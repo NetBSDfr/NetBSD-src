@@ -1058,7 +1058,7 @@ ENTRY(start_xen32)
 	stosb
 
 /*
- * https://github.com/Xilinx/xen/blob/master/xen/include/public/arch-x86/hvm/start_info.h
+ * sys/external/mit/xen-include-public/dist/xen/include/public/arch-x86/hvm/start_info.h
  */
 
 	/* copy start_info from its current location to end of kernel */
@@ -1069,39 +1069,32 @@ ENTRY(start_xen32)
 
 	movl	$RELOC(_end), %ebx /* now %ebx holds what's expected */
 
-	/* map memmap entries at the end of start_info */
-	movl	%ebx, %edx /* after kernel */
-	addl	$40, %edx /* memmap physical address */
-	movl	(%edx), %esi /* address of memmap entries */
-	addl	$8, %edx /* memmap_entries */
-	movl	(%edx), %ecx /* counter */
-	movl	$23, %eax /* struct hvm_memmap_table_entry is 24 bytes long */
-	movl	%ecx, %edx
-mul_loop: /* 24 bytes * memmap_entries */
-	addl	%edx, %ecx
-	subl	$1, %eax
-	jnz	mul_loop
+	/* copy memmap entries at the end of start_info */
+	imul	$MMAP_ENT_SZ, (MMAP_ENTRIES)(%ebx), %ecx /* sizeof hvm_memmap_table_entry * entries */
 
 	pushl	%ecx /* save count as offset */
 
-	movl	%ebx, %edi /* to the beginning */
-	addl	$64, %edi /* destination end of struct */
+	movl	%ebx, %edx
+	addl	$MMAP_PADDR, %edx /* address of mmap entries */
+	movl	(%edx), %esi
+	movl	%ebx, %edi /* to the end of start_info */
+	addl	$MMAP_SI_SZ, %edi /* ebx + sizeof(start_info) */
 
-	rep movsb
+	rep	movsb /* esi (mmap entries addr) to end of start_info */
 
 	/* point hvm_memmap_table_entry to the end of ebx */
 	movl	%ebx, %edx
-	addl	$40, %edx /* memmap_paddr */
+	addl	$MMAP_PADDR, %edx
 	movl	%ebx, %eax
-	addl	$64, %eax /* aligned end of hvm_start_info */
+	addl	$MMAP_SI_SZ, %eax /* aligned end of hvm_start_info */
 	movl	%eax, (%edx) /* update memmap_paddr */
 
 	/* copy command line */
 	movl	%ebx, %edx
-	addl	$24, %edx /* cmdline address */
+	addl	$CMDLINE_PADDR, %edx /* cmdline address */
 	movl	(%edx), %esi
 	movl	%ebx, %edi
-	addl	$64, %edi /* end of hvm_start_info */
+	addl	$MMAP_SI_SZ, %edi /* end of hvm_start_info */
 	popl	%ecx
 	addl	%ecx, %edi /* add size of memmap table */
 	pushl	%edi /* save new cmdline position */
