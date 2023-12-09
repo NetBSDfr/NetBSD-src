@@ -68,6 +68,7 @@ __KERNEL_RCSID(0, "$NetBSD: shutdown_xenbus.c,v 1.9 2020/05/13 22:13:49 jdolecek
 #define	SHUTDOWN_PATH	"control"
 #define	SHUTDOWN_NAME	"shutdown"
 
+#ifndef GENPVH
 static struct sysmon_pswitch xenbus_power = {
 	.smpsw_type = PSWITCH_TYPE_POWER,
 	.smpsw_name = "xenbus",
@@ -85,7 +86,6 @@ static void
 xenbus_shutdown_handler(struct xenbus_watch *watch, const char **vec,
     unsigned int len)
 {
-
 	struct xenbus_transaction *xbt;
 	int error;
 	char reqstr[32];
@@ -140,10 +140,12 @@ static struct xenbus_watch xenbus_shutdown_watch = {
 	.node = __UNCONST(SHUTDOWN_PATH "/" SHUTDOWN_NAME), /* XXX */
 	.xbw_callback = xenbus_shutdown_handler,
 };
+#endif /* GENPVH */
 
 void
 shutdown_xenbus_setup(void)
 {
+#ifndef GENPVH
 	xen_suspend_allow = false;
 
 	if (sysmon_pswitch_register(&xenbus_power) != 0 ||
@@ -155,4 +157,5 @@ shutdown_xenbus_setup(void)
 	if (register_xenbus_watch(&xenbus_shutdown_watch)) {
 		aprint_error("%s: unable to watch control/shutdown\n", __func__);
 	}
+#endif
 }

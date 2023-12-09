@@ -127,7 +127,9 @@ void	hypervisor_attach(device_t, device_t, void *);
 CFATTACH_DECL_NEW(hypervisor, 0,
     hypervisor_match, hypervisor_attach, NULL, NULL);
 
+#ifndef GENPVH
 static int hypervisor_print(void *, const char *);
+#endif
 
 union hypervisor_attach_cookie {
 	const char *hac_device;		/* first elem of all */
@@ -166,7 +168,7 @@ struct  x86_isa_chipset x86_isa_chipset;
 #endif
 #endif
 
-#if defined(XENPVHVM) || defined(XENPVH)
+#if defined(XENPVHVM) || defined(XENPVH) || defined(GENPVH)
 #include <xen/include/public/arch-x86/cpuid.h>
 #include <xen/include/public/arch-x86/hvm/start_info.h>
 #include <xen/include/public/hvm/hvm_op.h>
@@ -194,9 +196,11 @@ static int xen_hvm_vec = 0;
 
 int xen_version;
 
+#ifndef GENPVH
 /* power management, for save/restore */
 static bool hypervisor_suspend(device_t, const pmf_qual_t *);
 static bool hypervisor_resume(device_t, const pmf_qual_t *);
+#endif
 
 /* from FreeBSD */
 #define XEN_MAGIC_IOPORT 0x10
@@ -241,27 +245,31 @@ void
 init_xen_early(void)
 {
 	const char *cmd_line;
-	if (vm_guest != VM_GUEST_XENPVH)
+	if (vm_guest != VM_GUEST_XENPVH && vm_guest != VM_GUEST_GENPVH)
 		return;
-	xen_init_hypercall_page();
+
 	hvm_start_info = (void *)((uintptr_t)hvm_start_paddr + KERNBASE);
 
-	HYPERVISOR_shared_info = (void *)((uintptr_t)HYPERVISOR_shared_info_pa + KERNBASE);
-	struct xen_add_to_physmap xmap = {
-		.domid = DOMID_SELF,
-		.space = XENMAPSPACE_shared_info,
-		.idx = 0, /* Important - XEN checks for this */
-		.gpfn = atop(HYPERVISOR_shared_info_pa)
-	};
+	if (vm_guest == VM_GUEST_XENPVH) {
+		xen_init_hypercall_page();
 
-	int err;
+		HYPERVISOR_shared_info = (void *)((uintptr_t)HYPERVISOR_shared_info_pa + KERNBASE);
+		struct xen_add_to_physmap xmap = {
+			.domid = DOMID_SELF,
+			.space = XENMAPSPACE_shared_info,
+			.idx = 0, /* Important - XEN checks for this */
+			.gpfn = atop(HYPERVISOR_shared_info_pa)
+		};
 
-	if ((err = HYPERVISOR_memory_op(XENMEM_add_to_physmap, &xmap)) < 0) {
-		printk(
-		    "Xen HVM: Unable to register HYPERVISOR_shared_info %d\n", err);
+		int err;
+
+		if ((err = HYPERVISOR_memory_op(XENMEM_add_to_physmap, &xmap)) < 0) {
+			printk(
+			    "Xen HVM: Unable to register HYPERVISOR_shared_info %d\n", err);
+		}
+		delay_func = x86_delay = xen_delay;
+		x86_initclock_func = xen_initclocks;
 	}
-	delay_func = x86_delay = xen_delay;
-	x86_initclock_func = xen_initclocks;
 	if (hvm_start_info->cmdline_paddr != 0) {
 		cmd_line =
 		    (void *)((uintptr_t)hvm_start_info->cmdline_paddr + KERNBASE);
@@ -296,6 +304,7 @@ xen_check_hypervisordev(void)
 static int
 xen_hvm_init_late(void)
 {
+#ifndef GENPVH
 	struct idt_vec *iv = &(cpu_info_primary.ci_idtvec);
 
 	if (HYPERVISOR_xen_version(XENVER_version, NULL) < 0) {
@@ -357,6 +366,7 @@ xen_hvm_init_late(void)
 	idt_vec_set(iv, xen_hvm_vec, &IDTVEC(hypervisor_pvhvm_callback));
 
 	events_default_setup();
+#endif /* GENPVH */
 	return 1;
 }
 
@@ -409,10 +419,11 @@ xen_hvm_init(void)
 	if (xen_hvm_init_late() == 0)
 		return 0;
 
+#ifndef GENPVH
 	struct xen_hvm_param xen_hvm_param;
 	xen_hvm_param.domid = DOMID_SELF;
 	xen_hvm_param.index = HVM_PARAM_CONSOLE_PFN;
-	
+
 	if ( HYPERVISOR_hvm_op(HVMOP_get_param, &xen_hvm_param) < 0) {
 		aprint_debug(
 		    "Xen HVM: Unable to obtain xencons page address\n");
@@ -438,6 +449,7 @@ xen_hvm_init(void)
 
 		xen_start_info.console.domU.evtchn = xen_hvm_param.value;
 	}
+#endif
 
 	/*
 	 * PR port-amd64/55543
@@ -445,11 +457,12 @@ xen_hvm_init(void)
 	 * fully functional here. This version also doesn't support
 	 * HVM_PARAM_CONSOLE_PFN. 
 	 */
+#ifndef GENPVH
 	if (xencons_interface != 0) {
 		delay_func = x86_delay = xen_delay;
 		x86_initclock_func = xen_initclocks;
 	}
-
+#endif
 	vm_guest = VM_GUEST_XENPVHVM; /* Be more specific */
 	return 1;
 }
@@ -566,7 +579,7 @@ hypervisor_vcpu_print(void *aux, const char *parent)
 void
 hypervisor_attach(device_t parent, device_t self, void *aux)
 {
-
+#ifndef GENPVH
 #if NPCI >0
 #ifdef PCI_BUS_FIXUP
 	int pci_maxbus = 0;
@@ -772,9 +785,9 @@ hypervisor_attach(device_t parent, device_t self, void *aux)
 
 	if (!pmf_device_register(self, hypervisor_suspend, hypervisor_resume))
 		aprint_error_dev(self, "couldn't establish power handler\n");
-
+#endif /* GENPVH */
 }
-
+#ifndef GENPVH
 static bool
 hypervisor_suspend(device_t dev, const pmf_qual_t *qual)
 {
@@ -806,6 +819,7 @@ hypervisor_print(void *aux, const char *parent)
 		aprint_normal("%s at %s", hac->hac_device, parent);
 	return (UNCONF);
 }
+#endif /* GENPVH */
 
 #define DIR_MODE	(S_IRUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH)
 

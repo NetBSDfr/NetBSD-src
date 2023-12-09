@@ -100,7 +100,9 @@ extern bool acpi_present;
 extern bool mpacpi_active;
 
 void	xen_mainbus_attach(device_t, device_t, void *);
+#ifndef GENPVH
 static int	xen_mainbus_print(void *, const char *);
+#endif
 
 union xen_mainbus_attach_args {
 	const char *mba_busname;		/* first elem of all */
@@ -119,6 +121,7 @@ union xen_mainbus_attach_args {
 void
 xen_mainbus_attach(device_t parent, device_t self, void *aux)
 {
+#ifndef GENPVH
 	union xen_mainbus_attach_args mba;
 
 	switch(vm_guest) {
@@ -148,8 +151,9 @@ xen_mainbus_attach(device_t parent, device_t self, void *aux)
 			aprint_error_dev(self,
 			    "couldn't establish power handler\n");
 	}
+#endif
 }
-
+#ifndef GENPVH
 static int
 xen_mainbus_print(void *aux, const char *pnp)
 {
@@ -159,3 +163,4 @@ xen_mainbus_print(void *aux, const char *pnp)
 		aprint_normal("%s at %s", mba->mba_busname, pnp);
 	return UNCONF;
 }
+#endif

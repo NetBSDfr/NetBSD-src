@@ -282,7 +282,7 @@
 #include <xen/include/public/xen.h>
 
 #define ELFNOTE(name, type, desctype, descdata...) \
-.pushsection .note.name			;	\
+.pushsection .note.name, "a", @note	;	\
   .align 4				;	\
   .long 2f - 1f		/* namesz */	;	\
   .long 4f - 3f		/* descsz */	;	\
@@ -973,7 +973,6 @@ longmode_hi:
 	movl	%eax,_C_LABEL(cpuid_level)
 
 	movl	$VM_GUEST_XENPV, _C_LABEL(vm_guest)
-
 	/*
 	 * Initialize cpu_info_primary.ci_self := &cpu_info_primary,
 	 * and initialize some MSRs with
@@ -1058,16 +1057,78 @@ ENTRY(start_xen32)
 	rep
 	stosb
 
+/*
+ * https://github.com/Xilinx/xen/blob/master/xen/include/public/arch-x86/hvm/start_info.h
+ */
+
+	/* copy start_info from its current location to end of kernel */
+	movl	$RELOC(_end), %edi
+	movl	$PAGE_SIZE, %ecx
+	movl	%ebx, %esi
+	rep	movsb /* copy %esi to %edi byte per byte %ecx times */
+
+	movl	$RELOC(_end), %ebx /* now %ebx holds what's expected */
+
+	/* map memmap entries at the end of start_info */
+	movl	%ebx, %edx /* after kernel */
+	addl	$40, %edx /* memmap physical address */
+	movl	(%edx), %esi /* address of memmap entries */
+	addl	$8, %edx /* memmap_entries */
+	movl	(%edx), %ecx /* counter */
+	movl	$23, %eax /* struct hvm_memmap_table_entry is 24 bytes long */
+	movl	%ecx, %edx
+mul_loop: /* 24 bytes * memmap_entries */
+	addl	%edx, %ecx
+	subl	$1, %eax
+	jnz	mul_loop
+
+	pushl	%ecx /* save count as offset */
+
+	movl	%ebx, %edi /* to the beginning */
+	addl	$64, %edi /* destination end of struct */
+
+	rep movsb
+
+	/* point hvm_memmap_table_entry to the end of ebx */
+	movl	%ebx, %edx
+	addl	$40, %edx /* memmap_paddr */
+	movl	%ebx, %eax
+	addl	$64, %eax /* aligned end of hvm_start_info */
+	movl	%eax, (%edx) /* update memmap_paddr */
+
+	/* copy command line */
+	movl	%ebx, %edx
+	addl	$24, %edx /* cmdline address */
+	movl	(%edx), %esi
+	movl	%ebx, %edi
+	addl	$64, %edi /* end of hvm_start_info */
+	popl	%ecx
+	addl	%ecx, %edi /* add size of memmap table */
+	pushl	%edi /* save new cmdline position */
+cmdcpy:
+	movb	(%esi), %al
+	movb	%al, (%edi)
+	addl	$1, %esi
+	addl	$1, %edi
+	cmpl	$0, (%esi) /* NULL terminated */
+	jne	cmdcpy
+	movb	$0, (%edi)
+
+	popl (%edx) /* point to new location */
+
 	/*
 	 * save addr of the hvm_start_info structure. This is also the end
 	 * of the symbol table
 	 */
-	movl	%ebx, RELOC(hvm_start_paddr)
+	movl	%ebx, RELOC(hvm_start_paddr) /* copy start_info addr to hvm_start_paddr */
+	/* below is the build of esym based on the false asumption ebx == end of esym */
 	movl	%ebx, %eax
-	addl	$KERNBASE_LO,%eax
-	movl	$RELOC(esym),%ebp
-	movl	%eax,(%ebp)
-	movl	$KERNBASE_HI,4(%ebp)
+	addl	$KERNBASE_LO,%eax /* 0x80000000 + ebx */
+	/* for further mapping */
+	movl	$RELOC(esym),%ebp /* address of esym in ebp */
+	movl	%eax,(%ebp) /* esym points to %ebx assuming it's the end of esym but it's not */
+	movl	$KERNBASE_HI,4(%ebp) /* ffffffff80000000 + ebx, make it 64 bits */
+
 	/* get a page for HYPERVISOR_shared_info */
 	addl	$PAGE_SIZE, %ebx
 	addl	$PGOFSET,%ebx
@@ -1085,7 +1146,8 @@ ENTRY(start_xen32)
 	movl	$KERNBASE_HI,4(%ebp)
 
 	/* announce ourself */
-	movl	$VM_GUEST_XENPVH, RELOC(vm_guest)
+	/* movl	$VM_GUEST_XENPVH, RELOC(vm_guest) */
+	movl	$VM_GUEST_GENPVH, RELOC(vm_guest)
 	jmp .Lbiosbasemem_finished
 END(start_xen32)
 	.code64

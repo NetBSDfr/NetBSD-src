@@ -373,6 +373,7 @@ define	BST_TYPE		offsetof(struct bus_space_tag, bst_type)
 
 define	VM_GUEST_XENPV		VM_GUEST_XENPV
 define	VM_GUEST_XENPVH		VM_GUEST_XENPVH
+define	VM_GUEST_GENPVH		VM_GUEST_GENPVH
 
 ifdef XEN
 define CPU_INFO_VCPU		offsetof(struct cpu_info, ci_vcpu)

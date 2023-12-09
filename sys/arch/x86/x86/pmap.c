@@ -1383,7 +1383,7 @@ pmap_bootstrap(vaddr_t kva_start)
 	pentium_idt_vaddr = pmap_bootstrap_valloc(1);
 #endif
 
-#if defined(XENPVHVM)
+#if defined(XENPVHVM) && !defined(GENPVH)
 	/* XXX: move to hypervisor.c with appropriate API adjustments */
 	extern paddr_t HYPERVISOR_shared_info_pa;
 	extern volatile struct xencons_interface *xencons_interface; /* XXX */
