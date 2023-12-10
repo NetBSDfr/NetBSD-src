@@ -483,7 +483,7 @@ cpu_attach(device_t parent, device_t self, void *aux)
 		cpu_identify(ci);
 		x86_errata();
 		x86_cpu_idle_init();
-#ifdef XENPVHVM
+#if defined(XENPVHVM) && !defined(GENPVH)
 		xen_hvm_init_cpu(ci);
 #endif
 		break;
@@ -493,7 +493,7 @@ cpu_attach(device_t parent, device_t self, void *aux)
 		cpu_identify(ci);
 		x86_errata();
 		x86_cpu_idle_init();
-#ifdef XENPVHVM
+#if defined(XENPVHVM) && !defined(GENPVH)
 		xen_hvm_init_cpu(ci);
 #endif
 		break;
@@ -1034,7 +1034,7 @@ cpu_hatch(void *v)
 	 * above.
 	 */
 	cpu_init(ci);
-#ifdef XENPVHVM
+#if defined(XENPVHVM) && !defined(GENPVH)
 	xen_hvm_init_cpu(ci);
 #endif
 	(*x86_initclock_func)();

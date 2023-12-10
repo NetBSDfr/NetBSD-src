@@ -190,8 +190,9 @@ volatile shared_info_t *HYPERVISOR_shared_info __read_mostly;
 paddr_t HYPERVISOR_shared_info_pa;
 union start_info_union start_info_union __aligned(PAGE_SIZE);
 struct hvm_start_info *hvm_start_info;
-
+#ifndef GENPVH
 static int xen_hvm_vec = 0;
+#endif
 #endif
 
 int xen_version;
@@ -216,6 +217,7 @@ enum {
 
 bool xenhvm_use_percpu_callback = 0;
 
+#ifndef GENPVH
 static void
 xen_init_hypercall_page(void)
 {
@@ -237,6 +239,7 @@ xen_init_hypercall_page(void)
 	/* XXX: vtophys(&hypercall_page) */
 	wrmsr(descs[1], (uintptr_t)&hypercall_page - KERNBASE);
 }
+#endif
 
 uint32_t hvm_start_paddr;
 
@@ -250,26 +253,6 @@ init_xen_early(void)
 
 	hvm_start_info = (void *)((uintptr_t)hvm_start_paddr + KERNBASE);
 
-	if (vm_guest == VM_GUEST_XENPVH) {
-		xen_init_hypercall_page();
-
-		HYPERVISOR_shared_info = (void *)((uintptr_t)HYPERVISOR_shared_info_pa + KERNBASE);
-		struct xen_add_to_physmap xmap = {
-			.domid = DOMID_SELF,
-			.space = XENMAPSPACE_shared_info,
-			.idx = 0, /* Important - XEN checks for this */
-			.gpfn = atop(HYPERVISOR_shared_info_pa)
-		};
-
-		int err;
-
-		if ((err = HYPERVISOR_memory_op(XENMEM_add_to_physmap, &xmap)) < 0) {
-			printk(
-			    "Xen HVM: Unable to register HYPERVISOR_shared_info %d\n", err);
-		}
-		delay_func = x86_delay = xen_delay;
-		x86_initclock_func = xen_initclocks;
-	}
 	if (hvm_start_info->cmdline_paddr != 0) {
 		cmd_line =
 		    (void *)((uintptr_t)hvm_start_info->cmdline_paddr + KERNBASE);
@@ -279,9 +262,33 @@ init_xen_early(void)
 		xen_start_info.cmd_line[0] = '\0';
 	}
 	xen_start_info.flags = hvm_start_info->flags;
+
+	if (vm_guest == VM_GUEST_GENPVH)
+		return;
+
+#ifndef GENPVH
+	xen_init_hypercall_page();
+#endif
+
+	HYPERVISOR_shared_info = (void *)((uintptr_t)HYPERVISOR_shared_info_pa + KERNBASE);
+	struct xen_add_to_physmap xmap = {
+		.domid = DOMID_SELF,
+		.space = XENMAPSPACE_shared_info,
+		.idx = 0, /* Important - XEN checks for this */
+		.gpfn = atop(HYPERVISOR_shared_info_pa)
+	};
+
+	int err;
+
+	if ((err = HYPERVISOR_memory_op(XENMEM_add_to_physmap, &xmap)) < 0) {
+		printk(
+		    "Xen HVM: Unable to register HYPERVISOR_shared_info %d\n", err);
+	}
+	delay_func = x86_delay = xen_delay;
+	x86_initclock_func = xen_initclocks;
 }
 
-
+#ifndef GENPVH
 static bool
 xen_check_hypervisordev(void)
 {
@@ -304,7 +311,6 @@ xen_check_hypervisordev(void)
 static int
 xen_hvm_init_late(void)
 {
-#ifndef GENPVH
 	struct idt_vec *iv = &(cpu_info_primary.ci_idtvec);
 
 	if (HYPERVISOR_xen_version(XENVER_version, NULL) < 0) {
@@ -366,7 +372,6 @@ xen_hvm_init_late(void)
 	idt_vec_set(iv, xen_hvm_vec, &IDTVEC(hypervisor_pvhvm_callback));
 
 	events_default_setup();
-#endif /* GENPVH */
 	return 1;
 }
 
@@ -419,7 +424,6 @@ xen_hvm_init(void)
 	if (xen_hvm_init_late() == 0)
 		return 0;
 
-#ifndef GENPVH
 	struct xen_hvm_param xen_hvm_param;
 	xen_hvm_param.domid = DOMID_SELF;
 	xen_hvm_param.index = HVM_PARAM_CONSOLE_PFN;
@@ -449,7 +453,6 @@ xen_hvm_init(void)
 
 		xen_start_info.console.domU.evtchn = xen_hvm_param.value;
 	}
-#endif
 
 	/*
 	 * PR port-amd64/55543
@@ -457,12 +460,10 @@ xen_hvm_init(void)
 	 * fully functional here. This version also doesn't support
 	 * HVM_PARAM_CONSOLE_PFN. 
 	 */
-#ifndef GENPVH
 	if (xencons_interface != 0) {
 		delay_func = x86_delay = xen_delay;
 		x86_initclock_func = xen_initclocks;
 	}
-#endif
 	vm_guest = VM_GUEST_XENPVHVM; /* Be more specific */
 	return 1;
 }
@@ -540,7 +541,7 @@ xen_hvm_init_cpu(struct cpu_info *ci)
 	again = 1;
 	return 1;
 }
-
+#endif /* GENPVH */
 #endif /* XENPVHVM */
 
 /*
@@ -564,22 +565,13 @@ hypervisor_match(device_t parent, cfdata_t match, void *aux)
 	return 1;
 }
 
-#if defined(MULTIPROCESSOR) && defined(XENPV)
-static int
-hypervisor_vcpu_print(void *aux, const char *parent)
-{
-	/* Unconfigured cpus are ignored quietly. */
-	return (QUIET);
-}
-#endif /* MULTIPROCESSOR && XENPV */
-
 /*
  * Attach the hypervisor.
  */
 void
 hypervisor_attach(device_t parent, device_t self, void *aux)
 {
-#ifndef GENPVH
+#ifndef GENPVH /* we don't need Xen hypervisor in generic PVH mode */
 #if NPCI >0
 #ifdef PCI_BUS_FIXUP
 	int pci_maxbus = 0;
@@ -788,6 +780,15 @@ hypervisor_attach(device_t parent, device_t self, void *aux)
 #endif /* GENPVH */
 }
 #ifndef GENPVH
+#if defined(MULTIPROCESSOR) && defined(XENPV)
+static int
+hypervisor_vcpu_print(void *aux, const char *parent)
+{
+	/* Unconfigured cpus are ignored quietly. */
+	return (QUIET);
+}
+#endif /* MULTIPROCESSOR && XENPV */
+
 static bool
 hypervisor_suspend(device_t dev, const pmf_qual_t *qual)
 {
@@ -819,7 +820,6 @@ hypervisor_print(void *aux, const char *parent)
 		aprint_normal("%s at %s", hac->hac_device, parent);
 	return (UNCONF);
 }
-#endif /* GENPVH */
 
 #define DIR_MODE	(S_IRUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH)
 
@@ -883,3 +883,4 @@ xen_map_vcpu(struct cpu_info *ci)
 		    ci->ci_vcpuid, ret);
 	}
 }
+#endif /* GENPVH */

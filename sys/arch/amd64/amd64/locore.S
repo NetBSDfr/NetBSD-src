@@ -1047,8 +1047,11 @@ ENTRY(copy_start_info)
 
 	movl	$RELOC(_end), %ebx /* now %ebx holds what's expected */
 
-	/* copy memmap entries at the end of start_info */
-	imul	$MMAP_ENT_SZ, (MMAP_ENTRIES)(%ebx), %ecx /* sizeof hvm_memmap_table_entry * entries */
+	/*
+	 * copy memmap entries at the end of start_info
+	 * sizeof hvm_memmap_table_entry * entries
+	 */
+	imul	$MMAP_ENT_SZ, (MMAP_ENTRIES)(%ebx), %ecx
 
 	pushl	%ecx /* save count as offset */
 
@@ -1109,6 +1112,13 @@ ENTRY(start_xen32)
 	stosb
 
 #ifdef GENPVH
+	/*
+	 * Xen PVH expects start_info to be located at esym, after __kernel_end.
+	 * Neither qemu nor firecracker do this, as the ABI doesn't expect this
+	 * behavior https://xenbits.xen.org/docs/unstable/misc/pvh.html
+	 * In order not to revamp all kernel memory layout, simply copy
+	 * start_info where it is expected.
+	 */
 	call	copy_start_info
 #endif
 	/*

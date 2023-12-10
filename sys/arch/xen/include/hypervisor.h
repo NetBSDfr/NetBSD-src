@@ -62,9 +62,11 @@
 
 struct cpu_info;
 
+#ifndef GENPVH
 int xen_hvm_init(void);
 int xen_hvm_init_cpu(struct cpu_info *);
 void xen_mainbus_attach(device_t, device_t, void *);
+#endif
 
 struct hypervisor_attach_args {
 	const char 		*haa_busname;
