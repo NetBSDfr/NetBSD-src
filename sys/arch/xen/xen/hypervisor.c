@@ -168,7 +168,7 @@ struct  x86_isa_chipset x86_isa_chipset;
 #endif
 #endif
 
-#if defined(XENPVHVM) || defined(XENPVH) || defined(GENPVH)
+#if defined(XENPVHVM) || defined(XENPVH)
 #include <xen/include/public/arch-x86/cpuid.h>
 #include <xen/include/public/arch-x86/hvm/start_info.h>
 #include <xen/include/public/hvm/hvm_op.h>
