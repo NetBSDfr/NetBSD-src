@@ -1034,33 +1034,11 @@ END(start)
 # if !defined(XENPV)
 /* entry point for Xen PVH */
 	.code32
-ENTRY(start_xen32)
-	/* Xen doesn't start us with a valid gdt */
-	movl    $RELOC(gdtdesc32), %eax
-	lgdt    (%eax)
-	jmp     $GSEL(GCODE_SEL, SEL_KPL), $RELOC(.Lreload_cs)
-
-.Lreload_cs:
-	movw    $GSEL(GDATA_SEL, SEL_KPL), %ax
-	movw    %ax, %ds
-	movw    %ax, %es
-	movw    %ax, %ss
-
-	/* we need a valid stack */
-	movl	$RELOC(tmpstk),%esp
-
-	/* clear BSS */
-        xorl    %eax,%eax
-	movl    $RELOC(__bss_start),%edi
-	movl    $RELOC(_end),%ecx
-	subl    %edi,%ecx
-	rep
-	stosb
-
+#ifdef GENPVH
+ENTRY(copy_start_info)
 /*
  * sys/external/mit/xen-include-public/dist/xen/include/public/arch-x86/hvm/start_info.h
  */
-
 	/* copy start_info from its current location to end of kernel */
 	movl	$RELOC(_end), %edi
 	movl	$PAGE_SIZE, %ecx
@@ -1095,20 +1073,44 @@ ENTRY(start_xen32)
 	movl	(%edx), %esi
 	movl	%ebx, %edi
 	addl	$MMAP_SI_SZ, %edi /* end of hvm_start_info */
-	popl	%ecx
+	popl	%ecx /* previously saved end of data offset */
 	addl	%ecx, %edi /* add size of memmap table */
 	pushl	%edi /* save new cmdline position */
-cmdcpy:
-	movb	(%esi), %al
-	movb	%al, (%edi)
-	addl	$1, %esi
-	addl	$1, %edi
-	cmpl	$0, (%esi) /* NULL terminated */
-	jne	cmdcpy
-	movb	$0, (%edi)
+
+	repnz	movsb
 
 	popl (%edx) /* point to new location */
 
+	ret
+END(copy_start_info)
+#endif /* GENPVH */
+
+ENTRY(start_xen32)
+	/* Xen doesn't start us with a valid gdt */
+	movl    $RELOC(gdtdesc32), %eax
+	lgdt    (%eax)
+	jmp     $GSEL(GCODE_SEL, SEL_KPL), $RELOC(.Lreload_cs)
+
+.Lreload_cs:
+	movw    $GSEL(GDATA_SEL, SEL_KPL), %ax
+	movw    %ax, %ds
+	movw    %ax, %es
+	movw    %ax, %ss
+
+	/* we need a valid stack */
+	movl	$RELOC(tmpstk),%esp
+
+	/* clear BSS */
+        xorl    %eax,%eax
+	movl    $RELOC(__bss_start),%edi
+	movl    $RELOC(_end),%ecx
+	subl    %edi,%ecx
+	rep
+	stosb
+
+#ifdef GENPVH
+	call	copy_start_info
+#endif
 	/*
 	 * save addr of the hvm_start_info structure. This is also the end
 	 * of the symbol table
@@ -1139,8 +1141,11 @@ cmdcpy:
 	movl	$KERNBASE_HI,4(%ebp)
 
 	/* announce ourself */
-	/* movl	$VM_GUEST_XENPVH, RELOC(vm_guest) */
+#ifdef GENPVH
 	movl	$VM_GUEST_GENPVH, RELOC(vm_guest)
+#else
+	movl	$VM_GUEST_XENPVH, RELOC(vm_guest)
+#endif
 	jmp .Lbiosbasemem_finished
 END(start_xen32)
 	.code64
@@ -1154,6 +1159,7 @@ ENTRY(hypercall_page) /* Returns -1, on HYPERVISOR_xen_version() */
 	retq
 .align HYPERCALL_PAGE_OFFSET, 0x90
 END(hypercall_page)
+
 #endif /* XEN */
 
 /*
