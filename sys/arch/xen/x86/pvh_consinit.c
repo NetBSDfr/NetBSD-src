@@ -43,12 +43,10 @@ __KERNEL_RCSID(0, "$NetBSD: pvh_consinit.c,v 1.6 2023/10/17 13:27:58 bouyer Exp 
 
 #include "xen_def_cons.h"
 
+#ifndef GENPVH
 int
 xen_pvh_consinit(void)
 {
-#ifdef GENPVH
-	return 0;
-#else
 	/*
 	 * hugly hack because we're called multiple times at different
 	 * boot stage.
@@ -113,5 +111,5 @@ xen_pvh_consinit(void)
 	xenconscn_attach();
 #endif
 	return 1;
-#endif /* GENPVH */
 }
+#endif /* GENPVH */
