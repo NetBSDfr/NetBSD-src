@@ -13,6 +13,8 @@ file	arch/xen/xen/xen_clock.c		xen
 file	arch/xen/x86/xen_bus_dma.c		xen
 file	arch/xen/xen/genfb_xen.c		xen & genfb
 
+file	arch/xen/xen/hypervisor.c		xen needs-flag
+
 file	arch/xen/x86/pvh_consinit.c		xenpvhvm
 
 define hypervisorbus {}
@@ -21,7 +23,7 @@ define xendevbus {}
 # Xen hypervisor
 device	hypervisor { [apid = -1]}: isabus, pcibus, sysmon_power, xendevbus, acpibus
 attach hypervisor at hypervisorbus
-file	arch/xen/xen/hypervisor.c	hypervisor needs-flag
+#file	arch/xen/xen/hypervisor.c	hypervisor needs-flag
 file	arch/xen/xen/shutdown_xenbus.c	hypervisor
 
 # Xenbus

@@ -121,15 +121,14 @@ __KERNEL_RCSID(0, "$NetBSD: hypervisor.c,v 1.96 2022/06/23 14:32:16 bouyer Exp $
 #include <xen/xbdvar.h>
 #endif
 
+#ifndef GENPVH
 int	hypervisor_match(device_t, cfdata_t, void *);
 void	hypervisor_attach(device_t, device_t, void *);
 
 CFATTACH_DECL_NEW(hypervisor, 0,
     hypervisor_match, hypervisor_attach, NULL, NULL);
 
-#ifndef GENPVH
 static int hypervisor_print(void *, const char *);
-#endif
 
 union hypervisor_attach_cookie {
 	const char *hac_device;		/* first elem of all */
@@ -156,6 +155,7 @@ union hypervisor_attach_cookie {
 #endif /* NPCI */
 	struct vcpu_attach_args hac_vcaa;
 };
+#endif
 
 /*
  * This is set when the ISA bus is attached.  If it's not set by the
@@ -190,18 +190,15 @@ volatile shared_info_t *HYPERVISOR_shared_info __read_mostly;
 paddr_t HYPERVISOR_shared_info_pa;
 union start_info_union start_info_union __aligned(PAGE_SIZE);
 struct hvm_start_info *hvm_start_info;
-#ifndef GENPVH
-static int xen_hvm_vec = 0;
-#endif
 #endif
 
 int xen_version;
 
 #ifndef GENPVH
+static int xen_hvm_vec = 0;
 /* power management, for save/restore */
 static bool hypervisor_suspend(device_t, const pmf_qual_t *);
 static bool hypervisor_resume(device_t, const pmf_qual_t *);
-#endif
 
 /* from FreeBSD */
 #define XEN_MAGIC_IOPORT 0x10
@@ -211,6 +208,7 @@ enum {
 	XMI_UNPLUG_NICS                  = 0x02,
 	XMI_UNPLUG_IDE_EXCEPT_PRI_MASTER = 0x04
 }; 
+#endif
 
 
 #ifdef XENPVHVM
@@ -268,7 +266,6 @@ init_xen_early(void)
 
 #ifndef GENPVH
 	xen_init_hypercall_page();
-#endif
 
 	HYPERVISOR_shared_info = (void *)((uintptr_t)HYPERVISOR_shared_info_pa + KERNBASE);
 	struct xen_add_to_physmap xmap = {
@@ -286,6 +283,7 @@ init_xen_early(void)
 	}
 	delay_func = x86_delay = xen_delay;
 	x86_initclock_func = xen_initclocks;
+#endif
 }
 
 #ifndef GENPVH
@@ -544,6 +542,7 @@ xen_hvm_init_cpu(struct cpu_info *ci)
 #endif /* GENPVH */
 #endif /* XENPVHVM */
 
+#ifndef GENPVH /* we don't need Xen hypervisor in generic PVH mode */
 /*
  * Probe for the hypervisor; always succeeds.
  */
@@ -571,7 +570,6 @@ hypervisor_match(device_t parent, cfdata_t match, void *aux)
 void
 hypervisor_attach(device_t parent, device_t self, void *aux)
 {
-#ifndef GENPVH /* we don't need Xen hypervisor in generic PVH mode */
 #if NPCI >0
 #ifdef PCI_BUS_FIXUP
 	int pci_maxbus = 0;
@@ -777,9 +775,7 @@ hypervisor_attach(device_t parent, device_t self, void *aux)
 
 	if (!pmf_device_register(self, hypervisor_suspend, hypervisor_resume))
 		aprint_error_dev(self, "couldn't establish power handler\n");
-#endif /* GENPVH */
 }
-#ifndef GENPVH
 #if defined(MULTIPROCESSOR) && defined(XENPV)
 static int
 hypervisor_vcpu_print(void *aux, const char *parent)

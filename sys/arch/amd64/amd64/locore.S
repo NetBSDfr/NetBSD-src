@@ -1134,6 +1134,7 @@ ENTRY(start_xen32)
 	movl	%eax,(%ebp) /* esym points to %ebx assuming it's the end of esym but it's not */
 	movl	$KERNBASE_HI,4(%ebp) /* ffffffff80000000 + ebx, make it 64 bits */
 
+#ifndef GENPVH
 	/* get a page for HYPERVISOR_shared_info */
 	addl	$PAGE_SIZE, %ebx
 	addl	$PGOFSET,%ebx
@@ -1141,6 +1142,7 @@ ENTRY(start_xen32)
 	movl	$RELOC(HYPERVISOR_shared_info_pa),%ebp
 	movl	%ebx,(%ebp)
 	movl	$0,4(%ebp)
+#endif
 	/* XXX assume hvm_start_info+dependant structure fits in a single page */
 	addl	$PAGE_SIZE, %ebx
 	addl	$PGOFSET,%ebx
