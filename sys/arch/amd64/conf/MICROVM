@@ -71,10 +71,9 @@ options 	PIPE_SOCKETPAIR	# smaller, but slower pipe(2)
 options 	XENPVHVM
 options 	XEN
 # Generic PVH support (qemu, firecracker...)
-options		GENPVH
-#hypervisor*	at mainbus?		# Xen hypervisor
-#xenbus*	 	at hypervisor?		# Xen virtual bus
-#xencons*	at hypervisor?		# Xen virtual console
+hypervisor*	at mainbus?		# Xen hypervisor
+xenbus*	 	at hypervisor?		# Xen virtual bus
+xencons*	at hypervisor?		# Xen virtual console
 #xennet*  	at xenbus?		# Xen virtual network interface
 #xbd*		at xenbus?		# Xen virtual block device
 # experimental: PVH dom0 support
@@ -666,7 +665,7 @@ com0	at isa? port 0x3f8 irq 4	# Standard PC serial ports
 #njs*	at cardbus? function ?	# Workbit NinjaSCSI-32
 #
 ## SCSI bus support
-#scsibus* at scsi?
+scsibus* at scsi?
 #
 ## SCSI devices
 #sd*	at scsibus? target ? lun ?	# SCSI disk drives
@@ -1109,7 +1108,7 @@ virtio* at pci? dev ? function ?	# Virtio PCI device
 ld*	at virtio?			# Virtio disk device
 vioif*	at virtio?			# Virtio network device
 #viornd* at virtio?			# Virtio entropy device
-#vioscsi* at virtio?			# Virtio SCSI device
+vioscsi* at virtio?			# Virtio SCSI device
 ##vio9p*	at virtio?			# Virtio 9P device
 #
 ## Hyper-V devices

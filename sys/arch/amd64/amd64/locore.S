@@ -1131,12 +1131,9 @@ ENTRY(start_genpvh)
 	movl	%ebx, RELOC(hvm_start_paddr)
 	movl	%ebx, %eax
 	addl	$KERNBASE_LO,%eax
-	/* for further mapping */
 	movl	$RELOC(esym),%ebp
 	movl	%eax,(%ebp)
 	movl	$KERNBASE_HI,4(%ebp)
-
-#ifndef GENPVH
 	/* get a page for HYPERVISOR_shared_info */
 	addl	$PAGE_SIZE, %ebx
 	addl	$PGOFSET,%ebx
@@ -1144,7 +1141,6 @@ ENTRY(start_genpvh)
 	movl	$RELOC(HYPERVISOR_shared_info_pa),%ebp
 	movl	%ebx,(%ebp)
 	movl	$0,4(%ebp)
-#endif
 	/* XXX assume hvm_start_info+dependant structure fits in a single page */
 	addl	$PAGE_SIZE, %ebx
 	addl	$PGOFSET,%ebx

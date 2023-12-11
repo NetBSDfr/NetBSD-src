@@ -121,7 +121,6 @@ __KERNEL_RCSID(0, "$NetBSD: hypervisor.c,v 1.96 2022/06/23 14:32:16 bouyer Exp $
 #include <xen/xbdvar.h>
 #endif
 
-#ifndef GENPVH
 int	hypervisor_match(device_t, cfdata_t, void *);
 void	hypervisor_attach(device_t, device_t, void *);
 
@@ -155,7 +154,6 @@ union hypervisor_attach_cookie {
 #endif /* NPCI */
 	struct vcpu_attach_args hac_vcaa;
 };
-#endif
 
 /*
  * This is set when the ISA bus is attached.  If it's not set by the
@@ -190,12 +188,12 @@ volatile shared_info_t *HYPERVISOR_shared_info __read_mostly;
 paddr_t HYPERVISOR_shared_info_pa;
 union start_info_union start_info_union __aligned(PAGE_SIZE);
 struct hvm_start_info *hvm_start_info;
+
+static int xen_hvm_vec = 0;
 #endif
 
 int xen_version;
 
-#ifndef GENPVH
-static int xen_hvm_vec = 0;
 /* power management, for save/restore */
 static bool hypervisor_suspend(device_t, const pmf_qual_t *);
 static bool hypervisor_resume(device_t, const pmf_qual_t *);
@@ -208,14 +206,12 @@ enum {
 	XMI_UNPLUG_NICS                  = 0x02,
 	XMI_UNPLUG_IDE_EXCEPT_PRI_MASTER = 0x04
 }; 
-#endif
 
 
 #ifdef XENPVHVM
 
 bool xenhvm_use_percpu_callback = 0;
 
-#ifndef GENPVH
 static void
 xen_init_hypercall_page(void)
 {
@@ -237,7 +233,6 @@ xen_init_hypercall_page(void)
 	/* XXX: vtophys(&hypercall_page) */
 	wrmsr(descs[1], (uintptr_t)&hypercall_page - KERNBASE);
 }
-#endif
 
 uint32_t hvm_start_paddr;
 
@@ -264,7 +259,6 @@ init_xen_early(void)
 	if (vm_guest != VM_GUEST_XENPVH)
 		return;
 
-#ifndef GENPVH
 	xen_init_hypercall_page();
 
 	HYPERVISOR_shared_info = (void *)((uintptr_t)HYPERVISOR_shared_info_pa + KERNBASE);
@@ -283,10 +277,8 @@ init_xen_early(void)
 	}
 	delay_func = x86_delay = xen_delay;
 	x86_initclock_func = xen_initclocks;
-#endif
 }
 
-#ifndef GENPVH
 static bool
 xen_check_hypervisordev(void)
 {
@@ -539,10 +531,8 @@ xen_hvm_init_cpu(struct cpu_info *ci)
 	again = 1;
 	return 1;
 }
-#endif /* GENPVH */
 #endif /* XENPVHVM */
 
-#ifndef GENPVH /* we don't need Xen hypervisor in generic PVH mode */
 /*
  * Probe for the hypervisor; always succeeds.
  */
@@ -564,6 +554,14 @@ hypervisor_match(device_t parent, cfdata_t match, void *aux)
 	return 1;
 }
 
+#if defined(MULTIPROCESSOR) && defined(XENPV)
+static int
+hypervisor_vcpu_print(void *aux, const char *parent)
+{
+	/* Unconfigured cpus are ignored quietly. */
+	return (QUIET);
+}
+#endif /* MULTIPROCESSOR && XENPV */
 /*
  * Attach the hypervisor.
  */
@@ -776,14 +774,6 @@ hypervisor_attach(device_t parent, device_t self, void *aux)
 	if (!pmf_device_register(self, hypervisor_suspend, hypervisor_resume))
 		aprint_error_dev(self, "couldn't establish power handler\n");
 }
-#if defined(MULTIPROCESSOR) && defined(XENPV)
-static int
-hypervisor_vcpu_print(void *aux, const char *parent)
-{
-	/* Unconfigured cpus are ignored quietly. */
-	return (QUIET);
-}
-#endif /* MULTIPROCESSOR && XENPV */
 
 static bool
 hypervisor_suspend(device_t dev, const pmf_qual_t *qual)
@@ -879,4 +869,3 @@ xen_map_vcpu(struct cpu_info *ci)
 		    ci->ci_vcpuid, ret);
 	}
 }
-#endif /* GENPVH */

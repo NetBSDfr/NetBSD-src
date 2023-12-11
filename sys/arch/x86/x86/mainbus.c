@@ -218,7 +218,7 @@ mainbus_attach(device_t parent, device_t self, void *aux)
 	aprint_naive("\n");
 	aprint_normal("\n");
 
-#if defined(XENPVHVM) && !defined(GENPVH)
+#if defined(XENPVHVM)
 	xen_hvm_init(); /* before attaching CPUs */
 #endif
 
@@ -230,7 +230,7 @@ mainbus_attach(device_t parent, device_t self, void *aux)
 #if defined(XENPV)
 	}
 #endif /* XENPV */
-#if defined(XEN) && !defined(GENPVH)
+#if defined(XEN)
 	/*
 	 * before isa/pci probe, so that PV devices are not probed again
 	 * as emulated
