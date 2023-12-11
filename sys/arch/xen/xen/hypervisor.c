@@ -279,6 +279,7 @@ init_xen_early(void)
 	x86_initclock_func = xen_initclocks;
 }
 
+
 static bool
 xen_check_hypervisordev(void)
 {
@@ -417,7 +418,7 @@ xen_hvm_init(void)
 	struct xen_hvm_param xen_hvm_param;
 	xen_hvm_param.domid = DOMID_SELF;
 	xen_hvm_param.index = HVM_PARAM_CONSOLE_PFN;
-
+	
 	if ( HYPERVISOR_hvm_op(HVMOP_get_param, &xen_hvm_param) < 0) {
 		aprint_debug(
 		    "Xen HVM: Unable to obtain xencons page address\n");
@@ -454,6 +455,7 @@ xen_hvm_init(void)
 		delay_func = x86_delay = xen_delay;
 		x86_initclock_func = xen_initclocks;
 	}
+
 	vm_guest = VM_GUEST_XENPVHVM; /* Be more specific */
 	return 1;
 }
@@ -531,6 +533,7 @@ xen_hvm_init_cpu(struct cpu_info *ci)
 	again = 1;
 	return 1;
 }
+
 #endif /* XENPVHVM */
 
 /*
@@ -562,12 +565,14 @@ hypervisor_vcpu_print(void *aux, const char *parent)
 	return (QUIET);
 }
 #endif /* MULTIPROCESSOR && XENPV */
+
 /*
  * Attach the hypervisor.
  */
 void
 hypervisor_attach(device_t parent, device_t self, void *aux)
 {
+
 #if NPCI >0
 #ifdef PCI_BUS_FIXUP
 	int pci_maxbus = 0;
@@ -773,6 +778,7 @@ hypervisor_attach(device_t parent, device_t self, void *aux)
 
 	if (!pmf_device_register(self, hypervisor_suspend, hypervisor_resume))
 		aprint_error_dev(self, "couldn't establish power handler\n");
+
 }
 
 static bool

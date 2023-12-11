@@ -171,7 +171,8 @@ consinit(void)
 #if (NCOM > 0)
 	int rv;
 #endif
-#if defined(XENPVHVM)
+
+#ifdef XENPVHVM
 	if (vm_guest == VM_GUEST_XENPVH) {
 		if (xen_pvh_consinit() != 0)
 			return;
