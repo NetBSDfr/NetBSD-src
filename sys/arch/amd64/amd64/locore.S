@@ -1064,13 +1064,12 @@ ENTRY(start_genpvh)
 	 *  2) We have been started by another VMM (Qemu, Firecracker, ...)
 	 *
 	 * The main difference is that, when we are started by Xen,
-	 * %ebx (addr of the hvm_start_info structure) is pointing to a location
-	 * that will be mapped correctly later.
+	 * %ebx (addr of the hvm_start_info structure) is pointing to a
+	 * location that will be mapped correctly later.
 	 *
-	 * In the second case, we have to copy this structure (and all the
-	 * information
-	 * contained in it) to a location that will be mapped later :
-	 * __kernel_end
+	 * In the second case, we have to copy this structure (and all
+	 * the information contained in it) to a location that will be
+	 * mapped later : __kernel_end
 	 *
 	 * To distinguish between the 2 cases, we'll use the 'cpuid' instruction
 	 */
