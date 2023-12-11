@@ -85,6 +85,7 @@ static void
 xenbus_shutdown_handler(struct xenbus_watch *watch, const char **vec,
     unsigned int len)
 {
+
 	struct xenbus_transaction *xbt;
 	int error;
 	char reqstr[32];
