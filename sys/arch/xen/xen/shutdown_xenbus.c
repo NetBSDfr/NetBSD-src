@@ -58,7 +58,6 @@
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD: shutdown_xenbus.c,v 1.9 2020/05/13 22:13:49 jdolecek Exp $");
 
-#ifndef GENPVH
 #include <sys/param.h>
 
 #include <dev/sysmon/sysmonvar.h>
@@ -156,4 +155,3 @@ shutdown_xenbus_setup(void)
 		aprint_error("%s: unable to watch control/shutdown\n", __func__);
 	}
 }
-#endif /* GENPVH */

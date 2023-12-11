@@ -35,7 +35,6 @@
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD: xen_mainbus.c,v 1.10 2021/08/07 16:19:08 thorpej Exp $");
 
-#ifndef GENPVH
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/device.h>
@@ -159,4 +158,3 @@ xen_mainbus_print(void *aux, const char *pnp)
 		aprint_normal("%s at %s", mba->mba_busname, pnp);
 	return UNCONF;
 }
-#endif
