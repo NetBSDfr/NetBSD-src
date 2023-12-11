@@ -261,7 +261,7 @@ init_xen_early(void)
 	}
 	xen_start_info.flags = hvm_start_info->flags;
 
-	if (vm_guest == VM_GUEST_GENPVH)
+	if (vm_guest != VM_GUEST_XENPVH)
 		return;
 
 #ifndef GENPVH
