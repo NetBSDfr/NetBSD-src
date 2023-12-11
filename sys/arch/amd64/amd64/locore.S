@@ -1135,6 +1135,9 @@ ENTRY(start_genpvh)
 	movl	%eax,(%ebp)
 	movl	$KERNBASE_HI,4(%ebp)
 	/* get a page for HYPERVISOR_shared_info */
+	/* this is only needed if we are running on Xen */
+	cmpl	$VM_GUEST_XENPVH, RELOC(vm_guest)
+	jne	.add_hvm_start_info_page
 	addl	$PAGE_SIZE, %ebx
 	addl	$PGOFSET,%ebx
 	andl	$~PGOFSET,%ebx
@@ -1142,6 +1145,7 @@ ENTRY(start_genpvh)
 	movl	%ebx,(%ebp)
 	movl	$0,4(%ebp)
 	/* XXX assume hvm_start_info+dependant structure fits in a single page */
+.add_hvm_start_info_page:
 	addl	$PAGE_SIZE, %ebx
 	addl	$PGOFSET,%ebx
 	andl	$~PGOFSET,%ebx
