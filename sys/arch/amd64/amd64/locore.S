@@ -306,7 +306,7 @@
 	ELFNOTE(Xen, XEN_ELFNOTE_ENTRY,          .quad,  start)
 #else
 	ELFNOTE(Xen, XEN_ELFNOTE_PADDR_OFFSET,   .quad,  0)
-	ELFNOTE(Xen, XEN_ELFNOTE_PHYS32_ENTRY,   .long,  RELOC(start_xen32))
+	ELFNOTE(Xen, XEN_ELFNOTE_PHYS32_ENTRY,   .long,  RELOC(start_genpvh))
 #endif /* XENPV */
 	ELFNOTE(Xen, XEN_ELFNOTE_HYPERCALL_PAGE, .quad,  hypercall_page)
 	ELFNOTE(Xen, XEN_ELFNOTE_HV_START_LOW,   .quad,  HYPERVISOR_VIRT_START)
@@ -1034,61 +1034,7 @@ END(start)
 # if !defined(XENPV)
 /* entry point for Xen PVH */
 	.code32
-#ifdef GENPVH
-ENTRY(copy_start_info)
-/*
- * sys/external/mit/xen-include-public/dist/xen/include/public/arch-x86/hvm/start_info.h
- */
-	/* copy start_info from its current location to end of kernel */
-	movl	$RELOC(_end), %edi
-	movl	$PAGE_SIZE, %ecx
-	movl	%ebx, %esi
-	rep	movsb /* copy %esi to %edi byte per byte %ecx times */
-
-	movl	$RELOC(_end), %ebx /* now %ebx holds what's expected */
-
-	/*
-	 * copy memmap entries at the end of start_info
-	 * sizeof hvm_memmap_table_entry * entries
-	 */
-	imul	$MMAP_ENT_SZ, (MMAP_ENTRIES)(%ebx), %ecx
-
-	pushl	%ecx /* save count as offset */
-
-	movl	%ebx, %edx
-	addl	$MMAP_PADDR, %edx /* address of mmap entries */
-	movl	(%edx), %esi
-	movl	%ebx, %edi /* to the end of start_info */
-	addl	$MMAP_SI_SZ, %edi /* ebx + sizeof(start_info) */
-
-	rep	movsb /* esi (mmap entries addr) to end of start_info */
-
-	/* point hvm_memmap_table_entry to the end of ebx */
-	movl	%ebx, %edx
-	addl	$MMAP_PADDR, %edx
-	movl	%ebx, %eax
-	addl	$MMAP_SI_SZ, %eax /* aligned end of hvm_start_info */
-	movl	%eax, (%edx) /* update memmap_paddr */
-
-	/* copy command line */
-	movl	%ebx, %edx
-	addl	$CMDLINE_PADDR, %edx /* cmdline address */
-	movl	(%edx), %esi
-	movl	%ebx, %edi
-	addl	$MMAP_SI_SZ, %edi /* end of hvm_start_info */
-	popl	%ecx /* previously saved end of data offset */
-	addl	%ecx, %edi /* add size of memmap table */
-	pushl	%edi /* save new cmdline position */
-
-	repnz	movsb
-
-	popl (%edx) /* point to new location */
-
-	ret
-END(copy_start_info)
-#endif /* GENPVH */
-
-ENTRY(start_xen32)
+ENTRY(start_genpvh)
 	/* Xen doesn't start us with a valid gdt */
 	movl    $RELOC(gdtdesc32), %eax
 	lgdt    (%eax)
@@ -1104,35 +1050,92 @@ ENTRY(start_xen32)
 	movl	$RELOC(tmpstk),%esp
 
 	/* clear BSS */
-        xorl    %eax,%eax
+	xorl    %eax,%eax
 	movl    $RELOC(__bss_start),%edi
 	movl    $RELOC(_end),%ecx
 	subl    %edi,%ecx
 	rep
 	stosb
 
-#ifdef GENPVH
 	/*
-	 * Xen PVH expects start_info to be located at esym, after __kernel_end.
-	 * Neither qemu nor firecracker do this, as the ABI doesn't expect this
-	 * behavior https://xenbits.xen.org/docs/unstable/misc/pvh.html
-	 * In order not to revamp all kernel memory layout, simply copy
-	 * start_info where it is expected.
+	 * Here, we have 2 cases :
+	 *
+	 *  1) We have been started by Xen
+	 *  2) We have been started by another VMM (Qemu, Firecracker, ...)
+	 *
+	 * The main difference is that, when we are started by Xen,
+	 * %ebx (addr of the hvm_start_info structure) is pointing to a location
+	 * that will be mapped correctly later.
+	 *
+	 * In the second case, we have to copy this structure (and all the
+	 * information
+	 * contained in it) to a location that will be mapped later :
+	 * __kernel_end
+	 *
+	 * To distinguish between the 2 cases, we'll use the 'cpuid' instruction
 	 */
-	call	copy_start_info
-#endif
+
+	push %ebx
+	xorl %eax, %eax
+	cpuid
+	cmp $0x566e6558, %ebx	/* "VneX" */
+	je .start_xen32
+
+	/* We have been started by a VMM that is *not* Xen */
+
+	/* First, copy the hvm_start_info structure to __kernel_end */
+	pop %ebx
+	movl %ebx, %esi
+	movl $RELOC(__kernel_end), %edi
+	movl $HVM_START_INFO_SIZE, %ecx
+	shrl $2, %ecx
+	rep movsl
+
+	/* Copy cmdline_paddr after hvm_start_info */
+	movl CMDLINE_PADDR(%ebx), %esi
+	movl $RELOC(__kernel_end), %ecx
+	movl %edi, CMDLINE_PADDR(%ecx)	/* Set new cmdline_paddr in hvm_start_info */
+	.cmdline_copy:
+	movb (%esi), %al
+	movsb
+	cmp $0, %al
+	jne .cmdline_copy
+
+	/* Copy memmap_paddr after cmdline */
+	movl MMAP_PADDR(%ebx), %esi
+	movl $RELOC(__kernel_end), %ecx
+	movl %edi, MMAP_PADDR(%ecx)	/* Set new memmap_paddr in hvm_start_info */
+	movl MMAP_ENTRIES(%ebx), %eax	/* Get memmap_entries */
+	movl $MMAP_ENTRY_SIZE, %ebx
+	mull %ebx			/* eax * ebx => edx:eax */
+	movl %eax, %ecx
+	shll $2, %ecx
+	rep movsl
+
+	movl $RELOC(__kernel_end), %ebx
+
+	/* announce ourself */
+	movl	$VM_GUEST_GENPVH, RELOC(vm_guest)
+
+	jmp .save_hvm_start_paddr
+
+.start_xen32:
+	pop %ebx
+	movl	$VM_GUEST_XENPVH, RELOC(vm_guest)
+
+.save_hvm_start_paddr:
+
 	/*
 	 * save addr of the hvm_start_info structure. This is also the end
 	 * of the symbol table
 	 */
-	movl	%ebx, RELOC(hvm_start_paddr) /* copy start_info addr to hvm_start_paddr */
-	/* below is the build of esym based on the false asumption ebx == end of esym */
+	movl	%ebx, RELOC(hvm_start_paddr)
 	movl	%ebx, %eax
-	addl	$KERNBASE_LO,%eax /* 0x80000000 + ebx */
+	addl	$KERNBASE_LO,%eax
 	/* for further mapping */
-	movl	$RELOC(esym),%ebp /* address of esym in ebp */
-	movl	%eax,(%ebp) /* esym points to %ebx assuming it's the end of esym but it's not */
-	movl	$KERNBASE_HI,4(%ebp) /* ffffffff80000000 + ebx, make it 64 bits */
+	movl	$RELOC(esym),%ebp
+	movl	%eax,(%ebp)
+	movl	$KERNBASE_HI,4(%ebp)
 
 #ifndef GENPVH
 	/* get a page for HYPERVISOR_shared_info */
@@ -1152,14 +1155,8 @@ ENTRY(start_xen32)
 	movl	%ebx,(%ebp)
 	movl	$KERNBASE_HI,4(%ebp)
 
-	/* announce ourself */
-#ifdef GENPVH
-	movl	$VM_GUEST_GENPVH, RELOC(vm_guest)
-#else
-	movl	$VM_GUEST_XENPVH, RELOC(vm_guest)
-#endif
 	jmp .Lbiosbasemem_finished
-END(start_xen32)
+END(start_genpvh)
 	.code64
 # endif /* !XENPV */
 /* space for the hypercall call page */

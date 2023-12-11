@@ -382,11 +382,11 @@ define SIR_XENIPL_VM		SIR_XENIPL_VM
 define SIR_XENIPL_SCHED		SIR_XENIPL_SCHED
 define SIR_XENIPL_HIGH		SIR_XENIPL_HIGH
 define EVTCHN_UPCALL_MASK	offsetof(struct vcpu_info, evtchn_upcall_mask)
+define HVM_START_INFO_SIZE	sizeof(struct hvm_start_info)
 define MMAP_PADDR		offsetof(struct hvm_start_info, memmap_paddr)
 define MMAP_ENTRIES		offsetof(struct hvm_start_info, memmap_entries)
+define MMAP_ENTRY_SIZE		sizeof(struct hvm_memmap_table_entry)
 define CMDLINE_PADDR		offsetof(struct hvm_start_info, cmdline_paddr)
-define MMAP_ENT_SZ		sizeof(struct hvm_memmap_table_entry)
-define MMAP_SI_SZ		sizeof(struct hvm_start_info)
 ifdef XENPV
 define XEN_PT_BASE		offsetof(struct start_info, pt_base)    
 define XEN_NR_PT_FRAMES		offsetof(struct start_info, nr_pt_frames)
