@@ -1044,7 +1044,7 @@ static const struct vm_name_guest vm_bios_vendors[] = {
 	{ "BHYVE", VM_GUEST_VM },			/* bhyve */
 	{ "Seabios", VM_GUEST_VM },			/* KVM */
 	{ "innotek GmbH", VM_GUEST_VIRTUALBOX },	/* Oracle VirtualBox */
-	{ "Generic PVH", VM_GUEST_GENPVH},
+	{ "Generic PVH", VM_GUEST_GENPVH},		/* Generic PVH */
 };
 
 static const struct vm_name_guest vm_system_products[] = {
