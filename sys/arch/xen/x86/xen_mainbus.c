@@ -149,6 +149,7 @@ xen_mainbus_attach(device_t parent, device_t self, void *aux)
 			    "couldn't establish power handler\n");
 	}
 }
+
 static int
 xen_mainbus_print(void *aux, const char *pnp)
 {
