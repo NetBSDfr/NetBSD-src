@@ -171,12 +171,20 @@ consinit(void)
 #if (NCOM > 0)
 	int rv;
 #endif
+	char console_devname[16] = "";
 
 #ifdef XENPVHVM
 	if (vm_guest == VM_GUEST_XENPVH) {
 		if (xen_pvh_consinit() != 0)
 			return;
 		/* fallback to native console selection, usefull for dom0 PVH */
+	}
+	if (vm_guest == VM_GUEST_GENPVH) {
+		union xen_cmdline_parseinfo xcp;
+		/* get console= parameter from generic PVH VMM */
+		xen_parse_cmdline(XEN_PARSE_CONSOLE, &xcp);
+		strncpy(console_devname, xcp.xcp_console,
+			sizeof(xcp.xcp_console));
 	}
 #endif
 	if (initted)
@@ -185,10 +193,14 @@ consinit(void)
 
 #ifndef CONS_OVERRIDE
 	consinfo = lookup_bootinfo(BTINFO_CONSOLE);
-	if (!consinfo)
+	if (!consinfo) {
 #endif
 		consinfo = &default_consinfo;
-
+		/* console= parameter was not passed via a generic PVH VMM */
+		if (!console_devname[0])
+			strncpy(console_devname, consinfo->devname,
+				sizeof(consinfo->devname));
+	}
 #if (NGENFB > 0)
 #if defined(XENPVHVM) && defined(DOM0OPS)
 	if (vm_guest == VM_GUEST_XENPVH && xendomain_is_dom0())
@@ -197,8 +209,7 @@ consinit(void)
 #endif /* XENPVHVM */
 		fbinfo = lookup_bootinfo(BTINFO_FRAMEBUFFER);
 #endif
-
-	if (!strcmp(consinfo->devname, "pc")) {
+	if (!strcmp(console_devname, "pc")) {
 		int error;
 #if (NGENFB > 0)
 		if (fbinfo && fbinfo->physaddr > 0) {
@@ -254,7 +265,7 @@ dokbd:
 		return;
 	}
 #if (NCOM > 0)
-	if (!strcmp(consinfo->devname, "com")) {
+	if (!strcmp(console_devname, "com")) {
 		int addr = consinfo->addr;
 		int speed = consinfo->speed;
 
