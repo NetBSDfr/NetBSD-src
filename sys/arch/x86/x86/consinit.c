@@ -184,7 +184,7 @@ consinit(void)
 		/* get console= parameter from generic PVH VMM */
 		xen_parse_cmdline(XEN_PARSE_CONSOLE, &xcp);
 		strncpy(console_devname, xcp.xcp_console,
-			sizeof(xcp.xcp_console));
+			sizeof(console_devname));
 	}
 #endif
 	if (initted)
@@ -199,7 +199,7 @@ consinit(void)
 	/* console= parameter was not passed via a generic PVH VMM */
 	if (!console_devname[0])
 		strncpy(console_devname, consinfo->devname,
-			sizeof(consinfo->devname));
+			sizeof(console_devname));
 #if (NGENFB > 0)
 #if defined(XENPVHVM) && defined(DOM0OPS)
 	if (vm_guest == VM_GUEST_XENPVH && xendomain_is_dom0())
