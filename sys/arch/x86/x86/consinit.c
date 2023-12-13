@@ -193,14 +193,13 @@ consinit(void)
 
 #ifndef CONS_OVERRIDE
 	consinfo = lookup_bootinfo(BTINFO_CONSOLE);
-	if (!consinfo) {
+	if (!consinfo)
 #endif
 		consinfo = &default_consinfo;
-		/* console= parameter was not passed via a generic PVH VMM */
-		if (!console_devname[0])
-			strncpy(console_devname, consinfo->devname,
-				sizeof(consinfo->devname));
-	}
+	/* console= parameter was not passed via a generic PVH VMM */
+	if (!console_devname[0])
+		strncpy(console_devname, consinfo->devname,
+			sizeof(consinfo->devname));
 #if (NGENFB > 0)
 #if defined(XENPVHVM) && defined(DOM0OPS)
 	if (vm_guest == VM_GUEST_XENPVH && xendomain_is_dom0())
@@ -289,14 +288,14 @@ dokbd:
 	}
 #endif
 #if (NNULLCONS > 0)
-	if (!strcmp(consinfo->devname, "nullcons")) {
+	if (!strcmp(console_devname, "nullcons")) {
 		void nullcninit(struct consdev *cn);
 
 		nullcninit(0);
 		return;
 	}
 #endif
-	panic("invalid console device %s", consinfo->devname);
+	panic("invalid console device %s", console_devname);
 }
 
 #ifdef KGDB
