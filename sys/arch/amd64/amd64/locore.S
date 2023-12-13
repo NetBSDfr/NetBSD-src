@@ -1100,7 +1100,10 @@ ENTRY(start_genpvh)
 	cmp $0, %al
 	jne .cmdline_copy
 
-	/* Copy memmap_paddr after cmdline */
+	/* Copy memmap_paddr after cmdline (only if hvm_start_info->version != 0) */
+	xorl %eax, %eax
+	cmpl START_INFO_VERSION(%ebx), %eax
+	je .reload_ebx
 	movl MMAP_PADDR(%ebx), %esi
 	movl $RELOC(__kernel_end), %ecx
 	movl %edi, MMAP_PADDR(%ecx)	/* Set new memmap_paddr in hvm_start_info */
@@ -1111,6 +1114,7 @@ ENTRY(start_genpvh)
 	shll $2, %ecx
 	rep movsl
 
+.reload_ebx:
 	movl $RELOC(__kernel_end), %ebx
 
 	/* announce ourself */
