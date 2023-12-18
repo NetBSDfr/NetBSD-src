@@ -278,6 +278,7 @@
 
 #ifdef XEN
 #define __ASSEMBLY__
+#include <xen/include/public/arch-x86/cpuid.h>
 #include <xen/include/public/elfnote.h>
 #include <xen/include/public/xen.h>
 
@@ -1089,7 +1090,7 @@ ENTRY(start_genpvh)
 	inc %eax
 	shl $30, %eax
 	cpuid			/* Calling cpuid with eax=0x40000000 */
-	cmp $0x566e6558, %ebx	/* "VneX" */
+	cmp $XEN_CPUID_SIGNATURE_EBX, %ebx	/* "VneX" */
 	je .start_xen32
 
 	/* We have been started by a VMM that is *not* Xen */
