@@ -37,6 +37,8 @@ struct virtio_mmio_softc {
 	bus_space_handle_t	sc_ioh;
 	bus_size_t		sc_iosize;
 
+	int			mmio_version;
+
 	void			*sc_ih;
 
 	int			(*sc_alloc_interrupts)(struct virtio_mmio_softc *);

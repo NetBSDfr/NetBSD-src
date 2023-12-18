@@ -3,8 +3,15 @@
 # XXX the contents of the following included file should be moved here
 include "dev/pci/files.virtio"
 
+define cmdlinebus { }
+#define dummybus { }
+
 file	dev/virtio/virtio_mmio.c	virtio_mmio
 
 device	viocon
 attach	viocon at virtio
 file	dev/virtio/viocon.c		viocon
+
+
+attach	virtio at cmdlinebus with mmio_cmdline: virtio_mmio
+file	dev/virtio/virtio_mmio_cmdline.c	mmio_cmdline

@@ -340,7 +340,6 @@ ld_virtio_attach(device_t parent, device_t self, void *aux)
 		goto err;
 	}
 	qsize = sc->sc_vq.vq_num;
-
 	if (virtio_child_attach_finish(vsc, &sc->sc_vq, 1,
 	    NULL, VIRTIO_F_INTR_MSIX) != 0)
 		goto err;

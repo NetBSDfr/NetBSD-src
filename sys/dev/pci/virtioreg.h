@@ -98,6 +98,21 @@
 #define  VIRTIO_CONFIG_DEVICE_STATUS_DEVICE_NEEDS_RESET	 64
 #define  VIRTIO_CONFIG_DEVICE_STATUS_FAILED		128
 
+/* Status byte for guest to report progress. */
+#define VIRTIO_CONFIG_STATUS_RESET	0x00
+/* We have seen device and processed generic fields. */
+#define VIRTIO_CONFIG_STATUS_ACK	0x01
+/* We have found a driver for the device. */
+#define VIRTIO_CONFIG_STATUS_DRIVER	0x02
+/* Driver has used its parts of the config, and is happy. */
+#define VIRTIO_CONFIG_STATUS_DRIVER_OK	0x04
+/* Driver has finished configuring features (modern only). */
+#define VIRTIO_CONFIG_S_FEATURES_OK	0x08
+/* Device entered invalid state, driver must reset it. */
+#define VIRTIO_CONFIG_S_NEEDS_RESET	0x40
+/* We've given up on this device. */
+#define VIRTIO_CONFIG_STATUS_FAILED	0x80
+
 /* common ISR status flags */
 #define  VIRTIO_CONFIG_ISR_QUEUE_INTERRUPT	1
 #define  VIRTIO_CONFIG_ISR_CONFIG_CHANGE	2
@@ -144,6 +159,19 @@
  */
 #define VRING_AVAIL_F_NO_INTERRUPT      1
 
+/*
+ * Some VirtIO feature bits (currently bits 28 through 34) are
+ * reserved for the transport being used (eg. virtio_ring), the
+ * rest are per-device feature bits.
+ */
+#define VIRTIO_TRANSPORT_F_START	28
+#define VIRTIO_TRANSPORT_F_END		34
+
+/* Support for indirect buffer descriptors. */
+#define VIRTIO_RING_F_INDIRECT_DESC	(1UL << 28)
+
+/* Support to suppress interrupt until specific index is reached. */
+#define VIRTIO_RING_F_EVENT_IDX		(1UL << 29)
 
 /* Virtio ring descriptors: 16 bytes.
  * These can chain together via "next". */

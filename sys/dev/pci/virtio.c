@@ -816,6 +816,7 @@ virtio_alloc_vq(struct virtio_softc *sc, struct virtqueue *vq,
 	/* alloc and map the memory */
 	r = bus_dmamem_alloc(sc->sc_dmat, allocsize, VIRTIO_PAGE_SIZE, 0,
 	    &vq->vq_segs[0], 1, &rsegs, BUS_DMA_WAITOK);
+
 	if (r != 0) {
 		aprint_error_dev(sc->sc_dev,
 		    "virtqueue %d for %s allocation failed, "
@@ -891,7 +892,6 @@ virtio_alloc_vq(struct virtio_softc *sc, struct virtqueue *vq,
 		    "descriptors\n", size_indirect, maxnsegs * vq_num);
 
 	return 0;
-
 err:
 	sc->sc_ops->setup_queue(sc, vq->vq_index, 0);
 	if (vq->vq_dmamap)

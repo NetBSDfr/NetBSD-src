@@ -79,6 +79,7 @@ __KERNEL_RCSID(0, "$NetBSD: amd64_mainbus.c,v 1.7 2021/08/07 16:18:41 thorpej Ex
 #include <arch/x86/pci/msipic.h>
 #endif /* __HAVE_PCI_MSI_MSIX */
 #endif
+#include <dev/virtio/cmdlinevar.h>
 
 /*
  * XXXfvdl ACPI
@@ -100,6 +101,7 @@ union amd64_mainbus_attach_args {
 #if NIPMI > 0
 	struct ipmi_attach_args mba_ipmi;
 #endif
+	struct cmdline_attach_args mba_cmdline;
 };
 
 /*
@@ -158,7 +160,6 @@ amd64_mainbus_attach(device_t parent, device_t self, void *aux)
 #if NISA > 0 || NPCI > 0 || NACPICA > 0 || NIPMI > 0
 	union amd64_mainbus_attach_args mba;
 #endif
-
 #if NISADMA > 0 && NACPICA > 0
 	/*
 	 * ACPI needs ISA DMA initialized before they start probing.
@@ -212,6 +213,7 @@ amd64_mainbus_attach(device_t parent, device_t self, void *aux)
 		if (npcibus == 0 && mpacpi_active)
 			npcibus = mp_pci_scan(self, &mba.mba_pba, pcibusprint);
 #endif
+
 #if defined(MPBIOS) && defined(MPBIOS_SCANPCI)
 		if (npcibus == 0 && mpbios_scanned != 0)
 			npcibus = mp_pci_scan(self, &mba.mba_pba, pcibusprint);
@@ -236,6 +238,10 @@ amd64_mainbus_attach(device_t parent, device_t self, void *aux)
 		    CFARGS(.iattr = "isabus"));
 	}
 #endif
+
+	mba.mba_cmdline.memt = x86_bus_space_mem;
+	mba.mba_cmdline.dmat = &pci_bus_dma_tag;
+	config_found(self, &mba.mba_cmdline, NULL, CFARGS(.iattr = "cmdlinebus"));
 
 	if (!pmf_device_register(self, NULL, NULL))
 		aprint_error_dev(self, "couldn't establish power handler\n");

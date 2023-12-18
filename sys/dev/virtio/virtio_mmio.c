@@ -39,6 +39,7 @@ __KERNEL_RCSID(0, "$NetBSD: virtio_mmio.c,v 1.11 2023/07/07 07:19:36 rin Exp $")
 
 #define VIRTIO_PRIVATE
 #include <dev/virtio/virtio_mmiovar.h>
+#include <dev/pci/virtioreg.h>
 
 #define VIRTIO_MMIO_MAGIC		('v' | 'i' << 8 | 'r' << 16 | 't' << 24)
 
@@ -56,10 +57,18 @@ __KERNEL_RCSID(0, "$NetBSD: virtio_mmio.c,v 1.11 2023/07/07 07:19:36 rin Exp $")
 #define VIRTIO_MMIO_QUEUE_NUM		0x038
 #define VIRTIO_MMIO_QUEUE_ALIGN		0x03c
 #define VIRTIO_MMIO_QUEUE_PFN		0x040
+#define	VIRTIO_MMIO_QUEUE_READY		0x044	/* requires version 2 */
 #define VIRTIO_MMIO_QUEUE_NOTIFY	0x050
 #define VIRTIO_MMIO_INTERRUPT_STATUS	0x060
 #define VIRTIO_MMIO_INTERRUPT_ACK	0x064
 #define VIRTIO_MMIO_STATUS		0x070
+#define	VIRTIO_MMIO_QUEUE_DESC_LOW	0x080	/* requires version 2 */
+#define	VIRTIO_MMIO_QUEUE_DESC_HIGH	0x084	/* requires version 2 */
+#define	VIRTIO_MMIO_QUEUE_AVAIL_LOW	0x090	/* requires version 2 */
+#define	VIRTIO_MMIO_QUEUE_AVAIL_HIGH	0x094	/* requires version 2 */
+#define	VIRTIO_MMIO_QUEUE_USED_LOW	0x0a0	/* requires version 2 */
+#define	VIRTIO_MMIO_QUEUE_USED_HIGH	0x0a4	/* requires version 2 */
+#define	VIRTIO_MMIO_CONFIG_GENERATION	0x0fc	/* requires version 2 */
 #define VIRTIO_MMIO_CONFIG		0x100
 
 #define VIRTIO_MMIO_INT_VRING		(1 << 0)
@@ -86,6 +95,7 @@ __KERNEL_RCSID(0, "$NetBSD: virtio_mmio.c,v 1.11 2023/07/07 07:19:36 rin Exp $")
 static void	virtio_mmio_kick(struct virtio_softc *, uint16_t);
 static uint16_t	virtio_mmio_read_queue_size(struct virtio_softc *, uint16_t);
 static void	virtio_mmio_setup_queue(struct virtio_softc *, uint16_t, uint64_t);
+static int	virtio_mmio_get_status(struct virtio_softc *);
 static void	virtio_mmio_set_status(struct virtio_softc *, int);
 static void	virtio_mmio_negotiate_features(struct virtio_softc *, uint64_t);
 static int	virtio_mmio_alloc_interrupts(struct virtio_softc *);
@@ -96,6 +106,7 @@ static const struct virtio_ops virtio_mmio_ops = {
 	.kick = virtio_mmio_kick,
 	.read_queue_size = virtio_mmio_read_queue_size,
 	.setup_queue = virtio_mmio_setup_queue,
+	.get_status = virtio_mmio_get_status,
 	.set_status = virtio_mmio_set_status,
 	.neg_features = virtio_mmio_negotiate_features,
 	.alloc_interrupts = virtio_mmio_alloc_interrupts,
@@ -117,13 +128,47 @@ virtio_mmio_setup_queue(struct virtio_softc *vsc, uint16_t idx, uint64_t addr)
 {
 	struct virtio_mmio_softc *sc = (struct virtio_mmio_softc *)vsc;
 
-	bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_SEL, idx);
 	bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_NUM,
 	    bus_space_read_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_NUM_MAX));
-	bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_ALIGN,
-	    VIRTIO_PAGE_SIZE);
-	bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_PFN,
-	    addr / VIRTIO_PAGE_SIZE);
+
+	if (sc->mmio_version == 1) {
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_SEL, idx);
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_ALIGN,
+		    VIRTIO_PAGE_SIZE);
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_PFN,
+		    addr / VIRTIO_PAGE_SIZE);
+	} else {
+		switch(idx) {
+		case 0:
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_DESC_LOW,
+		    addr);
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_DESC_HIGH,
+		    ((uint64_t)addr >> 32));
+		break;
+		case 1:
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_AVAIL_LOW,
+		    addr);
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_AVAIL_HIGH,
+		    ((uint64_t)addr >> 32));
+		break;
+		case 2:
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_USED_LOW,
+		    addr);
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_USED_HIGH,
+		    ((uint64_t)addr >> 32));
+		break;
+		}
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_READY, 1);
+	}
+}
+
+static int
+virtio_mmio_get_status(struct virtio_softc *vsc)
+{
+	struct virtio_mmio_softc *sc = (struct virtio_mmio_softc *)vsc;
+
+	return bus_space_read_4(sc->sc_iot, sc->sc_ioh,
+		       VIRTIO_MMIO_STATUS);
 }
 
 static void
@@ -163,21 +208,19 @@ virtio_mmio_common_attach(struct virtio_mmio_softc *sc)
 		    "wrong magic value 0x%08x; giving up\n", magic);
 		return;
 	}
-
 	ver = bus_space_read_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_VERSION);
-	if (ver != 1) {
+	if (ver < 1 || ver > 2) {
 		aprint_error_dev(vsc->sc_dev,
 		    "unknown version 0x%02x; giving up\n", ver);
 		return;
 	}
+	sc->mmio_version = ver;
 
 	id = bus_space_read_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_DEVICE_ID);
-
 	/* we could use PAGE_SIZE, but virtio(4) assumes 4KiB for now */
-	bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_GUEST_PAGE_SIZE,
-	    VIRTIO_PAGE_SIZE);
-
-	/* no device connected. */
+	if (ver == 1)
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh,
+			VIRTIO_MMIO_GUEST_PAGE_SIZE, VIRTIO_PAGE_SIZE);
 	if (id == 0)
 		return;
 
@@ -227,27 +270,79 @@ virtio_mmio_common_detach(struct virtio_mmio_softc *sc, int flags)
 	return 0;
 }
 
+static uint64_t
+virtio_filter_transport_features(uint64_t features)
+{
+	uint64_t transport, mask;
+
+	transport = (1ULL <<
+	    (VIRTIO_TRANSPORT_F_END - VIRTIO_TRANSPORT_F_START)) - 1;
+	transport <<= VIRTIO_TRANSPORT_F_START;
+
+	mask = -1ULL & ~transport;
+	mask |= VIRTIO_RING_F_INDIRECT_DESC;
+	mask |= VIRTIO_RING_F_EVENT_IDX;
+	mask |= VIRTIO_F_VERSION_1;
+
+	return (features & mask);
+}
 /*
  * Feature negotiation.
  */
 static void
 virtio_mmio_negotiate_features(struct virtio_softc *vsc, uint64_t
-    guest_features)
+    child_features)
 {
 	struct virtio_mmio_softc *sc = (struct virtio_mmio_softc *)vsc;
-	uint32_t r;
+	uint64_t host_features, features;
+	int status;
+
+	if (sc->mmio_version > 1)
+		child_features |= VIRTIO_F_VERSION_1;
+
+	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
+	    VIRTIO_MMIO_HOST_FEATURES_SEL, 1);
+	host_features = bus_space_read_4(sc->sc_iot, sc->sc_ioh,
+				VIRTIO_MMIO_HOST_FEATURES);
+	host_features <<= 32;
 
 	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
 	    VIRTIO_MMIO_HOST_FEATURES_SEL, 0);
-	r = bus_space_read_4(sc->sc_iot, sc->sc_ioh,
+	host_features |= bus_space_read_4(sc->sc_iot, sc->sc_ioh,
 				VIRTIO_MMIO_HOST_FEATURES);
-	r &= guest_features;
-	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
-	    VIRTIO_MMIO_GUEST_FEATURES_SEL, 0);
-	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
-			  VIRTIO_MMIO_GUEST_FEATURES, r);
 
-	vsc->sc_active_features = r;
+	/*
+	 * Limit negotiated features to what the driver, virtqueue, and
+	 * host all support.
+	 */
+	features = host_features & child_features;
+	features = virtio_filter_transport_features(features);
+	vsc->sc_active_features = features;
+
+	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
+		VIRTIO_MMIO_GUEST_FEATURES_SEL, 1);
+	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
+		VIRTIO_MMIO_GUEST_FEATURES, features >> 32);
+
+	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
+		VIRTIO_MMIO_GUEST_FEATURES_SEL, 0);
+	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
+		VIRTIO_MMIO_GUEST_FEATURES, features);
+
+	if (sc->mmio_version > 1) {
+		/*
+		 * Must re-read the status after setting it to verify the
+		 * negotiated features were accepted by the device.
+		 */
+		/* https://twitter.com/cperciva/status/1548447423436967936 */
+		virtio_mmio_set_status(vsc, VIRTIO_CONFIG_S_FEATURES_OK);
+
+		status = virtio_mmio_get_status(vsc);
+		if ((status & VIRTIO_CONFIG_S_FEATURES_OK) == 0) {
+			aprint_error_dev(vsc->sc_dev,
+			"desired features were not accepted\n");
+		}
+	}
 }
 
 /*
@@ -290,9 +385,11 @@ virtio_mmio_kick(struct virtio_softc *vsc, uint16_t idx)
 static int
 virtio_mmio_alloc_interrupts(struct virtio_softc *vsc)
 {
-	struct virtio_mmio_softc * const sc = (struct virtio_mmio_softc *)vsc;
+	/* struct virtio_mmio_softc * const sc = (struct virtio_mmio_softc *)vsc;
 
 	return sc->sc_alloc_interrupts(sc);
+	*/
+	return 0;
 }
 
 static void
