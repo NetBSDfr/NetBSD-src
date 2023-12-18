@@ -127,6 +127,7 @@ static void
 virtio_mmio_setup_queue(struct virtio_softc *vsc, uint16_t idx, uint64_t addr)
 {
 	struct virtio_mmio_softc *sc = (struct virtio_mmio_softc *)vsc;
+	struct virtqueue *vqs = sc->sc_sc.sc_vqs;
 
 	bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_NUM,
 	    bus_space_read_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_NUM_MAX));
@@ -138,26 +139,21 @@ virtio_mmio_setup_queue(struct virtio_softc *vsc, uint16_t idx, uint64_t addr)
 		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_PFN,
 		    addr / VIRTIO_PAGE_SIZE);
 	} else {
-		switch(idx) {
-		case 0:
 		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_DESC_LOW,
 		    addr);
 		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_DESC_HIGH,
 		    ((uint64_t)addr >> 32));
-		break;
-		case 1:
-		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_AVAIL_LOW,
-		    addr);
-		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_AVAIL_HIGH,
-		    ((uint64_t)addr >> 32));
-		break;
-		case 2:
+
 		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_USED_LOW,
-		    addr);
+		    addr + vqs[idx].vq_availoffset);
 		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_USED_HIGH,
-		    ((uint64_t)addr >> 32));
-		break;
-		}
+		    ((uint64_t)(addr+vqs[idx].vq_availoffset) >> 32));
+
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_USED_LOW,
+		    addr + vqs[idx].vq_usedoffset);
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_USED_HIGH,
+		    ((uint64_t)(addr+vqs[idx].vq_usedoffset) >> 32));
+
 		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_READY, 1);
 	}
 }
