@@ -201,7 +201,6 @@ amd64_mainbus_attach(device_t parent, device_t self, void *aux)
 		mba.mba_pba.pba_iot = x86_bus_space_io;
 		mba.mba_pba.pba_memt = x86_bus_space_mem;
 		mba.mba_pba.pba_dmat = &pci_bus_dma_tag;
-		mba.mba_pba.pba_dmat64 = &pci_bus_dma64_tag;
 		mba.mba_pba.pba_pc = NULL;
 		mba.mba_pba.pba_flags =
 		    PCI_FLAGS_IO_OKAY | PCI_FLAGS_MEM_OKAY |

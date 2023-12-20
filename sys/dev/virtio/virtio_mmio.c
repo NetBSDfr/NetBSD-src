@@ -354,6 +354,7 @@ virtio_mmio_intr(void *arg)
 	/* check and ack the interrupt */
 	isr = bus_space_read_4(sc->sc_iot, sc->sc_ioh,
 			       VIRTIO_MMIO_INTERRUPT_STATUS);
+	printf(">>> ISR: %d\n", isr);
 	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
 			  VIRTIO_MMIO_INTERRUPT_ACK, isr);
 	if ((isr & VIRTIO_MMIO_INT_CONFIG) &&
@@ -361,6 +362,7 @@ virtio_mmio_intr(void *arg)
 		r = (vsc->sc_config_change)(vsc);
 	if ((isr & VIRTIO_MMIO_INT_VRING) &&
 	    (vsc->sc_intrhand != NULL)) {
+		printf(">>> INTR???\n");
 		if (vsc->sc_soft_ih != NULL)
 			softint_schedule(vsc->sc_soft_ih);
 		else
@@ -381,11 +383,9 @@ virtio_mmio_kick(struct virtio_softc *vsc, uint16_t idx)
 static int
 virtio_mmio_alloc_interrupts(struct virtio_softc *vsc)
 {
-	/* struct virtio_mmio_softc * const sc = (struct virtio_mmio_softc *)vsc;
+	struct virtio_mmio_softc * const sc = (struct virtio_mmio_softc *)vsc;
 
 	return sc->sc_alloc_interrupts(sc);
-	*/
-	return 0;
 }
 
 static void
