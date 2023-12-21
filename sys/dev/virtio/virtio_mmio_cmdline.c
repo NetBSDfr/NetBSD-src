@@ -38,7 +38,8 @@ __KERNEL_RCSID(0, "$NetBSD: virtio_mmio_cmdline.c");
 #include <dev/virtio/cmdlinevar.h>
 #include <xen/hypervisor.h>
 
-#include <x86/include/intr.h>
+#include <machine/i82093var.h>
+#include "ioapic.h"
 
 #define VMMIOSTR "virtio_mmio.device="
 
@@ -250,19 +251,30 @@ virtio_mmio_cmdline_alloc_interrupts(struct virtio_mmio_softc *msc)
 	struct virtio_mmio_cmdline_softc *const sc =
 		(struct virtio_mmio_cmdline_softc *)msc;
 	struct virtio_softc *const vsc = &msc->sc_sc;
+	struct ioapic_softc *ioapic;
 	struct pic *pic;
-	int pin = sc->margs.irq;
+	int irq = sc->margs.irq;
+	int pin = irq;
 
-	pic = &i8259_pic;
+	/* ioapic = ioapic_find_bybase(irq);*/
+	ioapic = ioapic_find_bybase(irq);
 
-	msc->sc_ih = intr_establish_xname(sc->margs.irq, pic, pin, IST_LEVEL, IPL_BIO,
-		virtio_mmio_intr, msc, true, device_xname(vsc->sc_dev));
+	if (ioapic != NULL) {
+		KASSERT(ioapic->sc_pic.pic_type == PIC_IOAPIC);
+		pic = &ioapic->sc_pic;
+		pin = irq - pic->pic_vecbase;
+		irq = -1;
+	} else
+		pic = &i8259_pic;
+
+	msc->sc_ih = intr_establish_xname(irq, pic, pin, IST_EDGE, IPL_BIO,
+		virtio_mmio_intr, msc, false, device_xname(vsc->sc_dev));
 	if (msc->sc_ih == NULL) {
 		aprint_error_dev(vsc->sc_dev,
 		    "failed to establish interrupt\n");
 		return -1;
 	}
-	aprint_normal_dev(vsc->sc_dev, "interrupting on %ld\n", sc->margs.irq);
+	aprint_normal_dev(vsc->sc_dev, "interrupting on %d\n", irq);
 
 	return 0;
 }
