@@ -74,7 +74,8 @@ static void	virtio_reset_vq(struct virtio_softc *,
 void
 virtio_set_status(struct virtio_softc *sc, int status)
 {
-	sc->sc_ops->set_status(sc, status);
+	if (sc->sc_ops->set_status)
+		sc->sc_ops->set_status(sc, status);
 }
 
 /*
