@@ -278,6 +278,7 @@
 
 #ifdef XEN
 #define __ASSEMBLY__
+#include <xen/include/public/arch-x86/cpuid.h>
 #include <xen/include/public/elfnote.h>
 #include <xen/include/public/xen.h>
 
@@ -1077,10 +1078,24 @@ ENTRY(start_genpvh)
 	push %ebx
 	xorl %eax, %eax
 	cpuid
-	cmp $0x566e6558, %ebx	/* "VneX" */
+	cmpl $0x1, %eax				/* Check if we can call CPUID with eax=1 */
+	jb .start_genpvh
+	xorl %eax, %eax
+	inc %eax
+	cpuid
+	shr $31, %ecx
+	testb $1, %cl				/* Check if bit 31 of ECX (hypervisor) is set */
+	jz .start_genpvh
+	xorl %eax, %eax
+	inc %eax
+	shl $30, %eax
+	cpuid					/* Calling cpuid with eax=0x40000000 */
+	cmp $XEN_CPUID_SIGNATURE_EBX, %ebx	/* "VneX" */
 	je .start_xen32
 
 	/* We have been started by a VMM that is *not* Xen */
+
+.start_genpvh:
 
 	/* First, copy the hvm_start_info structure to __kernel_end */
 	pop %ebx

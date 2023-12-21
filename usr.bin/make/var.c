@@ -1,4 +1,4 @@
-/*	$NetBSD: var.c,v 1.1076 2023/12/09 00:13:38 sjg Exp $	*/
+/*	$NetBSD: var.c,v 1.1086 2023/12/20 09:03:08 rillig Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -139,7 +139,7 @@
 #include "metachar.h"
 
 /*	"@(#)var.c	8.3 (Berkeley) 3/19/94" */
-MAKE_RCSID("$NetBSD: var.c,v 1.1076 2023/12/09 00:13:38 sjg Exp $");
+MAKE_RCSID("$NetBSD: var.c,v 1.1086 2023/12/20 09:03:08 rillig Exp $");
 
 /*
  * Variables are defined using one of the VAR=value assignments.  Their
@@ -222,9 +222,6 @@ typedef struct Var {
 /*
  * Exporting variables is expensive and may leak memory, so skip it if we
  * can.
- *
- * To avoid this, it might be worth encapsulating the environment variables
- * in a separate data structure called EnvVars.
  */
 typedef enum VarExportedMode {
 	VAR_EXPORTED_NONE,
@@ -378,10 +375,10 @@ CanonicalVarname(Substring name)
 	if (Substring_Equals(name, ".TARGET"))
 		return Substring_InitStr(TARGET);
 
+	/* GNU make has an additional alias $^ == ${.ALLSRC}. */
+
 	if (Substring_Equals(name, ".SHELL") && shellPath == NULL)
 		Shell_Init();
-
-	/* GNU make has an additional alias $^ == ${.ALLSRC}. */
 
 	return name;
 }
@@ -506,15 +503,14 @@ Var_Delete(GNode *scope, const char *varname)
 	Var *v;
 
 	if (he == NULL) {
-		DEBUG2(VAR, "%s: delete %s (not found)\n",
+		DEBUG2(VAR, "%s: ignoring delete '%s' as it is not found\n",
 		    scope->name, varname);
 		return;
 	}
 
-	DEBUG2(VAR, "%s: delete %s\n", scope->name, varname);
 	v = he->value;
 	if (v->readOnly) {
-		DEBUG2(VAR, "%s: delete %s (readOnly)\n",
+		DEBUG2(VAR, "%s: ignoring delete '%s' as it is read-only\n",
 		    scope->name, varname);
 		return;
 	}
@@ -525,6 +521,7 @@ Var_Delete(GNode *scope, const char *varname)
 		return;
 	}
 
+	DEBUG2(VAR, "%s: delete %s\n", scope->name, varname);
 	if (v->exported)
 		unsetenv(v->name.str);
 	if (strcmp(v->name.str, ".MAKE.EXPORTED") == 0)
@@ -789,10 +786,10 @@ Var_ExportVars(const char *varnames)
 static void
 ClearEnv(void)
 {
-	const char *cp;
+	const char *level;
 	char **newenv;
 
-	cp = getenv(MAKE_LEVEL_ENV);	/* we should preserve this */
+	level = getenv(MAKE_LEVEL_ENV);	/* we should preserve this */
 	if (environ == savedEnv) {
 		/* we have been here before! */
 		newenv = bmake_realloc(environ, 2 * sizeof(char *));
@@ -808,8 +805,8 @@ ClearEnv(void)
 	environ = savedEnv = newenv;
 	newenv[0] = NULL;
 	newenv[1] = NULL;
-	if (cp != NULL && *cp != '\0')
-		setenv(MAKE_LEVEL_ENV, cp, 1);
+	if (level != NULL && *level != '\0')
+		setenv(MAKE_LEVEL_ENV, level, 1);
 }
 
 static void
@@ -865,12 +862,12 @@ UnexportVar(Substring varname, UnexportWhat what)
 	if (what == UNEXPORT_NAMED) {
 		/* Remove the variable names from .MAKE.EXPORTED. */
 		/* XXX: v->name is injected without escaping it */
-		char *expr = str_concat3("${.MAKE.EXPORTED:N",
-		    v->name.str, "}");
-		char *cp = Var_Subst(expr, SCOPE_GLOBAL, VARE_WANTRES);
+		char *expr = str_concat3(
+		    "${.MAKE.EXPORTED:N", v->name.str, "}");
+		char *filtered = Var_Subst(expr, SCOPE_GLOBAL, VARE_WANTRES);
 		/* TODO: handle errors */
-		Global_Set(".MAKE.EXPORTED", cp);
-		free(cp);
+		Global_Set(".MAKE.EXPORTED", filtered);
+		free(filtered);
 		free(expr);
 	}
 }
@@ -911,28 +908,16 @@ Var_UnExport(bool isEnv, const char *arg)
 
 /*
  * When there is a variable of the same name in the command line scope, the
- * global variable would not be visible anywhere.  Therefore there is no
+ * global variable would not be visible anywhere.  Therefore, there is no
  * point in setting it at all.
  *
  * See 'scope == SCOPE_CMDLINE' in Var_SetWithFlags.
  */
 static bool
-ExistsInCmdline(const char *name, const char *val)
+ExistsInCmdline(const char *name)
 {
-	Var *v;
-
-	v = VarFind(name, SCOPE_CMDLINE, false);
-	if (v == NULL)
-		return false;
-
-	if (v->fromCmd) {
-		DEBUG3(VAR, "%s: %s = %s ignored!\n",
-		    SCOPE_GLOBAL->name, name, val);
-		return true;
-	}
-
-	VarFreeShortLived(v);
-	return false;
+	Var *v = VarFind(name, SCOPE_CMDLINE, false);
+	return v != NULL && v->fromCmd;
 }
 
 /* Set the variable to the value; the name is not expanded. */
@@ -944,12 +929,19 @@ Var_SetWithFlags(GNode *scope, const char *name, const char *val,
 
 	assert(val != NULL);
 	if (name[0] == '\0') {
-		DEBUG0(VAR, "SetVar: variable name is empty - ignored\n");
+		DEBUG3(VAR,
+		    "%s: ignoring '%s = %s' as the variable name is empty\n",
+		    scope->name, name, val);
 		return;
 	}
 
-	if (scope == SCOPE_GLOBAL && ExistsInCmdline(name, val))
+	if (scope == SCOPE_GLOBAL && ExistsInCmdline(name)) {
+		DEBUG3(VAR,
+		    "%s: ignoring '%s = %s' "
+		    "due to a command line variable of the same name\n",
+		    scope->name, name, val);
 		return;
+	}
 
 	/*
 	 * Only look for a variable in the given scope since anything set
@@ -969,15 +961,17 @@ Var_SetWithFlags(GNode *scope, const char *name, const char *val,
 			Var_Delete(SCOPE_GLOBAL, name);
 		}
 		if (strcmp(name, ".SUFFIXES") == 0) {
-			/* special: treat as readOnly */
-			DEBUG3(VAR, "%s: %s = %s ignored (read-only)\n",
+			/* special: treat as read-only */
+			DEBUG3(VAR,
+			    "%s: ignoring '%s = %s' as it is read-only\n",
 			    scope->name, name, val);
 			return;
 		}
 		v = VarAdd(name, val, scope, flags);
 	} else {
 		if (v->readOnly && !(flags & VAR_SET_READONLY)) {
-			DEBUG3(VAR, "%s: %s = %s ignored (read-only)\n",
+			DEBUG3(VAR,
+			    "%s: ignoring '%s = %s' as it is read-only\n",
 			    scope->name, name, val);
 			return;
 		}
@@ -990,19 +984,21 @@ Var_SetWithFlags(GNode *scope, const char *name, const char *val,
 			ExportVar(name, VEM_PLAIN);
 	}
 
-	/*
-	 * Any variables given on the command line are automatically exported
-	 * to the environment (as per POSIX standard), except for internals.
-	 */
 	if (scope == SCOPE_CMDLINE) {
 		v->fromCmd = true;
+
+		/*
+		 * Any variables given on the command line are automatically
+		 * exported to the environment (as per POSIX standard), except
+		 * for internals.
+		 */
 		if (!(flags & VAR_SET_NO_EXPORT) && name[0] != '.') {
 
 			/*
 			 * If requested, don't export these in the
 			 * environment individually.  We still put
 			 * them in .MAKEOVERRIDES so that the
-			 * command-line settings continue to override 
+			 * command-line settings continue to override
 			 * Makefile settings.
 			 */
 			if (!opts.varNoExportEnv)
@@ -1030,15 +1026,8 @@ Var_Set(GNode *scope, const char *name, const char *val)
 }
 
 /*
- * Set the variable name to the value val in the given scope.
- *
- * If the variable doesn't yet exist, it is created.
- * Otherwise the new value overwrites and replaces the old value.
- *
- * Input:
- *	scope		scope in which to set it
- *	name		name of the variable to set, is expanded once
- *	val		value to give to the variable
+ * In the scope, expand the variable name once, then create the variable or
+ * replace its value.
  */
 void
 Var_SetExpand(GNode *scope, const char *name, const char *val)
@@ -1051,10 +1040,10 @@ Var_SetExpand(GNode *scope, const char *name, const char *val)
 	Var_Expand(&varname, scope, VARE_WANTRES);
 
 	if (varname.str[0] == '\0') {
-		DEBUG2(VAR,
-		    "Var_SetExpand: variable name \"%s\" expands "
-		    "to empty string, with value \"%s\" - ignored\n",
-		    unexpanded_name, val);
+		DEBUG4(VAR,
+		    "%s: ignoring '%s = %s' "
+		    "as the variable name '%s' expands to empty\n",
+		    scope->name, varname.str, val, unexpanded_name);
 	} else
 		Var_SetWithFlags(scope, varname.str, val, VAR_SET_NONE);
 
@@ -1095,8 +1084,8 @@ Var_Append(GNode *scope, const char *name, const char *val)
 	if (v == NULL) {
 		Var_SetWithFlags(scope, name, val, VAR_SET_NONE);
 	} else if (v->readOnly) {
-		DEBUG1(VAR, "Ignoring append to %s since it is read-only\n",
-		    name);
+		DEBUG3(VAR, "%s: ignoring '%s += %s' as it is read-only\n",
+		    scope->name, name, val);
 	} else if (scope == SCOPE_CMDLINE || !v->fromCmd) {
 		Buf_AddByte(&v->val, ' ');
 		Buf_AddStr(&v->val, val);
@@ -1145,10 +1134,10 @@ Var_AppendExpand(GNode *scope, const char *name, const char *val)
 
 	Var_Expand(&xname, scope, VARE_WANTRES);
 	if (xname.str != name && xname.str[0] == '\0')
-		DEBUG2(VAR,
-		    "Var_AppendExpand: variable name \"%s\" expands "
-		    "to empty string, with value \"%s\" - ignored\n",
-		    name, val);
+		DEBUG4(VAR,
+		    "%s: ignoring '%s += %s' "
+		    "as the variable name '%s' expands to empty\n",
+		    scope->name, xname.str, val, name);
 	else
 		Var_Append(scope, xname.str, val);
 
@@ -1445,14 +1434,6 @@ ModifyWord_SysVSubst(Substring word, SepBuf *buf, void *data)
 }
 #endif
 
-
-struct ModifyWord_SubstArgs {
-	Substring lhs;
-	Substring rhs;
-	PatternFlags pflags;
-	bool matched;
-};
-
 static const char *
 Substring_Find(Substring haystack, Substring needle)
 {
@@ -1465,6 +1446,13 @@ Substring_Find(Substring haystack, Substring needle)
 			return haystack.start + i;
 	return NULL;
 }
+
+struct ModifyWord_SubstArgs {
+	Substring lhs;
+	Substring rhs;
+	PatternFlags pflags;
+	bool matched;
+};
 
 /*
  * Callback for ModifyWords to implement the :S,from,to, modifier.
@@ -1629,7 +1617,7 @@ ok:
 	wp += (size_t)m[0].rm_eo;
 	if (args->pflags.subGlobal) {
 		flags |= REG_NOTBOL;
-		if (m[0].rm_so == 0 && m[0].rm_eo == 0) {
+		if (m[0].rm_so == 0 && m[0].rm_eo == 0 && *wp != '\0') {
 			SepBuf_AddBytes(buf, wp, 1);
 			wp++;
 		}
@@ -1915,8 +1903,8 @@ FormatTime(const char *fmt, time_t t, bool gmt)
  * XXX: As of 2020-11-15, some modifiers such as :S, :C, :P, :L do not
  * need to be followed by a ':' or endc; this was an unintended mistake.
  *
- * If parsing fails because of a missing delimiter (as in the :S, :C or :@
- * modifiers), return AMR_CLEANUP.
+ * If parsing fails because of a missing delimiter after a modifier part (as
+ * in the :S, :C or :@ modifiers), return AMR_CLEANUP.
  *
  * If parsing fails because the modifier is unknown, return AMR_UNKNOWN to
  * try the SysV modifier ${VAR:from=to} as fallback.  This should only be
@@ -2735,9 +2723,9 @@ ParseModifier_Match(const char **pp, const ModChain *ch)
 	 * See if the code can be merged.
 	 * See also ApplyModifier_Defined.
 	 */
-	int nest = 0;
+	int depth = 0;
 	const char *p;
-	for (p = mod + 1; *p != '\0' && !(*p == ':' && nest == 0); p++) {
+	for (p = mod + 1; *p != '\0' && !(*p == ':' && depth == 0); p++) {
 		if (*p == '\\' && p[1] != '\0' &&
 		    (IsDelimiter(p[1], ch) || p[1] == ch->startc)) {
 			if (!needSubst)
@@ -2748,10 +2736,10 @@ ParseModifier_Match(const char **pp, const ModChain *ch)
 		if (*p == '$')
 			needSubst = true;
 		if (*p == '(' || *p == '{')
-			nest++;
+			depth++;
 		if (*p == ')' || *p == '}') {
-			nest--;
-			if (nest < 0)
+			depth--;
+			if (depth < 0)
 				break;
 		}
 	}
@@ -3078,8 +3066,8 @@ ApplyModifier_ToSep(const char **pp, ModChain *ch)
 	const char *sep = *pp + 2;
 
 	/*
-	 * Even in parse-only mode, proceed as normal since there is
-	 * neither any observable side effect nor a performance penalty.
+	 * Even in parse-only mode, apply the side effects, since the side
+	 * effects are neither observable nor is there a performance penalty.
 	 * Checking for wantRes for every single piece of code in here
 	 * would make the code in this function too hard to read.
 	 */
@@ -3236,14 +3224,14 @@ ApplyModifier_Words(const char **pp, ModChain *ch)
 	Expr *expr = ch->expr;
 	int first, last;
 	const char *p;
-	LazyBuf estrBuf;
-	FStr festr;
+	LazyBuf argBuf;
+	FStr arg;
 
 	(*pp)++;		/* skip the '[' */
-	if (!ParseModifierPart(pp, ']', expr->emode, ch, &estrBuf))
+	if (!ParseModifierPart(pp, ']', expr->emode, ch, &argBuf))
 		return AMR_CLEANUP;
-	festr = LazyBuf_DoneGet(&estrBuf);
-	p = festr.str;
+	arg = LazyBuf_DoneGet(&argBuf);
+	p = arg.str;
 
 	if (!IsDelimiter(**pp, ch))
 		goto bad_modifier;		/* Found junk after ']' */
@@ -3264,7 +3252,6 @@ ApplyModifier_Words(const char **pp, ModChain *ch)
 			size_t ac = words.len;
 			SubstringWords_Free(words);
 
-			/* 3 digits + '\0' is usually enough */
 			Buf_InitSize(&buf, 4);
 			Buf_AddInt(&buf, (int)ac);
 			Expr_SetValueOwn(expr, Buf_DoneData(&buf));
@@ -3308,11 +3295,11 @@ ApplyModifier_Words(const char **pp, ModChain *ch)
 		ch->sep, ch->oneBigWord));
 
 ok:
-	FStr_Done(&festr);
+	FStr_Done(&arg);
 	return AMR_OK;
 
 bad_modifier:
-	FStr_Done(&festr);
+	FStr_Done(&arg);
 	return AMR_BAD;
 }
 
@@ -3491,8 +3478,8 @@ ApplyModifier_IfElse(const char **pp, ModChain *ch)
 	if (cond_rc == CR_ERROR) {
 		Substring thenExpr = LazyBuf_Get(&thenBuf);
 		Substring elseExpr = LazyBuf_Get(&elseBuf);
-		Error("Bad conditional expression '%s' in '%s?%.*s:%.*s'",
-		    expr->name, expr->name,
+		Error("Bad conditional expression '%s' before '?%.*s:%.*s'",
+		    expr->name,
 		    (int)Substring_Length(thenExpr), thenExpr.start,
 		    (int)Substring_Length(elseExpr), elseExpr.start);
 		LazyBuf_Done(&thenBuf);
@@ -4047,11 +4034,11 @@ ApplySingleModifier(const char **pp, ModChain *ch)
 }
 
 #if __STDC_VERSION__ >= 199901L
-#define ModChain_Literal(expr, startc, endc, sep, oneBigWord) \
+#define ModChain_Init(expr, startc, endc, sep, oneBigWord) \
 	(ModChain) { expr, startc, endc, sep, oneBigWord }
 #else
 MAKE_INLINE ModChain
-ModChain_Literal(Expr *expr, char startc, char endc, char sep, bool oneBigWord)
+ModChain_Init(Expr *expr, char startc, char endc, char sep, bool oneBigWord)
 {
 	ModChain ch;
 	ch.expr = expr;
@@ -4072,7 +4059,7 @@ ApplyModifiers(
     char endc		/* ')' or '}'; or '\0' for indirect modifiers */
 )
 {
-	ModChain ch = ModChain_Literal(expr, startc, endc, ' ', false);
+	ModChain ch = ModChain_Init(expr, startc, endc, ' ', false);
 	const char *p;
 	const char *mod;
 
@@ -4093,17 +4080,17 @@ ApplyModifiers(
 		ApplyModifierResult res;
 
 		if (*p == '$') {
+			/*
+			 * TODO: Only evaluate the expression once, no matter
+			 * whether it's an indirect modifier or the initial
+			 * part of a SysV modifier.
+			 */
 			ApplyModifiersIndirectResult amir =
 			    ApplyModifiersIndirect(&ch, &p);
 			if (amir == AMIR_CONTINUE)
 				continue;
 			if (amir == AMIR_OUT)
 				break;
-			/*
-			 * It's neither '${VAR}:' nor '${VAR}}'.  Try to parse
-			 * it as a SysV modifier, as that is the only modifier
-			 * that can start with '$'.
-			 */
 		}
 
 		mod = p;
@@ -4120,7 +4107,7 @@ ApplyModifiers(
 	return;
 
 bad_modifier:
-	/* XXX: The modifier end is only guessed. */
+	/* Take a guess at where the modifier ends. */
 	Error("Bad modifier \":%.*s\" for variable \"%s\"",
 	    (int)strcspn(mod, ":)}"), mod, expr->name);
 
@@ -4221,7 +4208,6 @@ ParseVarname(const char **pp, char startc, char endc,
 		if (*p == endc)
 			depth--;
 
-		/* An expression inside an expression, expand. */
 		if (*p == '$') {
 			FStr nested_val = Var_Parse(&p, scope, emode);
 			/* TODO: handle errors */
@@ -4434,9 +4420,9 @@ ParseVarnameLong(
 		 * variable name, such as :L or :?.
 		 *
 		 * Most modifiers leave this expression in the "undefined"
-		 * state (VES_UNDEF), only a few modifiers like :D, :U, :L,
+		 * state (DEF_UNDEF), only a few modifiers like :D, :U, :L,
 		 * :P turn this undefined expression into a defined
-		 * expression (VES_DEF).
+		 * expression (DEF_DEFINED).
 		 *
 		 * In the end, after applying all modifiers, if the expression
 		 * is still undefined, Var_Parse will return an empty string
@@ -4457,12 +4443,12 @@ ParseVarnameLong(
 }
 
 #if __STDC_VERSION__ >= 199901L
-#define Expr_Literal(name, value, emode, scope, defined) \
-	{ name, value, emode, scope, defined }
+#define Expr_Init(name, value, emode, scope, defined) \
+	(Expr) { name, value, emode, scope, defined }
 #else
 MAKE_INLINE Expr
-Expr_Literal(const char *name, FStr value,
-	     VarEvalMode emode, GNode *scope, ExprDefined defined)
+Expr_Init(const char *name, FStr value,
+	  VarEvalMode emode, GNode *scope, ExprDefined defined)
 {
 	Expr expr;
 
@@ -4477,8 +4463,7 @@ Expr_Literal(const char *name, FStr value,
 
 /*
  * Expressions of the form ${:U...} with a trivial value are often generated
- * by .for loops and are boring, therefore parse and evaluate them in a fast
- * lane without debug logging.
+ * by .for loops and are boring, so evaluate them without debug logging.
  */
 static bool
 Var_Parse_FastLane(const char **pp, VarEvalMode emode, FStr *out_value)
@@ -4505,18 +4490,16 @@ Var_Parse_FastLane(const char **pp, VarEvalMode emode, FStr *out_value)
 }
 
 /*
- * Given the start of an expression (such as $v, $(VAR),
- * ${VAR:Mpattern}), extract the variable name and value, and the modifiers,
- * if any.  While doing that, apply the modifiers to the value of the
- * expression, forming its final value.  A few of the modifiers such as :!cmd!
- * or ::= have side effects.
+ * Given the start of an expression (such as $v, $(VAR), ${VAR:Mpattern}),
+ * extract the variable name and the modifiers, if any.  While parsing, apply
+ * the modifiers to the value of the expression.
  *
  * Input:
  *	*pp		The string to parse.
  *			When called from CondParser_FuncCallEmpty, it can
  *			also point to the "y" of "empty(VARNAME:Modifiers)".
- *	scope		The scope for finding variables
- *	emode		Controls the exact details of parsing and evaluation
+ *	scope		The scope for finding variables.
+ *	emode		Controls the exact details of parsing and evaluation.
  *
  * Output:
  *	*pp		The position where to continue parsing.
@@ -4557,14 +4540,12 @@ Var_Parse(const char **pp, GNode *scope, VarEvalMode emode)
 	bool dynamic;
 	const char *extramodifiers;
 	Var *v;
-	Expr expr = Expr_Literal(NULL, FStr_InitRefer(NULL), emode,
+	Expr expr = Expr_Init(NULL, FStr_InitRefer(NULL), emode,
 	    scope, DEF_REGULAR);
 	FStr val;
 
 	if (Var_Parse_FastLane(pp, emode, &val))
 		return val;
-
-	/* TODO: Reduce computations in parse-only mode. */
 
 	DEBUG2(VAR, "Var_Parse: %s (%s)\n", start, VarEvalMode_Name[emode]);
 
@@ -4598,11 +4579,18 @@ Var_Parse(const char **pp, GNode *scope, VarEvalMode emode)
 	}
 
 	/*
-	 * XXX: This assignment creates an alias to the current value of the
+	 * FIXME: This assignment creates an alias to the current value of the
 	 * variable.  This means that as long as the value of the expression
-	 * stays the same, the value of the variable must not change.
-	 * Using the '::=' modifier, it could be possible to trigger exactly
-	 * this situation.
+	 * stays the same, the value of the variable must not change, and the
+	 * variable must not be deleted.  Using the ':@' modifier, it is
+	 * possible (since var.c 1.212 from 2017-02-01) to delete the variable
+	 * while its value is still being used:
+	 *
+	 *	VAR=	value
+	 *	_:=	${VAR:${:U@VAR@loop@}:S,^,prefix,}
+	 *
+	 * The same effect might be achievable using the '::=' or the ':_'
+	 * modifiers.
 	 *
 	 * At the bottom of this function, the resulting value is compared to
 	 * the then-current value of the variable.  This might also invoke
@@ -4769,7 +4757,6 @@ Var_Subst(const char *str, GNode *scope, VarEvalMode emode)
 	 * Set true if an error has already been reported, to prevent a
 	 * plethora of messages when recursing
 	 */
-	/* See varparse-errors.mk for why the 'static' is necessary here. */
 	static bool errorReported;
 
 	Buf_Init(&res);

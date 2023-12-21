@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1965 2023/11/28 09:50:10 taca Exp $
+#	$NetBSD: 3RDPARTY,v 1.1969 2023/12/20 17:19:15 christos Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -352,13 +352,13 @@ Notes:
 Use the dhcp2netbsd script.
 
 Package:	dhcpcd
-Version:	10.0.4
-Current Vers:	10.0.4
+Version:	10.0.6
+Current Vers:	10.0.6
 Maintainer:	roy
 Archive Site:	https://github.com/NetworkConfiguration/dhcpcd/releases
 Home Page:	https://roy.marples.name/projects/dhcpcd/
 Home Page:	https://github.com/NetworkConfiguration/dhcpcd
-Date:		2023-10-19
+Date:		2023-12-18
 License:	BSD (2-clause)
 Location:	external/bsd/dhcpcd/dist
 Notes:
@@ -482,7 +482,7 @@ Before importing a new version of external/gpl3/gcc:
 
 Package:	gdb
 Version:	13.2
-Current Vers:	13.2
+Current Vers:	14.1
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/gdb/
 Home Page:	http://www.gnu.org/software/gdb/
@@ -1076,12 +1076,12 @@ Notes:
 Patch applied after OpenSSH import.
 
 Package:	OpenSSH
-Version:	9.5
-Current Vers:	9.5 / portable 9.5p1
+Version:	9.6
+Current Vers:	9.6 / portable 9.6p1
 Maintainer:	OpenSSH
 Archive Site:	http://www.openssh.com/ftp.html
 Home Page:	http://www.openssh.com/portable.html
-Date:		2023-07-26
+Date:		2023-12-18
 Mailing List:	openssh-unix-announce@mindrot.org
 Responsible:	thorpej, christos, elric
 License:	BSD. See src/crypto/external/bsd/openssh/dist/LICENSE

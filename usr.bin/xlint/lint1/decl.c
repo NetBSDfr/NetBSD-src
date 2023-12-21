@@ -1,4 +1,4 @@
-/* $NetBSD: decl.c,v 1.383 2023/12/03 18:17:41 rillig Exp $ */
+/* $NetBSD: decl.c,v 1.385 2023/12/10 15:29:38 rillig Exp $ */
 
 /*
  * Copyright (c) 1996 Christopher G. Demetriou.  All Rights Reserved.
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: decl.c,v 1.383 2023/12/03 18:17:41 rillig Exp $");
+__RCSID("$NetBSD: decl.c,v 1.385 2023/12/10 15:29:38 rillig Exp $");
 #endif
 
 #include <sys/param.h>
@@ -97,11 +97,8 @@ initdecl(void)
 }
 
 /*
- * Returns a shared type structure for arithmetic types and void.
- *
- * It's important to duplicate this structure using block_dup_type or
- * expr_dup_type if it is to be modified (adding qualifiers or anything
- * else).
+ * Returns a shared type structure for arithmetic types and void.  The returned
+ * type must not be modified; use block_dup_type or expr_dup_type if necessary.
  */
 type_t *
 gettyp(tspec_t t)
@@ -296,7 +293,6 @@ typedef_error(type_t *td, tspec_t t)
 	return td;
 
 invalid:
-	/* Anything else is not accepted. */
 	dcs->d_invalid_type_combination = true;
 	return td;
 }
@@ -1434,6 +1430,12 @@ declarator_name(sym_t *sym)
 		dcs->d_redeclared_symbol = NULL;
 	} else {
 		dcs->d_redeclared_symbol = sym;
+		if (is_query_enabled[16]
+		    && sym->s_scl == STATIC && dcs->d_scl != STATIC) {
+			/* '%s' was declared 'static', now non-'static' */
+			query_message(16, sym->s_name);
+			print_previous_declaration(sym);
+		}
 		sym = pushdown(sym);
 	}
 
