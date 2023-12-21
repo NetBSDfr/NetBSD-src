@@ -1,4 +1,4 @@
-/*	$NetBSD: netbsd32_machdep_13.c,v 1.3 2019/01/30 10:11:11 hannken Exp $	*/
+/*	$NetBSD: netbsd32_machdep_13.c,v 1.5 2023/12/14 20:17:18 andvar Exp $	*/
 
 /*
  * Copyright (c) 1998, 2001 Matthew R. Green
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: netbsd32_machdep_13.c,v 1.3 2019/01/30 10:11:11 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: netbsd32_machdep_13.c,v 1.5 2023/12/14 20:17:18 andvar Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_compat_netbsd.h"
@@ -105,7 +105,7 @@ compat_13_netbsd32_sigreturn(struct lwp *l, const struct compat_13_netbsd32_sigr
 #ifdef DEBUG
 		printf("%s: rwindow_save(%p) failed, sending SIGILL\n",
 		    __func__, p);
-		Debugger();
+		console_debugger();
 #endif
 		mutex_enter(p->p_lock);
 		sigexit(l, SIGILL);
@@ -114,7 +114,7 @@ compat_13_netbsd32_sigreturn(struct lwp *l, const struct compat_13_netbsd32_sigr
 	if (sigdebug & SDB_FOLLOW) {
 		printf("%s: %s[%d], sigcntxp %u\n", __func__,
 		    p->p_comm, p->p_pid, SCARG(uap, sigcntxp));
-		if (sigdebug & SDB_DDB) Debugger();
+		if (sigdebug & SDB_DDB) console_debugger();
 	}
 #endif
 	scp = (struct netbsd32_sigcontext13 *)(u_long)SCARG(uap, sigcntxp);
@@ -122,7 +122,7 @@ compat_13_netbsd32_sigreturn(struct lwp *l, const struct compat_13_netbsd32_sigr
 	{
 #ifdef DEBUG
 		printf("%s: copyin failed\n", __func__);
-		Debugger();
+		console_debugger();
 #endif
 		return (EINVAL);
 	}
@@ -139,7 +139,7 @@ compat_13_netbsd32_sigreturn(struct lwp *l, const struct compat_13_netbsd32_sigr
 	{
 		printf("%s: pc %d or npc %d invalid\n",
 		   __func__, sc.sc_pc, sc.sc_npc);
-		Debugger();
+		console_debugger();
 		return (EINVAL);
 	}
 #else
@@ -156,7 +156,7 @@ compat_13_netbsd32_sigreturn(struct lwp *l, const struct compat_13_netbsd32_sigr
 	if (sigdebug & SDB_FOLLOW) {
 		printf("%s: return trapframe pc=%d sp=%d tstate=%x\n", __func__,
 		       (int)tf->tf_pc, (int)tf->tf_out[6], (int)tf->tf_tstate);
-		if (sigdebug & SDB_DDB) Debugger();
+		if (sigdebug & SDB_DDB) console_debugger();
 	}
 #endif
 	mutex_enter(p->p_lock);
