@@ -170,7 +170,7 @@ virtio_mmio_cmdline_parse(device_t self, struct virtio_mmio_cmdline_softc *sc)
 			if (error) {
 				aprint_error_dev(self,
 					"couldn't map %#" PRIx64 ": %d",
-		    			(uint64_t)margs->baseaddr, error
+					(uint64_t)margs->baseaddr, error
 				);
 				return;
 			}

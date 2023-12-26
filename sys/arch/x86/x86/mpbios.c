@@ -553,7 +553,7 @@ static uint16_t
 compute_entry_count(const uint8_t *entry, const uint8_t *end)
 {
 	size_t nentries = 0;
- 
+
 	while (entry < end) {
 		switch (*entry) {
 		case MPS_MCT_CPU:

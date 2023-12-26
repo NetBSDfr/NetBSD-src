@@ -229,7 +229,6 @@ ufs_open(void *v)
 		kauth_cred_t	a_cred;
 	} */ *ap = v;
 
-
 	/*
 	 * Files marked append-only must be opened for appending.
 	 */
