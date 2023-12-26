@@ -417,7 +417,6 @@ int
 disk_read_sectors(void (*strat)(struct buf *), const struct disklabel *lp,
     struct buf *bp, unsigned int sector, int count)
 {
-
 	if ((lp->d_secsize / DEV_BSIZE) == 0 || lp->d_secpercyl == 0)
 		return EINVAL;
 
@@ -427,6 +426,7 @@ disk_read_sectors(void (*strat)(struct buf *), const struct disklabel *lp,
 	bp->b_oflags &= ~BO_DONE;
 	bp->b_cylinder = sector / lp->d_secpercyl;
 	(*strat)(bp);
+
 	return biowait(bp);
 }
 

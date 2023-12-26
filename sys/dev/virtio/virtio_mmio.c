@@ -41,6 +41,8 @@ __KERNEL_RCSID(0, "$NetBSD: virtio_mmio.c,v 1.11 2023/07/07 07:19:36 rin Exp $")
 #include <dev/virtio/virtio_mmiovar.h>
 #include <dev/pci/virtioreg.h>
 
+#include <machine/pmap_private.h>
+
 #define VIRTIO_MMIO_MAGIC		('v' | 'i' << 8 | 'r' << 16 | 't' << 24)
 
 #define VIRTIO_MMIO_MAGIC_VALUE		0x000
@@ -128,6 +130,7 @@ virtio_mmio_setup_queue(struct virtio_softc *vsc, uint16_t idx, uint64_t addr)
 {
 	struct virtio_mmio_softc *sc = (struct virtio_mmio_softc *)vsc;
 	struct virtqueue *vqs = sc->sc_sc.sc_vqs;
+	paddr_t paddr;
 
 	bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_NUM,
 	    bus_space_read_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_NUM_MAX));
@@ -139,20 +142,23 @@ virtio_mmio_setup_queue(struct virtio_softc *vsc, uint16_t idx, uint64_t addr)
 		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_PFN,
 		    addr / VIRTIO_PAGE_SIZE);
 	} else {
+		paddr = vtophys((vaddr_t)vqs->vq_desc);
 		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_DESC_LOW,
-		    addr);
+		    paddr);
 		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_DESC_HIGH,
-		    ((uint64_t)addr >> 32));
+		    ((uint64_t)paddr >> 32));
 
-		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_USED_LOW,
-		    addr + vqs[idx].vq_availoffset);
-		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_USED_HIGH,
-		    ((uint64_t)(addr+vqs[idx].vq_availoffset) >> 32));
+		paddr = vtophys((vaddr_t)vqs->vq_avail);
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_AVAIL_LOW,
+		    paddr);
+		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_AVAIL_HIGH,
+		    ((uint64_t)(paddr) >> 32));
 
+		paddr = vtophys((vaddr_t)vqs->vq_used);
 		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_USED_LOW,
-		    addr + vqs[idx].vq_usedoffset);
+		    paddr);
 		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_USED_HIGH,
-		    ((uint64_t)(addr+vqs[idx].vq_usedoffset) >> 32));
+		    ((uint64_t)(paddr) >> 32));
 
 		bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_QUEUE_READY, 1);
 	}
@@ -266,79 +272,49 @@ virtio_mmio_common_detach(struct virtio_mmio_softc *sc, int flags)
 	return 0;
 }
 
-static uint64_t
-virtio_filter_transport_features(uint64_t features)
-{
-	uint64_t transport, mask;
-
-	transport = (1ULL <<
-	    (VIRTIO_TRANSPORT_F_END - VIRTIO_TRANSPORT_F_START)) - 1;
-	transport <<= VIRTIO_TRANSPORT_F_START;
-
-	mask = -1ULL & ~transport;
-	mask |= VIRTIO_RING_F_INDIRECT_DESC;
-	mask |= VIRTIO_RING_F_EVENT_IDX;
-	mask |= VIRTIO_F_VERSION_1;
-
-	return (features & mask);
-}
 /*
  * Feature negotiation.
  */
 static void
 virtio_mmio_negotiate_features(struct virtio_softc *vsc, uint64_t
-    child_features)
+    guest_features)
 {
 	struct virtio_mmio_softc *sc = (struct virtio_mmio_softc *)vsc;
-	uint64_t host_features, features;
-	int status;
+	uint64_t host, negotiated, device_status;
 
-	if (sc->mmio_version > 1)
-		child_features |= VIRTIO_F_VERSION_1;
+	guest_features |= VIRTIO_F_VERSION_1;
+#ifdef __NEED_VIRTIO_F_ACCESS_PLATFORM
+	/* XXX This could use some work. */
+	guest_features |= VIRTIO_F_ACCESS_PLATFORM;
+#endif /* __NEED_VIRTIO_F_ACCESS_PLATFORM */
+	/* notify on empty is 0.9 only */
+	guest_features &= ~VIRTIO_F_NOTIFY_ON_EMPTY;
+	vsc->sc_active_features = 0;
 
-	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
-	    VIRTIO_MMIO_HOST_FEATURES_SEL, 1);
-	host_features = bus_space_read_4(sc->sc_iot, sc->sc_ioh,
-				VIRTIO_MMIO_HOST_FEATURES);
-	host_features <<= 32;
+	bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_HOST_FEATURES_SEL, 0);
+	host = bus_space_read_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_HOST_FEATURES);
+	bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_HOST_FEATURES_SEL, 1);
+	host |= (uint64_t)
+		bus_space_read_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_HOST_FEATURES) << 32;
 
-	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
-	    VIRTIO_MMIO_HOST_FEATURES_SEL, 0);
-	host_features |= bus_space_read_4(sc->sc_iot, sc->sc_ioh,
-				VIRTIO_MMIO_HOST_FEATURES);
+	negotiated = host & guest_features;
 
-	/*
-	 * Limit negotiated features to what the driver, virtqueue, and
-	 * host all support.
-	 */
-	features = host_features & child_features;
-	features = virtio_filter_transport_features(features);
-	vsc->sc_active_features = features;
+	bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_GUEST_FEATURES_SEL, 0);
+	bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_GUEST_FEATURES,
+			negotiated & 0xffffffff);
+	bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_GUEST_FEATURES_SEL, 1);
+	bus_space_write_4(sc->sc_iot, sc->sc_ioh, VIRTIO_MMIO_GUEST_FEATURES,
+			negotiated >> 32);
+	virtio_mmio_set_status(vsc, VIRTIO_CONFIG_S_FEATURES_OK);
 
-	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
-		VIRTIO_MMIO_GUEST_FEATURES_SEL, 1);
-	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
-		VIRTIO_MMIO_GUEST_FEATURES, features >> 32);
-
-	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
-		VIRTIO_MMIO_GUEST_FEATURES_SEL, 0);
-	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
-		VIRTIO_MMIO_GUEST_FEATURES, features);
-
-	if (sc->mmio_version > 1) {
-		/*
-		 * Must re-read the status after setting it to verify the
-		 * negotiated features were accepted by the device.
-		 */
-		/* https://twitter.com/cperciva/status/1548447423436967936 */
-		virtio_mmio_set_status(vsc, VIRTIO_CONFIG_S_FEATURES_OK);
-
-		status = virtio_mmio_get_status(vsc);
-		if ((status & VIRTIO_CONFIG_S_FEATURES_OK) == 0) {
-			aprint_error_dev(vsc->sc_dev,
+	device_status = virtio_mmio_get_status(vsc);
+	if ((device_status & VIRTIO_CONFIG_S_FEATURES_OK) == 0) {
+		aprint_error_dev(vsc->sc_dev,
 			"desired features were not accepted\n");
-		}
 	}
+
+	vsc->sc_active_features = negotiated;
+
 }
 
 /*
@@ -351,11 +327,9 @@ virtio_mmio_intr(void *arg)
 	struct virtio_softc *vsc = &sc->sc_sc;
 	int isr, r = 0;
 
-	printf(">>> TRIGGERED!!\n");
 	/* check and ack the interrupt */
 	isr = bus_space_read_4(sc->sc_iot, sc->sc_ioh,
 			       VIRTIO_MMIO_INTERRUPT_STATUS);
-	printf(">>> ISR: %d\n", isr);
 	bus_space_write_4(sc->sc_iot, sc->sc_ioh,
 			  VIRTIO_MMIO_INTERRUPT_ACK, isr);
 	if ((isr & VIRTIO_MMIO_INT_CONFIG) &&
@@ -363,7 +337,6 @@ virtio_mmio_intr(void *arg)
 		r = (vsc->sc_config_change)(vsc);
 	if ((isr & VIRTIO_MMIO_INT_VRING) &&
 	    (vsc->sc_intrhand != NULL)) {
-		printf(">>> INTR???\n");
 		if (vsc->sc_soft_ih != NULL)
 			softint_schedule(vsc->sc_soft_ih);
 		else

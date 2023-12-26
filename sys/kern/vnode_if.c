@@ -566,7 +566,6 @@ VOP_OPEN(struct vnode *vp,
 	error = vop_pre(vp, &mp, &mpsafe, FST_NO);
 	if (error)
 		return error;
-	printf("VTYPE: %s\n", mp->mnt_stat.f_fstypename);
 	error = (VCALL(vp, VOFFSET(vop_open), &a));
 	vop_post(vp, mp, mpsafe, FST_NO);
 	vop_open_post(&a, error);

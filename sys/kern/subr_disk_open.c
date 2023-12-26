@@ -66,9 +66,7 @@ opendisk(device_t dv)
 		panic("%s: can't alloc vnode for %s", __func__,
 		    device_xname(dv));
 	vn_lock(tmpvn, LK_EXCLUSIVE | LK_RETRY);
-	printf(">>> BEFORE: %s\n", device_xname(dv));
 	error = VOP_OPEN(tmpvn, FREAD | FSILENT, NOCRED);
-	printf(">>> AFTER\n");
 	if (error) {
 		/*
 		 * Ignore errors caused by missing device, partition,

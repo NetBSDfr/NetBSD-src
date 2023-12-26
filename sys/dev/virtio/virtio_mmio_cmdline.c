@@ -256,7 +256,6 @@ virtio_mmio_cmdline_alloc_interrupts(struct virtio_mmio_softc *msc)
 	int irq = sc->margs.irq;
 	int pin = irq;
 
-	/* ioapic = ioapic_find_bybase(irq);*/
 	ioapic = ioapic_find_bybase(irq);
 
 	if (ioapic != NULL) {
@@ -267,7 +266,7 @@ virtio_mmio_cmdline_alloc_interrupts(struct virtio_mmio_softc *msc)
 	} else
 		pic = &i8259_pic;
 
-	msc->sc_ih = intr_establish_xname(irq, pic, pin, IST_EDGE, IPL_BIO,
+	msc->sc_ih = intr_establish_xname(irq, pic, pin, IST_LEVEL, IPL_BIO,
 		virtio_mmio_intr, msc, false, device_xname(vsc->sc_dev));
 	if (msc->sc_ih == NULL) {
 		aprint_error_dev(vsc->sc_dev,
