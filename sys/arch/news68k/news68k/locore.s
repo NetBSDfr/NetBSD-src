@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.s,v 1.71 2023/10/15 10:46:51 tsutsui Exp $	*/
+/*	$NetBSD: locore.s,v 1.74 2023/12/27 03:03:42 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1988 University of Utah.
@@ -356,10 +356,10 @@ Lstart2:
 	jra	Lstploaddone
 Lmotommu1:
 	RELOC(protorp, %a0)
-	movl	#0x80000202,%a0@	| nolimit + share global + 4 byte PTEs
+	movl	#MMU51_SRP_BITS,%a0@	| see pmap.h
 	movl	%d1,%a0@(4)		| + segtable address
 	pmove	%a0@,%srp		| load the supervisor root pointer
-	movl	#0x80000002,%a0@	| reinit upper half for CRP loads
+	movl	#MMU51_CRP_BITS,%a0@	| reinit upper half for CRP loads
 Lstploaddone:
 	RELOC(mmutype, %a0)
 	cmpl	#MMU_68040,%a0@		| 68040?
@@ -371,11 +371,7 @@ Lstploaddone:
 	.long	0x4e7b0007		| movc %d0,%dtt1
 	.word	0xf4d8			| cinva bc
 	.word	0xf518			| pflusha
-#if PGSHIFT == 13
-	movl	#0xc000,%d0
-#else
-	movl	#0x8000,%d0
-#endif
+	movl	#MMU40_TCR_BITS,%d0
 	.long	0x4e7b0003		| movc %d0,%tc
 	movl	#CACHE40_ON,%d0
 	movc	%d0,%cacr		| turn on both caches
@@ -392,11 +388,7 @@ Lmotommu2:
 
 	pflusha
 	RELOC(prototc, %a2)
-#if PGSHIFT == 13
-	movl	#0x82d08b00,%a2@	| value to load TC with
-#else
-	movl	#0x82c0aa00,%a2@	| value to load TC with
-#endif
+	movl	#MMU51_TCR_BITS,%a2@	| value to load TC with
 	pmove	%a2@,%tc		| load it
 
 /*
@@ -896,8 +888,6 @@ Lnocache8:
  */
 ENTRY(loadustp)
 	movl	%sp@(4),%d0		| new USTP
-	moveq	#PGSHIFT, %d1
-	lsll	%d1,%d0			| convert to addr
 	pflusha				| flush entire TLB
 	lea	_C_LABEL(protorp),%a0	| CRP prototype
 	movl	%d0,%a0@(4)		| stash USTP
@@ -905,11 +895,6 @@ ENTRY(loadustp)
 	movc	%cacr,%d0
 	orl	#DCIC_CLR,%d0
 	movc	%d0,%cacr		| invalidate cache(s)
-	rts
-
-ENTRY(ploadw)
-	movl	%sp@(4),%a0		| address to load
-	ploadw	#1,%a0@			| pre-load translation
 	rts
 
 ENTRY(getsr)

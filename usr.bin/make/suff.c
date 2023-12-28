@@ -1,4 +1,4 @@
-/*	$NetBSD: suff.c,v 1.370 2023/11/19 22:50:11 rillig Exp $	*/
+/*	$NetBSD: suff.c,v 1.372 2023/12/19 19:33:39 rillig Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -115,7 +115,7 @@
 #include "dir.h"
 
 /*	"@(#)suff.c	8.4 (Berkeley) 3/21/94"	*/
-MAKE_RCSID("$NetBSD: suff.c,v 1.370 2023/11/19 22:50:11 rillig Exp $");
+MAKE_RCSID("$NetBSD: suff.c,v 1.372 2023/12/19 19:33:39 rillig Exp $");
 
 typedef List SuffixList;
 typedef ListNode SuffixListNode;
@@ -1247,9 +1247,7 @@ ExpandWildcards(GNodeListNode *cln, GNode *pgn)
 	if (!Dir_HasWildcards(cgn->name))
 		return;
 
-	/*
-	 * Expand the word along the chosen path
-	 */
+	/* Expand the word along the chosen path. */
 	Lst_Init(&expansions);
 	SearchPath_Expand(Suff_FindPath(cgn), cgn->name, &expansions);
 
@@ -1258,10 +1256,10 @@ ExpandWildcards(GNodeListNode *cln, GNode *pgn)
 		/*
 		 * Fetch next expansion off the list and find its GNode
 		 */
-		char *cp = Lst_Dequeue(&expansions);
+		char *name = Lst_Dequeue(&expansions);
 
-		DEBUG1(SUFF, "%s...", cp);
-		gn = Targ_GetNode(cp);
+		DEBUG1(SUFF, "%s...", name);
+		gn = Targ_GetNode(name);
 
 		/* Insert gn before the original child. */
 		Lst_InsertBefore(&pgn->children, cln, gn);
@@ -1274,8 +1272,8 @@ ExpandWildcards(GNodeListNode *cln, GNode *pgn)
 	DEBUG0(SUFF, "\n");
 
 	/*
-	 * Now the source is expanded, remove it from the list of children to
-	 * keep it from being processed.
+	 * Now that the source is expanded, remove it from the list of
+	 * children, to keep it from being processed.
 	 */
 	pgn->unmade--;
 	Lst_Remove(&pgn->children, cln);
@@ -1290,54 +1288,54 @@ ExpandWildcards(GNodeListNode *cln, GNode *pgn)
  * expressions with spaces in them.
  */
 static void
-ExpandChildrenRegular(char *cp, GNode *pgn, GNodeList *members)
+ExpandChildrenRegular(char *p, GNode *pgn, GNodeList *members)
 {
 	char *start;
 
-	pp_skip_hspace(&cp);
-	start = cp;
-	while (*cp != '\0') {
-		if (*cp == ' ' || *cp == '\t') {
+	pp_skip_hspace(&p);
+	start = p;
+	while (*p != '\0') {
+		if (*p == ' ' || *p == '\t') {
 			GNode *gn;
 			/*
 			 * White-space -- terminate element, find the node,
 			 * add it, skip any further spaces.
 			 */
-			*cp++ = '\0';
+			*p++ = '\0';
 			gn = Targ_GetNode(start);
 			Lst_Append(members, gn);
-			pp_skip_hspace(&cp);
+			pp_skip_hspace(&p);
 			/* Continue at the next non-space. */
-			start = cp;
-		} else if (*cp == '$') {
+			start = p;
+		} else if (*p == '$') {
 			/* Skip over the expression. */
-			const char *nested_p = cp;
+			const char *nested_p = p;
 			FStr junk = Var_Parse(&nested_p, pgn, VARE_PARSE_ONLY);
 			/* TODO: handle errors */
 			if (junk.str == var_Error) {
 				Parse_Error(PARSE_FATAL,
 				    "Malformed expression at \"%s\"",
-				    cp);
-				cp++;
+				    p);
+				p++;
 			} else {
-				cp += nested_p - cp;
+				p += nested_p - p;
 			}
 
 			FStr_Done(&junk);
-		} else if (cp[0] == '\\' && cp[1] != '\0') {
+		} else if (p[0] == '\\' && p[1] != '\0') {
 			/* Escaped something -- skip over it. */
 			/*
 			 * XXX: In other places, escaping at this syntactical
 			 * position is done by a '$', not a '\'.  The '\' is
 			 * only used in variable modifiers.
 			 */
-			cp += 2;
+			p += 2;
 		} else {
-			cp++;
+			p++;
 		}
 	}
 
-	if (cp != start) {
+	if (p != start) {
 		/*
 		 * Stuff left over -- add it to the list too
 		 */
@@ -1361,7 +1359,7 @@ static void
 ExpandChildren(GNodeListNode *cln, GNode *pgn)
 {
 	GNode *cgn = cln->datum;
-	char *cp;		/* Expanded value */
+	char *expanded;
 
 	if (!Lst_IsEmpty(&cgn->order_pred) || !Lst_IsEmpty(&cgn->order_succ))
 		/* It is all too hard to process the result of .ORDER */
@@ -1383,7 +1381,7 @@ ExpandChildren(GNodeListNode *cln, GNode *pgn)
 	}
 
 	DEBUG1(SUFF, "Expanding \"%s\"...", cgn->name);
-	cp = Var_Subst(cgn->name, pgn, VARE_UNDEFERR);
+	expanded = Var_Subst(cgn->name, pgn, VARE_UNDEFERR);
 	/* TODO: handle errors */
 
 	{
@@ -1395,39 +1393,32 @@ ExpandChildren(GNodeListNode *cln, GNode *pgn)
 			 * call on the Arch module to find the nodes for us,
 			 * expanding variables in the parent's scope.
 			 */
-			char *p = cp;
-			(void)Arch_ParseArchive(&p, &members, pgn);
+			char *ap = expanded;
+			(void)Arch_ParseArchive(&ap, &members, pgn);
 		} else {
-			ExpandChildrenRegular(cp, pgn, &members);
+			ExpandChildrenRegular(expanded, pgn, &members);
 		}
 
-		/*
-		 * Add all elements of the members list to the parent node.
-		 */
+		/* Add all members to the parent node. */
 		while (!Lst_IsEmpty(&members)) {
 			GNode *gn = Lst_Dequeue(&members);
 
 			DEBUG1(SUFF, "%s...", gn->name);
-			/*
-			 * Add gn to the parents child list before the
-			 * original child.
-			 */
 			Lst_InsertBefore(&pgn->children, cln, gn);
 			Lst_Append(&gn->parents, pgn);
 			pgn->unmade++;
-			/* Expand wildcards on new node */
 			ExpandWildcards(cln->prev, pgn);
 		}
 		Lst_Done(&members);
 
-		free(cp);
+		free(expanded);
 	}
 
 	DEBUG0(SUFF, "\n");
 
 	/*
-	 * Now the source is expanded, remove it from the list of children to
-	 * keep it from being processed.
+	 * The source is expanded now, so remove it from the list of children,
+	 * to keep it from being processed.
 	 */
 	pgn->unmade--;
 	Lst_Remove(&pgn->children, cln);
@@ -1446,16 +1437,10 @@ ExpandAllChildren(GNode *gn)
 }
 
 /*
- * Find a path along which to expand the node.
+ * Find a path along which to search or expand the node.
  *
- * If the node has a known suffix, use that path.
- * If it has no known suffix, use the default system search path.
- *
- * Input:
- *	gn		Node being examined
- *
- * Results:
- *	The appropriate path to search for the GNode.
+ * If the node has a known suffix, use that path,
+ * otherwise use the default system search path.
  */
 SearchPath *
 Suff_FindPath(GNode *gn)
@@ -1529,7 +1514,7 @@ ApplyTransform(GNode *tgn, GNode *sgn, Suffix *tsuff, Suffix *ssuff)
 	/* Apply the rule. */
 	Make_HandleUse(gn, tgn);
 
-	/* Deal with wildcards and variables in any acquired sources. */
+	/* Deal with wildcards and expressions in any acquired sources. */
 	ln = ln != NULL ? ln->next : NULL;
 	while (ln != NULL) {
 		GNodeListNode *nln = ln->next;
@@ -1565,7 +1550,6 @@ ExpandMember(GNode *gn, const char *eoarch, GNode *mem, Suffix *memSuff)
 			break;
 
 	if (ln != NULL) {
-		/* Got one -- apply it */
 		Suffix *suff = ln->datum;
 		if (!ApplyTransform(gn, mem, suff, memSuff)) {
 			DEBUG2(SUFF, "\tNo transformation from %s -> %s\n",
@@ -1578,9 +1562,6 @@ static void FindDeps(GNode *, CandidateSearcher *);
 
 /*
  * Locate dependencies for an OP_ARCHV node.
- *
- * Input:
- *	gn		Node for which to locate dependencies
  *
  * Side Effects:
  *	Same as Suff_FindDeps
@@ -1595,7 +1576,7 @@ FindDepsArchive(GNode *gn, CandidateSearcher *cs)
 	const char *name;	/* Start of member's name */
 
 	/*
-	 * The node is an archive(member) pair. so we must find a
+	 * The node is an 'archive(member)' pair, so we must find a
 	 * suffix for both of them.
 	 */
 	eoarch = strchr(gn->name, '(');
@@ -2068,9 +2049,6 @@ FindDeps(GNode *gn, CandidateSearcher *cs)
  *
  * Need to handle the changing of the null suffix gracefully so the old
  * transformation rules don't just go away.
- *
- * Input:
- *	name		Name of null suffix
  */
 void
 Suff_SetNull(const char *name)

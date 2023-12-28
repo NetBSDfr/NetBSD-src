@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.s,v 1.73 2023/06/16 20:01:20 andvar Exp $	*/
+/*	$NetBSD: locore.s,v 1.76 2023/12/27 03:03:42 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1998 Darrin B. Jewell
@@ -336,10 +336,10 @@ Lstart3:
 	jra	Lstploaddone
 Lmotommu1:
 	RELOC(protorp, %a0)
-	movl	#0x80000202,%a0@	| nolimit + share global + 4 byte PTEs
+	movl	#MMU51_SRP_BITS,%a0@	| see pmap.h
 	movl	%d1,%a0@(4)		| + segtable address
 	pmove	%a0@,%srp		| load the supervisor root pointer
-	movl	#0x80000002,%a0@	| reinit upper half for CRP loads
+	movl	#MMU51_CRP_BITS,%a0@	| reinit upper half for CRP loads
 
 Lstploaddone:
 
@@ -386,7 +386,7 @@ Lturnoffttr:
 Lmotommu2:
 	pflusha
 	RELOC(prototc, %a2)
-	movl	#0x82c0aa00,%a2@	| value to load TC with
+	movl	#MMU51_TCR_BITS,%a2@	| value to load TC with
 	pmove	%a2@,%tc		| load it
 	jmp	Lenab1:l		| force absolute (not pc-relative) jmp
 
@@ -891,8 +891,6 @@ ENTRY(loadustp)
 	tstl	_C_LABEL(mmutype)	| HP MMU?
 	jeq	Lhpmmu9			| yes, skip
 	movl	%sp@(4),%d0		| new USTP
-	moveq	#PGSHIFT,%d1
-	lsll	%d1,%d0			| convert to addr
 #if defined(M68040)
 	cmpl	#MMU_68040,_C_LABEL(mmutype) | 68040?
 	jne	LmotommuC		| no, skip
@@ -921,22 +919,6 @@ Lhpmmu9:
 	orl	#MMU_CEN,%a0@(MMUCMD)	| to clear data cache
 1:
 	movl	%sp@(4),%a0@(MMUUSTP)	| load a new USTP
-#endif
-	rts
-
-ENTRY(ploadw)
-#if defined(M68K_MMU_MOTOROLA)
-	movl	%sp@(4),%a0		| address to load
-#if defined(M68K_MMU_HP)
-	tstl	_C_LABEL(mmutype)	| HP MMU?
-	jeq	Lploadwskp		| yes, skip
-#endif
-#if defined(M68040)
-	cmpl	#MMU_68040,_C_LABEL(mmutype) | 68040?
-	jeq	Lploadwskp		| yes, skip
-#endif
-	ploadw	#1,%a0@			| pre-load translation
-Lploadwskp:
 #endif
 	rts
 

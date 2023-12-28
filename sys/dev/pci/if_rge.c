@@ -1,4 +1,4 @@
-/*	$NetBSD: if_rge.c,v 1.28 2023/10/19 23:43:40 mrg Exp $	*/
+/*	$NetBSD: if_rge.c,v 1.30 2023/12/21 08:50:22 skrll Exp $	*/
 /*	$OpenBSD: if_rge.c,v 1.9 2020/12/12 11:48:53 jan Exp $	*/
 
 /*
@@ -18,7 +18,11 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_rge.c,v 1.28 2023/10/19 23:43:40 mrg Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_rge.c,v 1.30 2023/12/21 08:50:22 skrll Exp $");
+
+#if defined(_KERNEL_OPT)
+#include "opt_net_mpsafe.h"
+#endif
 
 #include <sys/types.h>
 
@@ -144,7 +148,7 @@ uint16_t	rge_read_phy(struct rge_softc *, uint16_t, uint16_t);
 void		rge_write_phy_ocp(struct rge_softc *, uint16_t, uint16_t);
 uint16_t	rge_read_phy_ocp(struct rge_softc *, uint16_t);
 int		rge_get_link_status(struct rge_softc *);
-void		rge_txstart(struct work *, void *);
+void		rge_txstart(void *);
 void		rge_tick(void *);
 void		rge_link_state(struct rge_softc *);
 
@@ -351,6 +355,7 @@ rge_attach(device_t parent, device_t self, void *aux)
 	sc->sc_media.ifm_media = sc->sc_media.ifm_cur->ifm_media;
 
 	if_attach(ifp);
+	if_deferred_start_init(ifp, NULL);
 	ether_ifattach(ifp, eaddr);
 
 	if (pmf_device_register(self, NULL, NULL))
@@ -628,11 +633,7 @@ rge_start(struct ifnet *ifp)
 	ifp->if_timer = 5;
 
 	sc->rge_ldata.rge_txq_prodidx = idx;
-#if 0
-	ifq_serialize(ifq, &sc->sc_task);
-#else
-	rge_txstart(&sc->sc_task, sc);
-#endif
+	rge_txstart(sc);
 }
 
 void
@@ -1385,10 +1386,14 @@ rge_txeof(struct rge_softc *sc)
 		m_freem(txq->txq_mbuf);
 		txq->txq_mbuf = NULL;
 
+		net_stat_ref_t nsr = IF_STAT_GETREF(ifp);
 		if (txstat & (RGE_TDCMDSTS_EXCESSCOLL | RGE_TDCMDSTS_COLL))
-			if_statinc(ifp, if_collisions);
+			if_statinc_ref(nsr, if_collisions);
 		if (txstat & RGE_TDCMDSTS_TXERR)
-			if_statinc(ifp, if_oerrors);
+			if_statinc_ref(nsr, if_oerrors);
+		else
+			if_statinc_ref(nsr, if_opackets);
+		IF_STAT_PUTREF(ifp);
 
 		bus_dmamap_sync(sc->sc_dmat, sc->rge_ldata.rge_tx_list_map,
 		    idx * sizeof(struct rge_tx_desc),
@@ -1404,24 +1409,12 @@ rge_txeof(struct rge_softc *sc)
 
 	sc->rge_ldata.rge_txq_considx = cons;
 
-#if 0
-	if (ifq_is_oactive(&ifp->if_snd))
-		ifq_restart(&ifp->if_snd);
-	else if (free == 2)
-		ifq_serialize(&ifp->if_snd, &sc->sc_task);
-	else
-		ifp->if_timer = 0;
-#else
-#if 0
-	if (!IF_IS_EMPTY(&ifp->if_snd))
-		rge_start(ifp);
-	else
 	if (free == 2)
-		if (0) { rge_txstart(&sc->sc_task, sc); }
-	else
-#endif
-		ifp->if_timer = 0;
-#endif
+		rge_txstart(sc);
+
+	CLR(ifp->if_flags, IFF_OACTIVE);
+	ifp->if_timer = 0;
+	if_schedule_deferred_start(ifp);
 
 	return (1);
 }
@@ -2462,7 +2455,7 @@ rge_get_link_status(struct rge_softc *sc)
 }
 
 void
-rge_txstart(struct work *wk, void *arg)
+rge_txstart(void *arg)
 {
 	struct rge_softc *sc = arg;
 
