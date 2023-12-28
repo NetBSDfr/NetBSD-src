@@ -1,4 +1,4 @@
-/* $NetBSD: locore.s,v 1.68 2022/06/10 21:42:24 tsutsui Exp $ */
+/* $NetBSD: locore.s,v 1.71 2023/12/27 03:03:41 thorpej Exp $ */
 
 /*
  * Copyright (c) 1988 University of Utah.
@@ -784,8 +784,6 @@ ENTRY(ecacheoff)
  */
 ENTRY(loadustp)
 	movl	%sp@(4),%d0		| new USTP
-	moveq	#PGSHIFT,%d1
-	lsll	%d1,%d0			| convert to addr
 #if defined(M68040)
 	cmpl	#MMU_68040,_C_LABEL(mmutype) | 68040?
 	jne	LmotommuC		| no, skip
@@ -800,18 +798,6 @@ LmotommuC:
 	pmove	%a0@,%crp		| load root pointer
 	movl	#CACHE_CLR,%d0
 	movc	%d0,%cacr		| invalidate cache(s)
-	rts
-
-ENTRY(ploadw)
-#if defined(M68040)
-	cmpl	#MMU_68040,_C_LABEL(mmutype) | 68040?
-	jeq	Lploadwskp		| yes, skip
-#endif
-	movl	%sp@(4),%a0		| address to load
-	ploadw	#1,%a0@			| pre-load translation
-#if defined(M68040)
-Lploadwskp:
-#endif
 	rts
 
 ENTRY(getsr)
@@ -906,26 +892,18 @@ GLOBAL(fputype)
 	.long	FPU_68881	| default to 68881
 
 GLOBAL(protosrp)
-	.long	0x80000202,0	| prototype supervisor root pointer
+	.long	MMU51_SRP_BITS,0 | prototype supervisor root pointer
 GLOBAL(protocrp)
-	.long	0x80000002,0	| prototype CPU root pointer
+	.long	MMU51_CRP_BITS,0 | prototype CPU root pointer
 
 GLOBAL(prototc)
-#if PGSHIFT == 13
-	.long	0x82d08b00	| %tc (SRP,CRP,8KB page, TIA/TIB=8/11bits)
-#else
-	.long	0x82c0aa00	| %tc (SRP,CRP,4KB page, TIA/TIB=10/10bits)
-#endif
+	.long	MMU51_TCR_BITS	| %tc -- see pmap.h
 GLOBAL(protott0)		| tt0 0x4000.0000-0x7fff.ffff
 	.long	0x403f8543	|
 GLOBAL(protott1)		| tt1 0x8000.0000-0xffff.ffff
 	.long	0x807f8543	|
 GLOBAL(proto040tc)
-#if PGSHIFT == 13
-	.long	0xc000		| %tc (8KB page)
-#else
-	.long	0x8000		| %tc (4KB page)
-#endif
+	.long	MMU40_TCR_BITS	| %tc -- see pmap.h
 GLOBAL(proto040tt0)		| tt0 0x4000.0000-0x7fff.ffff
 	.long	0x403fa040	| kernel only, cache inhibit, serialized
 GLOBAL(proto040tt1)		| tt1 0x8000.0000-0xffff.ffff

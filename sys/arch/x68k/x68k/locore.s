@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.s,v 1.122 2023/09/17 07:22:17 andvar Exp $	*/
+/*	$NetBSD: locore.s,v 1.125 2023/12/27 03:03:42 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1988 University of Utah.
@@ -264,10 +264,10 @@ Lstart3:
 	jra	Lstploaddone
 Lmotommu1:
 	RELOC(protorp, %a0)
-	movl	#0x80000202,%a0@	| nolimit + share global + 4 byte PTEs
+	movl	#MMU51_SRP_BITS,%a0@	| nolimit + share global + 4 byte PTEs
 	movl	%d1,%a0@(4)		| + segtable address
 	pmove	%a0@,%srp		| load the supervisor root pointer
-	movl	#0x80000002,%a0@	| reinit upper half for CRP loads
+	movl	#MMU51_CRP_BITS,%a0@	| reinit upper half for CRP loads
 Lstploaddone:
 	RELOC(mmutype, %a0)
 	cmpl	#MMU_68040,%a0@		| 68040?
@@ -299,11 +299,7 @@ Ljupiterdone:
 	.long	0x4e7b0007		| movc %d0,%dtt1
 	.word	0xf4d8			| cinva bc
 	.word	0xf518			| pflusha
-#if PGSHIFT == 13
-	movl	#0xc000,%d0
-#else
-	movl	#0x8000,%d0
-#endif
+	movl	#MMU40_TCR_BITS,%d0
 	.long	0x4e7b0003		| movc %d0,%tc
 #ifdef M68060
 	RELOC(cputype, %a0)
@@ -321,11 +317,7 @@ Lnot060cache:
 	jmp	Lenab1
 Lmotommu2:
 	pflusha
-#if PGSHIFT == 13
-	movl	#0x82d08b00,%sp@-	| value to load TC with
-#else
-	movl	#0x82c0aa00,%sp@-	| value to load TC with
-#endif
+	movl	#MMU51_TCR_BITS,%sp@-	| value to load TC with
 	pmove	%sp@,%tc		| load it
 
 /*
@@ -833,8 +825,6 @@ ENTRY(ecacheoff)
  */
 ENTRY(loadustp)
 	movl	%sp@(4),%d0		| new USTP
-	moveq	#PGSHIFT,%d1
-	lsll	%d1,%d0			| convert to addr
 #if defined(M68040) || defined(M68060)
 	cmpl	#MMU_68040,_C_LABEL(mmutype) | 68040?
 	jne	LmotommuC		| no, skip
@@ -857,18 +847,6 @@ LmotommuC:
 	pmove	%a0@,%crp		| load root pointer
 	movl	#CACHE_CLR,%d0
 	movc	%d0,%cacr		| invalidate cache(s)
-	rts
-
-ENTRY(ploadw)
-#if defined(M68030)
-	movl	%sp@(4),%a0		| address to load
-#if defined(M68040) || defined(M68060)
-	cmpl	#MMU_68040,_C_LABEL(mmutype) | 68040?
-	jeq	Lploadwskp		| yes, skip
-#endif
-	ploadw	#1,%a0@			| pre-load translation
-Lploadwskp:
-#endif
 	rts
 
 /*
