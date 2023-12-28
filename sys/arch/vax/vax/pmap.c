@@ -1,4 +1,4 @@
-/*	$NetBSD: pmap.c,v 1.198 2023/10/17 10:22:07 riastradh Exp $	   */
+/*	$NetBSD: pmap.c,v 1.201 2023/12/22 19:14:57 thorpej Exp $	   */
 /*
  * Copyright (c) 1994, 1998, 1999, 2003 Ludd, University of Lule}, Sweden.
  * All rights reserved.
@@ -25,7 +25,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.198 2023/10/17 10:22:07 riastradh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.201 2023/12/22 19:14:57 thorpej Exp $");
 
 #include "opt_cputype.h"
 #include "opt_ddb.h"
@@ -161,7 +161,7 @@ ptpinuse(void *pte)
 #if defined(MULTIPROCESSOR) || defined(LOCKDEBUG)
 static kmutex_t pmap_lock;
 #define PMAP_LOCK	mutex_spin_enter(&pmap_lock);
-#define PMAP_UNLOCK	mutex_spin_enter(&pmap_lock);
+#define PMAP_UNLOCK	mutex_spin_exit(&pmap_lock);
 #else
 #define PMAP_LOCK
 #define PMAP_UNLOCK
@@ -633,6 +633,7 @@ rmspace(struct pmap *pm)
 		}
 		free_ptp((((struct pte *)ptpp)->pg_pfn << VAX_PGSHIFT));
 		*ptpp = 0;
+		mtpr((vaddr_t)br, PR_TBIS);
 	}
 	lr = pm->pm_p1lr/NPTEPG;
 	for (i = lr; i < NPTEPERREG/NPTEPG; i++) {
@@ -647,6 +648,7 @@ rmspace(struct pmap *pm)
 		}
 		free_ptp((((struct pte *)ptpp)->pg_pfn << VAX_PGSHIFT));
 		*ptpp = 0;
+		mtpr((vaddr_t)br, PR_TBIS);
 	}
 
 	if (pm->pm_p0lr != 0)
@@ -772,6 +774,7 @@ rmptep(struct pte *pte)
 #endif
 	free_ptp((((struct pte *)ptpp)->pg_pfn << VAX_PGSHIFT));
 	*ptpp = 0;
+	/* N.B. callers all do a TBIA, so TBIS not needed here. */
 }
 
 static int
@@ -1196,6 +1199,7 @@ pmap_enter(pmap_t pmap, vaddr_t v, paddr_t p, vm_prot_t prot, u_int flags)
 	return 0;
 
 growfail:
+	PMAP_UNLOCK;
 	if (flags & PMAP_CANFAIL)
 		return ENOMEM;
 	panic("usrptmap space leakage");
@@ -1470,6 +1474,7 @@ pmap_is_modified(struct vm_page *pg)
 		if (pte[0].pg_m | pte[1].pg_m | pte[2].pg_m | pte[3].pg_m
 		    | pte[4].pg_m | pte[5].pg_m | pte[6].pg_m | pte[7].pg_m) {
 			rv = true;
+			SET(pv->pv_attr, PG_M);
 			break;
 		}
 	} while ((pv = pv->pv_next) != NULL);

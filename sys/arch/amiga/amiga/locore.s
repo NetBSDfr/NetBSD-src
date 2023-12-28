@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.s,v 1.161 2022/05/30 09:56:02 andvar Exp $	*/
+/*	$NetBSD: locore.s,v 1.165 2023/12/27 03:03:40 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1988 University of Utah.
@@ -933,7 +933,7 @@ Lstartnot040:
 	orl	#0x0000c044,%d0		| 16 MB, ro, cache inhibited
 	.word	0x4e7b,0x0004		| movc %d0,%itt0
 	.word	0xf518			| pflusha
-	movl	#0xc000,%d0		| enable MMU
+	movl	#MMU40_TCR_BITS,%d0	| enable MMU
 	.word	0x4e7b,0x0003		| movc %d0,%tc
 	jmp	Lcleanitt0:l
 Lcleanitt0:
@@ -963,7 +963,7 @@ LMMUenable_start:
 	cmpl	#MMU_68040,%a0@
 	jne	Lenable030
 	.word	0xf518			| pflusha
-	movl	#0xc000,%d0		| enable MMU
+	movl	#MMU40_TCR_BITS,%d0	| enable MMU
 	.word	0x4e7b,0x0003		| movc	%d0,%tc
 	jmp	LMMUenable_end:l
 #endif /* M68040 || M68060 */
@@ -973,8 +973,7 @@ Lenable030:
 	pmove	%a0@,%tc
 	jmp	LMMUenable_end:l
 
-/* ENABLE, SRP_ENABLE, 8K pages, 8bit A-level, 11bit B-level */
-Ltc:	.long	0x82d08b00
+Ltc:	.long	MMU51_TCR_BITS		| see pmap.h
 
 LMMUenable_end:
 
@@ -1124,8 +1123,6 @@ ENTRY(probeva)
  */
 ENTRY(loadustp)
 	movl	%sp@(4),%d0			| new USTP
-	moveq	#PGSHIFT,%d1
-	lsll	%d1,%d0				| convert to addr
 #ifdef M68060
 	cmpl	#CPU_68060,_C_LABEL(cputype)	| 68060?
 	jeq	Lldustp060			|  yes, skip
@@ -1148,44 +1145,6 @@ Lldustp060:
 Lldustp040:
 	.word	0xf518				| pflusha
 	.word	0x4e7b,0x0806			| movec d0,URP
-	rts
-
-/*
- * Flush any hardware context associated with given USTP.
- * Only does something for HP330 where we must flush RPT
- * and ATC entries in PMMU.
- */
-ENTRY(flushustp)
-#ifdef M68060
-	cmpl	#CPU_68060,_C_LABEL(cputype)
-	jeq	Lflustp060
-#endif
-	cmpl	#MMU_68040,_C_LABEL(mmutype)
-	jeq	Lnot68851
-	tstl	_C_LABEL(mmutype)		| 68851 PMMU?
-	jle	Lnot68851			| no, nothing to do
-	movl	%sp@(4),%d0			| get USTP to flush
-	moveq	#PGSHIFT,%d1
-	lsll	%d1,%d0				| convert to address
-	movl	%d0,_C_LABEL(protorp)+4		| stash USTP
-	pflushr	_C_LABEL(protorp)		| flush RPT/TLB entries
-Lnot68851:
-	rts
-#ifdef M68060
-Lflustp060:
-	movc	%cacr,%d1
-	orl	#IC60_CUBC,%d1			| clear user btc entries
-	movc	%d1,%cacr
-	rts
-#endif
-
-
-ENTRY(ploadw)
-	movl	%sp@(4),%a0			| address to load
-	cmpl	#MMU_68040,_C_LABEL(mmutype)
-	jeq	Lploadw040
-	ploadw	#1,%a0@				| pre-load translation
-Lploadw040:					| should 68040 do a ptest?
 	rts
 
 /*
@@ -1459,7 +1418,7 @@ GLOBAL(ectype)
 GLOBAL(fputype)
 	.long	FPU_NONE
 GLOBAL(protorp)
-	.long	0x80000002,0	| prototype root pointer
+	.long	MMU51_CRP_BITS,0 | prototype root pointer
 GLOBAL(delaydivisor)
 	.long	12		| should be enough for 80 MHz 68060
 				| will be adapted to other CPUs in
