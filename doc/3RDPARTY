@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1969 2023/12/20 17:19:15 christos Exp $
+#	$NetBSD: 3RDPARTY,v 1.1974 2023/12/23 20:49:22 christos Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -1229,12 +1229,12 @@ and more. Vern's ping is gone. We are too different from everyone else
 now to do a new import.
 
 Package:	Postfix
-Version:	3.7.3
-Current Vers:	3.7.8/3.8.3
+Version:	3.8.4
+Current Vers:	3.8.4
 Maintainer:	Wietse Venema <wietse@porcupine.org>
 Archive Site:
 Home Page:	http://www.postfix.org/
-Date: 		2022-10-08
+Date: 		2023-12-23
 Mailing List:	postfix-users@postfix.org
 Responsible:	christos
 License:	IBM Public License. See also src/external/ibm-public/postfix/dist.
@@ -1429,14 +1429,14 @@ Location:	external/bsd/tradcpp
 Notes:
 
 Package:	tz
-Version:	tzcode2023c / tzdata2023cgtz
-Current Vers:	tzcode2023c / tzdata2023c
+Version:	tzcode2023d / tzdata2023dgtz
+Current Vers:	tzcode2023d / tzdata2023d
 Maintainer:	Paul Eggert <eggert@cs.ucla.edu>
 Archive Site:	ftp://ftp.iana.org/tz/releases/
 Archive Site:	ftp://munnari.oz.au/pub/oldtz/
 Old Archive Site:	ftp://elsie.nci.nih.gov/pub/
 Home Page:	http://www.iana.org/time-zones
-Date:		2023-09-16
+Date:		2023-12-23
 Mailing List:	tz@iana.org
 Responsible:	kleink, christos, kre
 License:	Public domain
