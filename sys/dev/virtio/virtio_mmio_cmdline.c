@@ -197,9 +197,16 @@ virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 	struct cmdline_attach_args *caa = aux;
 
 	msc->sc_iot = caa->memt;
-	vsc->sc_dev = self;
-	vsc->sc_dmat = caa->dmat;
 	msc->sc_iosize = sc->margs.sz;
+	vsc->sc_dev = self;
+
+	if (BUS_DMA_TAG_VALID(caa->dmat64)) {
+		aprint_verbose(": using 64-bit DMA");
+		vsc->sc_dmat = caa->dmat64;
+	} else {
+		aprint_verbose(": using 32-bit DMA");
+		vsc->sc_dmat = caa->dmat;
+	}
 
 	virtio_mmio_cmdline_parse(self, sc);
 
@@ -255,6 +262,7 @@ virtio_mmio_cmdline_alloc_interrupts(struct virtio_mmio_softc *msc)
 	struct pic *pic;
 	int irq = sc->margs.irq;
 	int pin = irq;
+	bool mpsafe;
 
 	ioapic = ioapic_find_bybase(irq);
 
@@ -266,8 +274,10 @@ virtio_mmio_cmdline_alloc_interrupts(struct virtio_mmio_softc *msc)
 	} else
 		pic = &i8259_pic;
 
-	msc->sc_ih = intr_establish_xname(irq, pic, pin, IST_LEVEL, IPL_BIO,
-		virtio_mmio_intr, msc, false, device_xname(vsc->sc_dev));
+	mpsafe = (0 != (vsc->sc_flags & VIRTIO_F_INTR_MPSAFE));
+
+	msc->sc_ih = intr_establish_xname(irq, pic, pin, IST_LEVEL, vsc->sc_ipl,
+		virtio_mmio_intr, msc, mpsafe, device_xname(vsc->sc_dev));
 	if (msc->sc_ih == NULL) {
 		aprint_error_dev(vsc->sc_dev,
 		    "failed to establish interrupt\n");
