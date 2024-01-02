@@ -1,4 +1,4 @@
-/*	$NetBSD: suff.c,v 1.372 2023/12/19 19:33:39 rillig Exp $	*/
+/*	$NetBSD: suff.c,v 1.376 2023/12/30 15:00:56 rillig Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -115,7 +115,7 @@
 #include "dir.h"
 
 /*	"@(#)suff.c	8.4 (Berkeley) 3/21/94"	*/
-MAKE_RCSID("$NetBSD: suff.c,v 1.372 2023/12/19 19:33:39 rillig Exp $");
+MAKE_RCSID("$NetBSD: suff.c,v 1.376 2023/12/30 15:00:56 rillig Exp $");
 
 typedef List SuffixList;
 typedef ListNode SuffixListNode;
@@ -141,8 +141,6 @@ static GNodeList transforms = LST_INIT;
  * TODO: What are these suffix numbers used for?
  */
 static int sNum = 0;
-
-typedef List SuffixListList;
 
 /*
  * A suffix such as ".c" or ".o" that may be used in suffix transformation
@@ -185,14 +183,6 @@ typedef struct Suffix {
 	SuffixList parents;
 	/* Suffixes we have a transformation from */
 	SuffixList children;
-	/*
-	 * Lists in which this suffix is referenced.
-	 *
-	 * XXX: These lists are used nowhere, they are just appended to, for
-	 * no apparent reason.  They do have the side effect of increasing
-	 * refCount though.
-	 */
-	SuffixListList ref;
 } Suffix;
 
 /*
@@ -374,7 +364,6 @@ SuffixList_Unref(SuffixList *list, Suffix *suff)
 	}
 }
 
-/* Free up all memory associated with the given suffix structure. */
 static void
 Suffix_Free(Suffix *suff)
 {
@@ -392,19 +381,12 @@ Suffix_Free(Suffix *suff)
 		    suff->name, suff->refCount);
 #endif
 
-	Lst_Done(&suff->ref);
 	Lst_Done(&suff->children);
 	Lst_Done(&suff->parents);
 	SearchPath_Free(suff->searchPath);
 
 	free(suff->name);
 	free(suff);
-}
-
-static void
-SuffFree(void *p)
-{
-	Suffix_Free(p);
 }
 
 /* Remove the suffix from the list, and free if it is otherwise unused. */
@@ -416,7 +398,7 @@ SuffixList_Remove(SuffixList *list, Suffix *suff)
 		/* XXX: can lead to suff->refCount == -1 */
 		SuffixList_Unref(&sufflist, suff);
 		DEBUG1(SUFF, "Removing suffix \"%s\"\n", suff->name);
-		SuffFree(suff);
+		Suffix_Free(suff);
 	}
 }
 
@@ -440,12 +422,10 @@ SuffixList_Insert(SuffixList *list, Suffix *suff)
 		DEBUG2(SUFF, "inserting \"%s\" (%d) at end of list\n",
 		    suff->name, suff->sNum);
 		Lst_Append(list, Suffix_Ref(suff));
-		Lst_Append(&suff->ref, list);
 	} else if (listSuff->sNum != suff->sNum) {
 		DEBUG4(SUFF, "inserting \"%s\" (%d) before \"%s\" (%d)\n",
 		    suff->name, suff->sNum, listSuff->name, listSuff->sNum);
 		Lst_InsertBefore(list, ln, Suffix_Ref(suff));
-		Lst_Append(&suff->ref, list);
 	} else {
 		DEBUG2(SUFF, "\"%s\" (%d) is already there\n",
 		    suff->name, suff->sNum);
@@ -469,7 +449,6 @@ Suffix_New(const char *name)
 	suff->searchPath = SearchPath_New();
 	Lst_Init(&suff->children);
 	Lst_Init(&suff->parents);
-	Lst_Init(&suff->ref);
 	suff->sNum = sNum++;
 	suff->include = false;
 	suff->library = false;
@@ -496,7 +475,7 @@ Suff_ClearSuffixes(void)
 	Lst_Init(&sufflist);
 	sNum = 0;
 	if (nullSuff != NULL)
-		SuffFree(nullSuff);
+		Suffix_Free(nullSuff);
 	emptySuff = nullSuff = Suffix_New("");
 
 	SearchPath_AddAll(nullSuff->searchPath, &dirSearchPath);
@@ -821,19 +800,7 @@ UpdateTargets(Suffix *suff)
 	}
 }
 
-/*
- * Add the suffix to the end of the list of known suffixes.
- * Should we restructure the suffix graph? Make doesn't.
- *
- * A GNode is created for the suffix (XXX: this sounds completely wrong) and
- * a Suffix structure is created and added to the suffixes list unless the
- * suffix was already known.
- * The mainNode passed can be modified if a target mutated into a
- * transform and that target happened to be the main target.
- *
- * Input:
- *	name		the name of the suffix to add
- */
+/* Add the suffix to the end of the list of known suffixes. */
 void
 Suff_AddSuffix(const char *name)
 {
@@ -1541,7 +1508,7 @@ ApplyTransform(GNode *tgn, GNode *sgn, Suffix *tsuff, Suffix *ssuff)
 static void
 ExpandMember(GNode *gn, const char *eoarch, GNode *mem, Suffix *memSuff)
 {
-	GNodeListNode *ln;
+	SuffixListNode *ln;
 	size_t nameLen = (size_t)(eoarch - gn->name);
 
 	/* Use first matching suffix... */
@@ -2080,16 +2047,21 @@ Suff_Init(void)
 	Suff_ClearSuffixes();
 }
 
-
 /* Clean up the suffixes module. */
 void
 Suff_End(void)
 {
 #ifdef CLEANUP
-	Lst_DoneCall(&sufflist, SuffFree);
-	Lst_DoneCall(&suffClean, SuffFree);
+	SuffixListNode *ln;
+
+	for (ln = sufflist.first; ln != NULL; ln = ln->next)
+		Suffix_Free(ln->datum);
+	Lst_Done(&sufflist);
+	for (ln = suffClean.first; ln != NULL; ln = ln->next)
+		Suffix_Free(ln->datum);
+	Lst_Done(&suffClean);
 	if (nullSuff != NULL)
-		SuffFree(nullSuff);
+		Suffix_Free(nullSuff);
 	Lst_Done(&transforms);
 #endif
 }
@@ -2113,7 +2085,7 @@ Suffix_Print(const Suffix *suff)
 {
 	Buffer buf;
 
-	Buf_InitSize(&buf, 16);
+	Buf_Init(&buf);
 	Buf_AddFlag(&buf, suff->include, "SUFF_INCLUDE");
 	Buf_AddFlag(&buf, suff->library, "SUFF_LIBRARY");
 	Buf_AddFlag(&buf, suff->isNull, "SUFF_NULL");
@@ -2169,7 +2141,7 @@ Suff_NamesStr(void)
 	SuffixListNode *ln;
 	Suffix *suff;
 
-	Buf_InitSize(&buf, 16);
+	Buf_Init(&buf);
 	for (ln = sufflist.first; ln != NULL; ln = ln->next) {
 		suff = ln->datum;
 		if (ln != sufflist.first)

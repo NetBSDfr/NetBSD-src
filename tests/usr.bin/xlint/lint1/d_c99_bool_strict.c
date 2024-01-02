@@ -1,4 +1,4 @@
-/*	$NetBSD: d_c99_bool_strict.c,v 1.45 2023/12/10 14:59:47 rillig Exp $	*/
+/*	$NetBSD: d_c99_bool_strict.c,v 1.48 2023/12/30 17:09:42 rillig Exp $	*/
 # 3 "d_c99_bool_strict.c"
 
 /*
@@ -59,14 +59,14 @@
  *
  * strict-bool-bitwise-and:
  *	Expressions of the form "flags & FLAG" are compatible with _Bool if
- *	the left operand has enum type, the right operand is an integer
- *	constant and the resulting value is used in a context where it is
- *	implicitly and immediately compared to zero.
+ *	the resulting value is used in a context where it is implicitly and
+ *	immediately compared to zero.
  *
  *	Note: An efficient implementation technique for a collection of bool
  *	flags is an enum.  The enum declaration groups the available
  *	constants, and as of 2020, compilers such as GCC and Clang have basic
- *	support for detecting type mismatches on enums.
+ *	support for detecting type mismatches on enums.  Another implementation
+ *	technique for bit sets is a plain integer.
  *
  *	Note: Examples for such contexts are controlling expressions or the
  *	operands of the operators '!', '&&', '||'.
@@ -795,14 +795,14 @@ strict_bool_operator_result(bool b)
 /*
  * strict-bool-bitwise-and:
  *	Expressions of the form "flags & FLAG" are compatible with _Bool if
- *	the left operand has enum type, the right operand is an integer
- *	constant and the resulting value is used in a context where it is
- *	implicitly and immediately compared to zero.
+ *	the resulting value is used in a context where it is implicitly and
+ *	immediately compared to zero.
  *
  *	Note: Examples for such contexts are controlling expressions or the
  *	operands of the operators '!', '&&', '||'.
  *
- *	Note: Counterexamples for contexts are assignments to a bool variable.
+ *	Note: Counterexamples for contexts are assignments to a bool variable,
+ *	as before C99, the conversion was defined differently.
  *
  *	Note: These rules ensure that conforming code can be compiled without
  *	change in behavior using old compilers that implement bool as an
@@ -858,7 +858,7 @@ strict_bool_bitwise_and_enum(enum Flags flags)
  * what would fit into an unsigned char).  Even if an enum could be extended
  * to larger types than int, this pattern would work.
  */
-void
+bool
 query_flag_from_enum_bit_set(enum Flags flags)
 {
 	if (flags & FLAG0)
@@ -878,6 +878,45 @@ query_flag_from_enum_bit_set(enum Flags flags)
 
 	if (flags & FLAG28)
 		println("FLAG28 is set");
+
+	/* expect+1: error: operands of 'init' have incompatible types '_Bool' and 'int' [107] */
+	bool b0 = flags & FLAG0;
+	/* expect+1: error: operands of 'init' have incompatible types '_Bool' and 'int' [107] */
+	bool b1 = flags & FLAG1;
+	/* expect+1: error: operands of 'init' have incompatible types '_Bool' and 'int' [107] */
+	bool b28 = flags & FLAG28;
+	return b0 || b1 || b28;
+}
+
+bool
+query_flag_from_int(int flags)
+{
+
+	if (flags & FLAG0)
+		println("FLAG0 is set");
+
+	if ((flags & FLAG1) != 0)
+		println("FLAG1 is set");
+
+	if ((flags & (FLAG0 | FLAG1)) == (FLAG0 | FLAG1))
+		println("FLAG0 and FLAG1 are both set");
+
+	if (flags & FLAG0 && flags & FLAG1)
+		println("FLAG0 and FLAG1 are both set");
+
+	if ((flags & (FLAG0 | FLAG1)) != 0)
+		println("At least one of FLAG0 and FLAG1 is set");
+
+	if (flags & FLAG28)
+		println("FLAG28 is set");
+
+	/* expect+1: error: operands of 'init' have incompatible types '_Bool' and 'int' [107] */
+	bool b0 = flags & FLAG0;
+	/* expect+1: error: operands of 'init' have incompatible types '_Bool' and 'int' [107] */
+	bool b1 = flags & FLAG1;
+	/* expect+1: error: operands of 'init' have incompatible types '_Bool' and 'int' [107] */
+	bool b28 = flags & FLAG28;
+	return b0 || b1 || b28;
 }
 
 
@@ -963,10 +1002,10 @@ typedef struct stdio_file {
 int ferror(FILE *);
 FILE stdio_files[3];
 FILE *stdio_stdout;
-# 967 "d_c99_bool_strict.c" 2
+# 1006 "d_c99_bool_strict.c" 2
 # 1 "string.h" 1 3 4
 int strcmp(const char *, const char *);
-# 970 "d_c99_bool_strict.c" 2
+# 1009 "d_c99_bool_strict.c" 2
 
 void
 controlling_expression(FILE *f, const char *a, const char *b)
@@ -1000,9 +1039,9 @@ controlling_expression(FILE *f, const char *a, const char *b)
 	 */
 	/* expect+5: error: controlling expression must be bool, not 'int' [333] */
 	if (ferror(
-# 1004 "d_c99_bool_strict.c" 3 4
+# 1043 "d_c99_bool_strict.c" 3 4
 	    &stdio_files[1]
-# 1006 "d_c99_bool_strict.c"
+# 1045 "d_c99_bool_strict.c"
 	    ))
 		return;
 
@@ -1018,9 +1057,9 @@ controlling_expression(FILE *f, const char *a, const char *b)
 	 */
 	/* expect+5: error: controlling expression must be bool, not 'int' [333] */
 	if (ferror(
-# 1022 "d_c99_bool_strict.c" 3 4
+# 1061 "d_c99_bool_strict.c" 3 4
 	    stdio_stdout
-# 1024 "d_c99_bool_strict.c"
+# 1063 "d_c99_bool_strict.c"
 	    ))
 		return;
 
@@ -1033,9 +1072,9 @@ controlling_expression(FILE *f, const char *a, const char *b)
 	 */
 	/* expect+5: error: controlling expression must be bool, not 'int' [333] */
 	if (ferror(
-# 1037 "d_c99_bool_strict.c" 3 4
+# 1076 "d_c99_bool_strict.c" 3 4
 	    (stdio_stdout)
-# 1039 "d_c99_bool_strict.c"
+# 1078 "d_c99_bool_strict.c"
 	    ))
 		return;
 
@@ -1059,9 +1098,9 @@ controlling_expression(FILE *f, const char *a, const char *b)
 	 */
 	/* expect+5: error: controlling expression must be bool, not 'int' [333] */
 	if (ferror(
-# 1063 "d_c99_bool_strict.c" 3 4
+# 1102 "d_c99_bool_strict.c" 3 4
 	    stdio_stdout /* comment */
-# 1065 "d_c99_bool_strict.c"
+# 1104 "d_c99_bool_strict.c"
 	    ))
 		return;
 }
