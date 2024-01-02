@@ -1,4 +1,4 @@
-#	$NetBSD: genassym.cf,v 1.30 2023/12/27 03:03:42 thorpej Exp $
+#	$NetBSD: genassym.cf,v 1.32 2023/12/27 19:47:00 thorpej Exp $
 
 #
 # Copyright (c) 1982, 1990, 1993
@@ -41,6 +41,7 @@ include <sys/syscall.h>
 include <uvm/uvm_extern.h>
 
 include <machine/cpu.h>
+include <machine/fcode.h>
 include <machine/psl.h>
 include <machine/pcb.h>
 include <machine/pte.h>
@@ -115,6 +116,10 @@ export	MMU51_SRP_BITS
 export	MMU51_CRP_BITS
 export	MMU51_TCR_BITS
 export	MMU40_TCR_BITS
+
+# Transparent translation register values (from pmap.h)
+export	NEXT68K_TT40_IO
+export	NEXT68K_TT40_KERN
 
 # lwp & proc fields and values
 define	L_PCB			offsetof(struct lwp, l_addr)

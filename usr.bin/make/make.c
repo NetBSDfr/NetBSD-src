@@ -1,4 +1,4 @@
-/*	$NetBSD: make.c,v 1.259 2023/02/14 21:38:31 rillig Exp $	*/
+/*	$NetBSD: make.c,v 1.261 2023/12/29 18:53:24 rillig Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -104,7 +104,7 @@
 #include "job.h"
 
 /*	"@(#)make.c	8.1 (Berkeley) 6/6/93"	*/
-MAKE_RCSID("$NetBSD: make.c,v 1.259 2023/02/14 21:38:31 rillig Exp $");
+MAKE_RCSID("$NetBSD: make.c,v 1.261 2023/12/29 18:53:24 rillig Exp $");
 
 /* Sequence # to detect recursion. */
 static unsigned int checked_seqno = 1;
@@ -132,7 +132,7 @@ GNodeType_ToString(GNodeType type, void **freeIt)
 {
 	Buffer buf;
 
-	Buf_InitSize(&buf, 32);
+	Buf_Init(&buf);
 #define ADD(flag) Buf_AddFlag(&buf, (type & (flag)) != OP_NONE, #flag)
 	ADD(OP_DEPENDS);
 	ADD(OP_FORCE);
@@ -174,7 +174,7 @@ GNodeFlags_ToString(GNodeFlags flags, void **freeIt)
 {
 	Buffer buf;
 
-	Buf_InitSize(&buf, 32);
+	Buf_Init(&buf);
 	Buf_AddFlag(&buf, flags.remake, "REMAKE");
 	Buf_AddFlag(&buf, flags.childMade, "CHILDMADE");
 	Buf_AddFlag(&buf, flags.force, "FORCE");
@@ -1224,7 +1224,7 @@ MakePrintStatusList(GNodeList *gnodes, int *errors)
 static void
 ExamineLater(GNodeList *examine, GNodeList *toBeExamined)
 {
-	ListNode *ln;
+	GNodeListNode *ln;
 
 	for (ln = toBeExamined->first; ln != NULL; ln = ln->next) {
 		GNode *gn = ln->datum;
