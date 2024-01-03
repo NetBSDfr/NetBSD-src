@@ -377,3 +377,4 @@ virtio_mmio_setup_interrupts(struct virtio_softc *vsc __unused,
 
 	return 0;
 }
+
