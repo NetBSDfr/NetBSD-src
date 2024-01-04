@@ -66,6 +66,8 @@ __KERNEL_RCSID(0, "$NetBSD: virtio_mmio.c,v 1.12 2024/01/02 07:24:50 thorpej Exp
 #include <sys/device.h>
 #include <sys/mutex.h>
 
+#include <machine/pmap_private.h>
+
 #define VIRTIO_PRIVATE
 #include <dev/virtio/virtio_mmiovar.h>
 
@@ -125,6 +127,7 @@ static uint16_t	virtio_mmio_read_queue_size(struct virtio_softc *, uint16_t);
 static void	virtio_mmio_v1_setup_queue(struct virtio_softc *, uint16_t, uint64_t);
 static void	virtio_mmio_v2_setup_queue(struct virtio_softc *, uint16_t, uint64_t);
 static void	virtio_mmio_set_status(struct virtio_softc *, int);
+static int	virtio_mmio_get_status(struct virtio_softc *);
 static void	virtio_mmio_negotiate_features(struct virtio_softc *, uint64_t);
 static int	virtio_mmio_alloc_interrupts(struct virtio_softc *);
 static void	virtio_mmio_free_interrupts(struct virtio_softc *);
@@ -165,6 +168,7 @@ static const struct virtio_ops virtio_mmio_v1_ops = {
 	.read_queue_size = virtio_mmio_read_queue_size,
 	.setup_queue = virtio_mmio_v1_setup_queue,
 	.set_status = virtio_mmio_set_status,
+	.get_status = virtio_mmio_get_status,
 	.neg_features = virtio_mmio_negotiate_features,
 	.alloc_interrupts = virtio_mmio_alloc_interrupts,
 	.free_interrupts = virtio_mmio_free_interrupts,
@@ -176,6 +180,7 @@ static const struct virtio_ops virtio_mmio_v2_ops = {
 	.read_queue_size = virtio_mmio_read_queue_size,
 	.setup_queue = virtio_mmio_v2_setup_queue,
 	.set_status = virtio_mmio_set_status,
+	.get_status = virtio_mmio_get_status,
 	.neg_features = virtio_mmio_negotiate_features,
 	.alloc_interrupts = virtio_mmio_alloc_interrupts,
 	.free_interrupts = virtio_mmio_free_interrupts,
@@ -232,6 +237,14 @@ virtio_mmio_v2_setup_queue(struct virtio_softc *vsc, uint16_t idx,
 	}
 }
 
+static int
+virtio_mmio_get_status(struct virtio_softc *vsc)
+{
+	struct virtio_mmio_softc *sc = (struct virtio_mmio_softc *)vsc;
+
+	return virtio_mmio_reg_read(sc, VIRTIO_MMIO_STATUS);
+}
+
 static void
 virtio_mmio_set_status(struct virtio_softc *vsc, int status)
 {
@@ -260,7 +273,7 @@ virtio_mmio_common_attach(struct virtio_mmio_softc *sc)
 {
 	struct virtio_softc *vsc = &sc->sc_sc;
 	device_t self = vsc->sc_dev;
-	uint32_t id, magic, ver;
+	uint32_t id, magic;
 
 	magic = bus_space_read_4(sc->sc_iot, sc->sc_ioh,
 	    VIRTIO_MMIO_MAGIC_VALUE);
@@ -276,8 +289,8 @@ virtio_mmio_common_attach(struct virtio_mmio_softc *sc)
 	vsc->sc_bus_endian    = READ_ENDIAN;
 	vsc->sc_struct_endian = STRUCT_ENDIAN;
 
-	ver = virtio_mmio_reg_read(sc, VIRTIO_MMIO_VERSION);
-	switch (ver) {
+	sc->sc_ver = virtio_mmio_reg_read(sc, VIRTIO_MMIO_VERSION);
+	switch (sc->sc_ver) {
 	case 1:
 		/* we could use PAGE_SIZE, but virtio(4) assumes 4KiB for now */
 		virtio_mmio_reg_write(sc,
@@ -291,10 +304,10 @@ virtio_mmio_common_attach(struct virtio_mmio_softc *sc)
 
 	default:
 		aprint_error_dev(vsc->sc_dev,
-		    "unknown version 0x%08x; giving up\n", ver);
+		    "unknown version 0x%08x; giving up\n", sc->sc_ver);
 		return;
 	}
-	aprint_normal_dev(self, "VirtIO-MMIO v%d\n", ver);
+	aprint_normal_dev(self, "VirtIO-MMIO v%d\n", sc->sc_ver);
 
 	id = virtio_mmio_reg_read(sc, VIRTIO_MMIO_DEVICE_ID);
 	if (id == 0) {
@@ -302,7 +315,7 @@ virtio_mmio_common_attach(struct virtio_mmio_softc *sc)
 		return;
 	}
 
-	virtio_print_device_type(self, id, ver);
+	virtio_print_device_type(self, id, sc->sc_ver);
 
 	/* set up our device config tag */
 	vsc->sc_devcfg_iosize = sc->sc_iosize - VIRTIO_MMIO_CONFIG;
@@ -353,13 +366,30 @@ virtio_mmio_negotiate_features(struct virtio_softc *vsc, uint64_t
     driver_features)
 {
 	struct virtio_mmio_softc *sc = (struct virtio_mmio_softc *)vsc;
-	uint32_t r;
+	uint64_t r, device_status;
+
+	if (sc->sc_ver > 1)
+		driver_features |= VIRTIO_F_VERSION_1;
 
 	virtio_mmio_reg_write(sc, VIRTIO_MMIO_DEVICE_FEATURES_SEL, 0);
 	r = virtio_mmio_reg_read(sc, VIRTIO_MMIO_DEVICE_FEATURES);
+	virtio_mmio_reg_write(sc, VIRTIO_MMIO_DEVICE_FEATURES_SEL, 1);
+	r |= (uint64_t)virtio_mmio_reg_read(sc, VIRTIO_MMIO_DEVICE_FEATURES) << 32;
+
 	r &= driver_features;
+
 	virtio_mmio_reg_write(sc, VIRTIO_MMIO_DRIVER_FEATURES_SEL, 0);
-	virtio_mmio_reg_write(sc, VIRTIO_MMIO_DRIVER_FEATURES, r);
+	virtio_mmio_reg_write(sc, VIRTIO_MMIO_DRIVER_FEATURES, r & 0xffffffff);
+	virtio_mmio_reg_write(sc, VIRTIO_MMIO_DRIVER_FEATURES_SEL, 1);
+	virtio_mmio_reg_write(sc, VIRTIO_MMIO_DRIVER_FEATURES, r >> 32);
+
+	virtio_mmio_set_status(vsc, VIRTIO_CONFIG_S_FEATURES_OK);
+
+	device_status = virtio_mmio_get_status(vsc);
+	if ((device_status & VIRTIO_CONFIG_S_FEATURES_OK) == 0) {
+		aprint_error_dev(vsc->sc_dev,
+			"desired features were not accepted\n");
+	}
 
 	vsc->sc_active_features = r;
 }
