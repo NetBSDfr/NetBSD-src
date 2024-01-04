@@ -238,10 +238,11 @@ amd64_mainbus_attach(device_t parent, device_t self, void *aux)
 		    CFARGS(.iattr = "isabus"));
 	}
 #endif
-
 	mba.mba_cmdline.memt = x86_bus_space_mem;
 	mba.mba_cmdline.dmat = &pci_bus_dma_tag;
-	config_found(self, &mba.mba_cmdline, NULL, CFARGS(.iattr = "cmdlinebus"));
+	mba.mba_cmdline.dmat64 = &pci_bus_dma64_tag;
+	config_found(self, &mba.mba_cmdline, NULL,
+		CFARGS(.iattr = "cmdlinebus"));
 
 	if (!pmf_device_register(self, NULL, NULL))
 		aprint_error_dev(self, "couldn't establish power handler\n");

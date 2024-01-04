@@ -43,13 +43,6 @@ __KERNEL_RCSID(0, "$NetBSD: virtio_mmio_cmdline.c");
 
 #define VMMIOSTR "virtio_mmio.device="
 
-static int	virtio_mmio_cmdline_match(device_t, cfdata_t, void *);
-static void	virtio_mmio_cmdline_attach(device_t, device_t, void *);
-static int	virtio_mmio_cmdline_detach(device_t, int);
-static int	virtio_mmio_cmdline_rescan(device_t, const char *, const int *);
-static int	virtio_mmio_cmdline_alloc_interrupts(struct virtio_mmio_softc *);
-static void	virtio_mmio_cmdline_free_interrupts(struct virtio_mmio_softc *);
-
 struct mmio_args {
 	uint64_t	sz;
 	uint64_t	baseaddr;
@@ -62,14 +55,33 @@ struct virtio_mmio_cmdline_softc {
 	struct mmio_args		margs;
 };
 
+static int	virtio_mmio_cmdline_match(device_t, cfdata_t, void *);
+static void	virtio_mmio_cmdline_attach(device_t, device_t, void *);
+static int	virtio_mmio_cmdline_do_attach(device_t,
+		struct cmdline_attach_args *,
+		struct mmio_args *);
+static int	virtio_mmio_cmdline_detach(device_t, int);
+static int	virtio_mmio_cmdline_rescan(device_t, const char *, const int *);
+static int	virtio_mmio_cmdline_alloc_interrupts(struct virtio_mmio_softc *);
+static void	virtio_mmio_cmdline_free_interrupts(struct virtio_mmio_softc *);
+
 CFATTACH_DECL3_NEW(mmio_cmdline,
 	sizeof(struct virtio_mmio_cmdline_softc),
 	virtio_mmio_cmdline_match, virtio_mmio_cmdline_attach,
 	virtio_mmio_cmdline_detach, NULL,
 	virtio_mmio_cmdline_rescan, (void *)voidop, DVF_DETACH_SHUTDOWN);
 
+static int
+virtio_mmio_cmdline_match(device_t parent, cfdata_t match, void *aux)
+{
+	if (strstr(xen_start_info.cmd_line, VMMIOSTR) == NULL)
+		return 0;
+
+	return 1;
+}
+
 static void
-parsearg(device_t self, struct mmio_args *margs, const char *arg)
+parsearg(struct mmio_args *margs, const char *arg)
 {
 	char *p;
 
@@ -131,73 +143,73 @@ parsearg(device_t self, struct mmio_args *margs, const char *arg)
 	return;
 
 bad:
-	printf("Error parsing virtio_mmio parameter: %s\n", arg);
+	aprint_error("Error parsing virtio_mmio parameter: %s\n", arg);
 }
 
 static void
-virtio_mmio_cmdline_parse(device_t self, struct virtio_mmio_cmdline_softc *sc)
+virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 {
-	struct virtio_mmio_softc *const msc = &sc->sc_msc;
+	struct virtio_mmio_cmdline_softc *sc = device_private(self);
+	struct cmdline_attach_args *caa = aux;
 	struct mmio_args *margs = &sc->margs;
-	char *p, *v, cmdline[128];
+	char *v, *n, cmdline[128];
 	int error;
+	static char *p = NULL;
+	static int idx = 0;
+	bool hasnext;
 
-	strcpy(cmdline, xen_start_info.cmd_line);
-
-	aprint_normal("\nkernel parameters: %s", cmdline);
-
-	if ((p = strstr(cmdline, VMMIOSTR)) == NULL)
-		return;
+	if (idx == 0) {
+		strcpy(cmdline, xen_start_info.cmd_line);
+		aprint_verbose("\nkernel parameters: %s", cmdline);
+		if ((p = strstr(cmdline, VMMIOSTR)) == NULL)
+			return;
+	}
 
 	while (*p) {
+		hasnext = false;
 		v = p;
 		while (*p && *p != ' ')
 			p++;
-		if (*p)
+		if (*p) {
+			n = p;
 			*p = '\0';
+			hasnext = true;
+		}
 		p = v;
 		while (*p && *p != '=')
 			p++;
 		if (*p) {
 			p++;
 			aprint_normal("\nviommio: %s", p);
-			parsearg(self, margs, p);
+			parsearg(margs, p);
 
-			error = bus_space_map(
-					msc->sc_iot, margs->baseaddr,
-					margs->sz, 0, &msc->sc_ioh
-				);
-			if (error) {
-				aprint_error_dev(self,
-					"couldn't map %#" PRIx64 ": %d",
-					(uint64_t)margs->baseaddr, error
-				);
+			error = virtio_mmio_cmdline_do_attach(self,
+				caa, margs);
+
+			if (error)
 				return;
-			}
-
+		}
+		if (hasnext) {
+			p = n+1;
+			idx++;
+			config_found(parent, caa, NULL,
+				CFARGS(.iattr = "cmdlinebus"));
 		}
 	}
 }
 
 static int
-virtio_mmio_cmdline_match(device_t parent, cfdata_t match, void *aux)
+virtio_mmio_cmdline_do_attach(device_t self,
+		struct cmdline_attach_args *caa,
+		struct mmio_args *margs)
 {
-	if (strstr(xen_start_info.cmd_line, VMMIOSTR) == NULL)
-		return 0;
-	return 1;
-}
-
-static void
-virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
-{
-	/* Attach function for device */
 	struct virtio_mmio_cmdline_softc *sc = device_private(self);
 	struct virtio_mmio_softc *const msc = &sc->sc_msc;
 	struct virtio_softc *const vsc = &msc->sc_sc;
-	struct cmdline_attach_args *caa = aux;
+	int error;
 
 	msc->sc_iot = caa->memt;
-	msc->sc_iosize = sc->margs.sz;
+	msc->sc_iosize = margs->sz;
 	vsc->sc_dev = self;
 
 	if (BUS_DMA_TAG_VALID(caa->dmat64)) {
@@ -208,7 +220,17 @@ virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 		vsc->sc_dmat = caa->dmat;
 	}
 
-	virtio_mmio_cmdline_parse(self, sc);
+	error = bus_space_map(
+			msc->sc_iot, margs->baseaddr,
+			margs->sz, 0, &msc->sc_ioh
+		);
+	if (error) {
+		aprint_error_dev(self,
+			"couldn't map %#" PRIx64 ": %d",
+			(uint64_t)margs->baseaddr, error
+		);
+		return error;
+	}
 
 	aprint_normal("\n");
 	aprint_naive("\n");
@@ -218,13 +240,15 @@ virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 
 	virtio_mmio_common_attach(msc);
 	virtio_mmio_cmdline_rescan(self, "virtio", NULL);
+
+	return 0;
 }
 
 static int
 virtio_mmio_cmdline_detach(device_t self, int flags)
 {
-	struct virtio_mmio_cmdline_softc * const fsc = device_private(self);
-	struct virtio_mmio_softc * const msc = &fsc->sc_msc;
+	struct virtio_mmio_cmdline_softc * const sc = device_private(self);
+	struct virtio_mmio_softc * const msc = &sc->sc_msc;
 
 	return virtio_mmio_common_detach(msc, flags);
 }
