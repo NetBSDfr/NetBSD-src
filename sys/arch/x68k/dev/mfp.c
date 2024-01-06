@@ -1,4 +1,4 @@
-/*	$NetBSD: mfp.c,v 1.30 2023/12/20 00:40:44 thorpej Exp $	*/
+/*	$NetBSD: mfp.c,v 1.32 2024/01/06 05:31:19 isaki Exp $	*/
 
 /*-
  * Copyright (c) 1998 NetBSD Foundation, Inc.
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: mfp.c,v 1.30 2023/12/20 00:40:44 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mfp.c,v 1.32 2024/01/06 05:31:19 isaki Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -149,7 +149,6 @@ mfp_init(void)
 }
 
 extern int delay_divisor;
-void	_delay(u_int);
 
 static void
 mfp_calibrate_delay(void)
@@ -166,7 +165,7 @@ mfp_calibrate_delay(void)
 	for (delay_divisor = 140; delay_divisor > 0; delay_divisor--) {
 		mfp_set_tcdr(255-0);
 		mfp_set_tcdcr(0x70); /* 1/200 delay mode */
-		_delay(10000 << 8);
+		_delay(10000);
 		mfp_set_tcdcr(0); /* stop timer */
 		if ((255 - mfp_get_tcdr()) > 200)
 			break;	/* got it! */

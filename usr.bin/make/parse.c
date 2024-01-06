@@ -1,4 +1,4 @@
-/*	$NetBSD: parse.c,v 1.713 2023/12/29 20:43:58 rillig Exp $	*/
+/*	$NetBSD: parse.c,v 1.715 2024/01/05 23:22:06 rillig Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -105,7 +105,7 @@
 #include "pathnames.h"
 
 /*	"@(#)parse.c	8.3 (Berkeley) 3/19/94"	*/
-MAKE_RCSID("$NetBSD: parse.c,v 1.713 2023/12/29 20:43:58 rillig Exp $");
+MAKE_RCSID("$NetBSD: parse.c,v 1.715 2024/01/05 23:22:06 rillig Exp $");
 
 /* Detects a multiple-inclusion guard in a makefile. */
 typedef enum {
@@ -336,7 +336,7 @@ GetInclude(size_t i)
 	return Vector_Get(&includes, i);
 }
 
-/* The makefile that is currently being read. */
+/* The makefile or the body of a .for loop that is currently being read. */
 static IncludedFile *
 CurFile(void)
 {
@@ -383,7 +383,7 @@ LoadFile(const char *path, int fd)
 	}
 	assert(buf.len <= buf.cap);
 
-	if (!Buf_EndsWith(&buf, '\n'))
+	if (buf.len > 0 && !Buf_EndsWith(&buf, '\n'))
 		Buf_AddByte(&buf, '\n');
 
 	return buf;		/* may not be null-terminated */
