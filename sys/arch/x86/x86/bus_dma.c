@@ -319,7 +319,7 @@ _bus_dmamap_create(bus_dma_tag_t t, bus_size_t size, int nsegments,
 			goto out;
 	}
 
-	if (map->_dm_bounce_thresh != 0)
+	if (map->_dm_bounce_thresh != 0 || map->_dm_segcnt == 1)
 		cookieflags |= X86_DMA_MIGHT_NEED_BOUNCE;
 
 	if ((cookieflags & X86_DMA_MIGHT_NEED_BOUNCE) == 0) {
