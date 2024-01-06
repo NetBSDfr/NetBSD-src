@@ -81,10 +81,6 @@ device	hyperv
 attach	hyperv at cpufeaturebus
 file	arch/x86/x86/hyperv.c		hyperv needs-flag
 
-device	pvclock
-attach	pvclock at cpufeaturebus
-file	arch/x86/x86/pvclock.c		pvclock
-
 file	arch/x86/x86/apic.c		ioapic | lapic
 file	arch/x86/x86/bus_dma.c		machdep
 file	arch/x86/x86/bus_space.c	machdep
