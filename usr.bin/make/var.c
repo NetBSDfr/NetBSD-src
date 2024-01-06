@@ -1,4 +1,4 @@
-/*	$NetBSD: var.c,v 1.1090 2023/12/29 14:57:00 rillig Exp $	*/
+/*	$NetBSD: var.c,v 1.1093 2024/01/05 23:22:06 rillig Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -139,7 +139,7 @@
 #include "metachar.h"
 
 /*	"@(#)var.c	8.3 (Berkeley) 3/19/94" */
-MAKE_RCSID("$NetBSD: var.c,v 1.1090 2023/12/29 14:57:00 rillig Exp $");
+MAKE_RCSID("$NetBSD: var.c,v 1.1093 2024/01/05 23:22:06 rillig Exp $");
 
 /*
  * Variables are defined using one of the VAR=value assignments.  Their
@@ -1328,7 +1328,7 @@ ModifyWord_Tail(Substring word, SepBuf *buf, void *dummy MAKE_ATTR_UNUSED)
 static void
 ModifyWord_Suffix(Substring word, SepBuf *buf, void *dummy MAKE_ATTR_UNUSED)
 {
-	const char *lastDot = Substring_LastIndex(word, '.');
+	const char *lastDot = Substring_FindLast(word, '.');
 	if (lastDot != NULL)
 		SepBuf_AddRange(buf, lastDot + 1, word.end);
 }
@@ -1339,7 +1339,7 @@ ModifyWord_Root(Substring word, SepBuf *buf, void *dummy MAKE_ATTR_UNUSED)
 {
 	const char *lastDot, *end;
 
-	lastDot = Substring_LastIndex(word, '.');
+	lastDot = Substring_FindLast(word, '.');
 	end = lastDot != NULL ? lastDot : word.end;
 	SepBuf_AddRange(buf, word.start, end);
 }
@@ -1596,7 +1596,6 @@ ModifyWord_Loop(Substring word, SepBuf *buf, void *data)
 	s = Var_Subst(args->body, args->scope, args->emode);
 	/* TODO: handle errors */
 
-	assert(word.end[0] == '\0');	/* assume null-terminated word */
 	DEBUG2(VAR, "ModifyWord_Loop: expand \"%s\" to \"%s\"\n",
 	    args->body, s);
 
@@ -2001,7 +2000,7 @@ ModChain_ShouldEval(const ModChain *ch)
 typedef enum ApplyModifierResult {
 	/* Continue parsing */
 	AMR_OK,
-	/* Not a match, try other modifiers as well. */
+	/* Not a match, try the ':from=to' modifier as well. */
 	AMR_UNKNOWN,
 	/* Error out with "Bad modifier" message. */
 	AMR_BAD,
@@ -4222,7 +4221,8 @@ FindLocalLegacyVar(Substring varname, GNode *scope,
 	if (strchr("@%?*!<>", varname.start[0]) == NULL)
 		return NULL;
 
-	v = VarFindSubstring(Substring_Sub(varname, 0, 1), scope, false);
+	v = VarFindSubstring(Substring_Init(varname.start, varname.start + 1),
+	    scope, false);
 	if (v == NULL)
 		return NULL;
 
@@ -4286,11 +4286,11 @@ ParseVarnameLong(
 	ParseVarname(&p, startc, endc, scope, emode, &varname);
 	name = LazyBuf_Get(&varname);
 
-	if (*p == ':') {
+	if (*p == ':')
 		haveModifier = true;
-	} else if (*p == endc) {
+	else if (*p == endc)
 		haveModifier = false;
-	} else {
+	else {
 		Parse_Error(PARSE_FATAL, "Unclosed variable \"%.*s\"",
 		    (int)Substring_Length(name), name.start);
 		LazyBuf_Done(&varname);
@@ -4398,10 +4398,9 @@ Var_Parse_FastLane(const char **pp, VarEvalMode emode, FStr *out_value)
 	if (*p != '}')
 		return false;
 
-	if (emode == VARE_PARSE_ONLY)
-		*out_value = FStr_InitRefer("");
-	else
-		*out_value = FStr_InitOwn(bmake_strsedup(*pp + 4, p));
+	*out_value = emode == VARE_PARSE_ONLY
+	    ? FStr_InitRefer("")
+	    : FStr_InitOwn(bmake_strsedup(*pp + 4, p));
 	*pp = p + 1;
 	return true;
 }

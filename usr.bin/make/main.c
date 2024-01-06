@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.606 2023/12/27 00:45:37 sjg Exp $	*/
+/*	$NetBSD: main.c,v 1.608 2024/01/05 23:22:06 rillig Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -111,7 +111,7 @@
 #include "trace.h"
 
 /*	"@(#)main.c	8.3 (Berkeley) 3/19/94"	*/
-MAKE_RCSID("$NetBSD: main.c,v 1.606 2023/12/27 00:45:37 sjg Exp $");
+MAKE_RCSID("$NetBSD: main.c,v 1.608 2024/01/05 23:22:06 rillig Exp $");
 #if defined(MAKE_NATIVE)
 __COPYRIGHT("@(#) Copyright (c) 1988, 1989, 1990, 1993 "
 	    "The Regents of the University of California.  "
@@ -222,8 +222,7 @@ MainParseArgDebugFile(const char *arg)
 
 	opts.debug_file = fopen(fname, mode);
 	if (opts.debug_file == NULL) {
-		fprintf(stderr, "Cannot open debug file \"%s\"\n",
-		    fname);
+		fprintf(stderr, "Cannot open debug file \"%s\"\n", fname);
 		exit(2);
 	}
 	free(fname);
@@ -408,9 +407,9 @@ MainParseArgJobs(const char *arg)
 	if (*p != '\0') {
 		double d;
 
-		if (*p == 'C') {
+		if (*p == 'C')
 			d = (opts.maxJobs > 0) ? opts.maxJobs : 1;
-		} else if (*p == '.') {
+		else if (*p == '.') {
 			d = strtod(arg, &end);
 			p = end;
 		} else
@@ -1705,14 +1704,38 @@ Cmd_Exec(const char *cmd, char **error)
 	char *output;
 	char *p;
 	int saved_errno;
+	char cmd_file[MAXPATHLEN];
+	size_t cmd_len;
+	int cmd_fd = -1;
 
 	if (shellPath == NULL)
 		Shell_Init();
 
+	cmd_len = strlen(cmd);
+	if (cmd_len > 1000) {
+		cmd_fd = mkTempFile(NULL, cmd_file, sizeof(cmd_file));
+		if (cmd_fd >= 0) {
+			ssize_t n;
+
+			n = write(cmd_fd, cmd, cmd_len);
+			close(cmd_fd);
+			if (n < (ssize_t)cmd_len) {
+				unlink(cmd_file);
+				cmd_fd = -1;
+			}
+		}
+	}
+
 	args[0] = shellName;
-	args[1] = "-c";
-	args[2] = cmd;
-	args[3] = NULL;
+	if (cmd_fd >= 0) {
+		args[1] = cmd_file;
+		args[2] = NULL;
+	} else {
+		cmd_file[0] = '\0';
+		args[1] = "-c";
+		args[2] = cmd;
+		args[3] = NULL;
+	}
 	DEBUG1(VAR, "Capturing the output of command \"%s\"\n", cmd);
 
 	if (pipe(pipefds) == -1) {
@@ -1775,6 +1798,8 @@ Cmd_Exec(const char *cmd, char **error)
 		    "Couldn't read shell's output for \"", cmd, "\"");
 	else
 		*error = NULL;
+	if (cmd_file[0] != '\0')
+		unlink(cmd_file);
 	return output;
 }
 
@@ -2129,7 +2154,7 @@ getTmpdir(void)
 
 /*
  * Create and open a temp file using "pattern".
- * If out_fname is provided, set it to a copy of the filename created.
+ * If tfile is provided, set it to a copy of the filename created.
  * Otherwise unlink the file once open.
  */
 int
