@@ -3,7 +3,7 @@
 # XXX the contents of the following included file should be moved here
 include "dev/pci/files.virtio"
 
-define cmdlinebus { }
+define cmdlinebus {}
 
 file	dev/virtio/virtio_mmio.c	virtio_mmio
 

@@ -38,10 +38,20 @@ __KERNEL_RCSID(0, "$NetBSD: virtio_mmio_cmdline.c");
 #include <dev/virtio/cmdlinevar.h>
 #include <xen/hypervisor.h>
 
+#include <machine/bus_private.h>
+
 #include <machine/i82093var.h>
 #include "ioapic.h"
 
 #define VMMIOSTR "virtio_mmio.device="
+
+struct x86_bus_dma_tag cmdline_bus_dma_tag = {
+	._tag_needs_free	= 0,
+	._bounce_thresh		= 0,
+	._bounce_alloc_lo	= 0,
+	._bounce_alloc_hi	= 0,
+	._may_bounce		= NULL,
+};
 
 struct mmio_args {
 	uint64_t	sz;
@@ -209,16 +219,9 @@ virtio_mmio_cmdline_do_attach(device_t self,
 	int error;
 
 	msc->sc_iot = caa->memt;
+	vsc->sc_dmat = caa->dmat;
 	msc->sc_iosize = margs->sz;
 	vsc->sc_dev = self;
-
-	if (BUS_DMA_TAG_VALID(caa->dmat64)) {
-		aprint_verbose(": using 64-bit DMA");
-		vsc->sc_dmat = caa->dmat64;
-	} else {
-		aprint_verbose(": using 32-bit DMA");
-		vsc->sc_dmat = caa->dmat;
-	}
 
 	error = bus_space_map(
 			msc->sc_iot, margs->baseaddr,

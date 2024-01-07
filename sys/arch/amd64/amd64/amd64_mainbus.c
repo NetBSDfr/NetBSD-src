@@ -130,6 +130,8 @@ int mp_eisa_bus = -1;
 extern bool acpi_present;
 extern bool mpacpi_active;
 
+extern struct x86_bus_dma_tag cmdline_bus_dma_tag;
+
 # ifdef MPVERBOSE
 #  if MPVERBOSE > 0
 int mp_verbose = MPVERBOSE;
@@ -239,8 +241,7 @@ amd64_mainbus_attach(device_t parent, device_t self, void *aux)
 	}
 #endif
 	mba.mba_cmdline.memt = x86_bus_space_mem;
-	mba.mba_cmdline.dmat = &pci_bus_dma_tag;
-	mba.mba_cmdline.dmat64 = &pci_bus_dma64_tag;
+	mba.mba_cmdline.dmat = &cmdline_bus_dma_tag;
 	config_found(self, &mba.mba_cmdline, NULL,
 		CFARGS(.iattr = "cmdlinebus"));
 
