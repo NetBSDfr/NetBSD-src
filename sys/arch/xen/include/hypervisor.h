@@ -140,6 +140,8 @@ union start_info_union
 };
 extern union start_info_union start_info_union;
 #define xen_start_info (start_info_union.start_info)
+extern paddr_t HYPERVISOR_shared_info_pa;
+extern uint32_t hvm_start_paddr;
 
 CTASSERT(sizeof(start_info_t) <= PAGE_SIZE);
 

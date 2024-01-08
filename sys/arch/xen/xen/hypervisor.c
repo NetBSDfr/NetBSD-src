@@ -229,8 +229,6 @@ xen_init_hypercall_page(void)
 	wrmsr(descs[1], (uintptr_t)&hypercall_page - KERNBASE);
 }
 
-uint32_t hvm_start_paddr;
-
 void init_xen_early(void);
 void
 init_xen_early(void)
