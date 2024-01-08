@@ -50,6 +50,7 @@ __KERNEL_RCSID(0, "$NetBSD: amd64_mainbus.c,v 1.7 2021/08/07 16:18:41 thorpej Ex
 #include "isadma.h"
 #include "acpica.h"
 #include "ipmi.h"
+#include "pvbus.h"
 
 #include "opt_acpi.h"
 #include "opt_mpbios.h"
@@ -79,7 +80,9 @@ __KERNEL_RCSID(0, "$NetBSD: amd64_mainbus.c,v 1.7 2021/08/07 16:18:41 thorpej Ex
 #include <arch/x86/pci/msipic.h>
 #endif /* __HAVE_PCI_MSI_MSIX */
 #endif
-#include <dev/virtio/cmdlinevar.h>
+#if NPVBUS > 0
+#include <dev/pv/pvvar.h>
+#endif
 
 /*
  * XXXfvdl ACPI
@@ -101,7 +104,9 @@ union amd64_mainbus_attach_args {
 #if NIPMI > 0
 	struct ipmi_attach_args mba_ipmi;
 #endif
-	struct cmdline_attach_args mba_cmdline;
+#if NPVBUS > 0
+	struct pvbus_attach_args mba_pvba;
+#endif
 };
 
 /*
@@ -159,7 +164,7 @@ amd64_mainbus_match(device_t parent, cfdata_t match, void *aux)
 void
 amd64_mainbus_attach(device_t parent, device_t self, void *aux)
 {
-#if NISA > 0 || NPCI > 0 || NACPICA > 0 || NIPMI > 0
+#if NISA > 0 || NPCI > 0 || NACPICA > 0 || NIPMI > 0 || NPVBUS > 0
 	union amd64_mainbus_attach_args mba;
 #endif
 #if NISADMA > 0 && NACPICA > 0
@@ -240,10 +245,12 @@ amd64_mainbus_attach(device_t parent, device_t self, void *aux)
 		    CFARGS(.iattr = "isabus"));
 	}
 #endif
-	mba.mba_cmdline.memt = x86_bus_space_mem;
-	mba.mba_cmdline.dmat = &cmdline_bus_dma_tag;
-	config_found(self, &mba.mba_cmdline, NULL,
-		CFARGS(.iattr = "cmdlinebus"));
+
+#if NPVBUS > 0
+	mba.mba_pvba.pvba_busname = "pvbus";
+	config_found(self, &mba.mba_pvba.pvba_busname, NULL,
+		CFARGS(.iattr = "pvbus"));
+#endif
 
 	if (!pmf_device_register(self, NULL, NULL))
 		aprint_error_dev(self, "couldn't establish power handler\n");

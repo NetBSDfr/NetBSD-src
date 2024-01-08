@@ -36,6 +36,7 @@ __KERNEL_RCSID(0, "$NetBSD: virtio_mmio_cmdline.c");
 #define VIRTIO_PRIVATE
 #include <dev/virtio/virtio_mmiovar.h>
 #include <dev/virtio/cmdlinevar.h>
+#include <dev/pv/pvvar.h>
 #include <xen/hypervisor.h>
 
 #include <machine/bus_private.h>
@@ -68,7 +69,7 @@ struct virtio_mmio_cmdline_softc {
 static int	virtio_mmio_cmdline_match(device_t, cfdata_t, void *);
 static void	virtio_mmio_cmdline_attach(device_t, device_t, void *);
 static int	virtio_mmio_cmdline_do_attach(device_t,
-		struct cmdline_attach_args *,
+		struct pv_attach_args *,
 		struct mmio_args *);
 static int	virtio_mmio_cmdline_detach(device_t, int);
 static int	virtio_mmio_cmdline_rescan(device_t, const char *, const int *);
@@ -160,7 +161,7 @@ static void
 virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 {
 	struct virtio_mmio_cmdline_softc *sc = device_private(self);
-	struct cmdline_attach_args *caa = aux;
+	struct pv_attach_args *pvaa = aux;
 	struct mmio_args *margs = &sc->margs;
 	char *v, *n, cmdline[128];
 	int error;
@@ -194,7 +195,7 @@ virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 			parsearg(margs, p);
 
 			error = virtio_mmio_cmdline_do_attach(self,
-				caa, margs);
+				pvaa, margs);
 
 			if (error)
 				return;
@@ -202,15 +203,14 @@ virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 		if (hasnext) {
 			p = n+1;
 			idx++;
-			config_found(parent, caa, NULL,
-				CFARGS(.iattr = "cmdlinebus"));
+			config_found(parent, pvaa, NULL, CFARGS_NONE);
 		}
 	}
 }
 
 static int
 virtio_mmio_cmdline_do_attach(device_t self,
-		struct cmdline_attach_args *caa,
+		struct pv_attach_args *pvaa,
 		struct mmio_args *margs)
 {
 	struct virtio_mmio_cmdline_softc *sc = device_private(self);
@@ -218,8 +218,8 @@ virtio_mmio_cmdline_do_attach(device_t self,
 	struct virtio_softc *const vsc = &msc->sc_sc;
 	int error;
 
-	msc->sc_iot = caa->memt;
-	vsc->sc_dmat = caa->dmat;
+	msc->sc_iot = pvaa->pvaa_memt;
+	vsc->sc_dmat = pvaa->pvaa_dmat;
 	msc->sc_iosize = margs->sz;
 	vsc->sc_dev = self;
 
