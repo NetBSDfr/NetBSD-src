@@ -31,6 +31,7 @@ pv_attach(device_t parent, device_t self, void *aux) {
 	pvaa.pvaa_dmat = &pvbus_bus_dma_tag;
 
 	aprint_naive("\n");
+	aprint_normal("\n");
 
 	config_found(self, &pvaa, NULL, CFARGS_NONE);
 }
