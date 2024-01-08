@@ -276,7 +276,7 @@
 	loop	1b		;
 
 
-#ifdef XEN
+#if defined(XEN) || defined(GENPVH)
 #define __ASSEMBLY__
 #include <xen/include/public/arch-x86/cpuid.h>
 #include <xen/include/public/elfnote.h>
@@ -319,7 +319,7 @@
 #if NKSYMS > 0 || defined(DDB) || defined(MODULAR)
 	ELFNOTE(Xen, XEN_ELFNOTE_BSD_SYMTAB,     .asciz, "yes")
 #endif
-#endif  /* XEN */
+#endif  /* XEN || GENPVH */
 
 /*
  * Initialization
@@ -423,7 +423,7 @@ _C_LABEL(farjmp64):
 	.word	GSEL(GCODE_SEL, SEL_KPL)
 END(farjmp64)
 
-#ifdef XEN
+#if defined(XEN) || defined(GENPVH)
 /* 32bit GDT */
 gdtdesc32:
 	.word	gdt32end - gdt32
@@ -437,7 +437,7 @@ gdt32:
 	.long	0x0000ffff		# %ds, %es, %ss
 	.long	0x00cf9200
 gdt32end:
-#endif /* XEN */
+#endif /* XEN || GENPVH */
 #endif	/* !XENPV */
 
 	/* Space for the temporary stack */
@@ -1022,8 +1022,11 @@ longmode_hi:
 	call	_C_LABEL(kasan_early_init)
 #endif
 	/* <-- DO NOT INSERT C CALLS BEFORE THIS POINT --> */
+	call	_C_LABEL(init_start_info)
 #if defined(XEN) && !defined(XENPV)
 	call	_C_LABEL(init_xen_early)
+#endif
+#ifdef GENPVH
 #endif
 	call	_C_LABEL(init_slotspace)
 	popq	%rdi
@@ -1031,7 +1034,7 @@ longmode_hi:
 	call 	_C_LABEL(main)
 END(start)
 
-#if defined(XEN)
+#if defined(XEN) || defined(GENPVH)
 # if !defined(XENPV)
 /* entry point for Xen PVH */
 	.code32
@@ -1187,7 +1190,7 @@ ENTRY(hypercall_page) /* Returns -1, on HYPERVISOR_xen_version() */
 .align HYPERCALL_PAGE_OFFSET, 0x90
 END(hypercall_page)
 
-#endif /* XEN */
+#endif /* XEN || GENPVH */
 
 /*
  * int setjmp(label_t *)

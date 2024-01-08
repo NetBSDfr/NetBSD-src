@@ -90,8 +90,9 @@ __KERNEL_RCSID(0, "$NetBSD: xen_machdep.c,v 1.29 2023/10/17 10:24:11 riastradh E
 #define DPRINTF(a)
 #endif
 
-
+#ifndef GENPVH
 bool xen_suspend_allow;
+#endif
 
 void
 xen_parse_cmdline(int what, union xen_cmdline_parseinfo *xcp)
@@ -442,6 +443,7 @@ printk(const char *fmt, ...)
 	(void)HYPERVISOR_console_io(CONSOLEIO_write, ret, buf);
 }
 
+#ifndef GENPVH
 static int early_xenconscn_getc(dev_t);
 static void early_xenconscn_putc(dev_t, int);
 static void early_xenconscn_pollc(dev_t, int);
@@ -494,6 +496,7 @@ xen_init_features(void)
 		}
 	}
 }
+#endif /* !GENPVH */
 
 /*
  * Attempt to find the device from which we were booted.

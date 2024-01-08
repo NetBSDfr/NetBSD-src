@@ -184,11 +184,6 @@ extern vector *x86_exceptions[];
 extern vector IDTVEC(hypervisor_pvhvm_callback);
 extern struct xenstore_domain_interface *xenstore_interface; /* XXX */
 
-volatile shared_info_t *HYPERVISOR_shared_info __read_mostly;
-paddr_t HYPERVISOR_shared_info_pa;
-union start_info_union start_info_union __aligned(PAGE_SIZE);
-struct hvm_start_info *hvm_start_info;
-
 static int xen_hvm_vec = 0;
 #endif
 
@@ -240,22 +235,6 @@ void init_xen_early(void);
 void
 init_xen_early(void)
 {
-	const char *cmd_line;
-	if (vm_guest != VM_GUEST_XENPVH && vm_guest != VM_GUEST_GENPVH)
-		return;
-
-	hvm_start_info = (void *)((uintptr_t)hvm_start_paddr + KERNBASE);
-
-	if (hvm_start_info->cmdline_paddr != 0) {
-		cmd_line =
-		    (void *)((uintptr_t)hvm_start_info->cmdline_paddr + KERNBASE);
-		strlcpy(xen_start_info.cmd_line, cmd_line,
-		    sizeof(xen_start_info.cmd_line));
-	} else {
-		xen_start_info.cmd_line[0] = '\0';
-	}
-	xen_start_info.flags = hvm_start_info->flags;
-
 	if (vm_guest != VM_GUEST_XENPVH)
 		return;
 

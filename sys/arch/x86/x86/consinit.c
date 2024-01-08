@@ -99,7 +99,7 @@ __KERNEL_RCSID(0, "$NetBSD: consinit.c,v 1.38 2023/10/17 16:06:36 bouyer Exp $")
 #endif
 #endif
 
-#ifdef XENPVHVM
+#if defined(XENPVHVM) || defined(GENPVH)
 #include <xen/hypervisor.h>
 #include <xen/xen.h>
 #endif
@@ -173,12 +173,14 @@ consinit(void)
 #endif
 	char console_devname[16] = "";
 
-#ifdef XENPVHVM
+#if defined(XENPVHVM) || defined(GENPVH)
+#ifndef GENPVH
 	if (vm_guest == VM_GUEST_XENPVH) {
 		if (xen_pvh_consinit() != 0)
 			return;
 		/* fallback to native console selection, usefull for dom0 PVH */
 	}
+#endif
 	if (vm_guest == VM_GUEST_GENPVH) {
 		union xen_cmdline_parseinfo xcp;
 		/* get console= parameter from generic PVH VMM */

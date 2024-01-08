@@ -196,13 +196,13 @@ __KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.367 2023/07/16 19:55:43 riastradh Exp 
 #include <machine/isa_machdep.h>
 #include <dev/ic/i8042reg.h>
 
-#ifdef XEN
+#if defined(XEN) || defined(GENPVH)
 #include <xen/xen.h>
 #include <xen/hypervisor.h>
 #include <xen/evtchn.h>
 #include <xen/include/public/version.h>
 #include <xen/include/public/vcpu.h>
-#endif /* XEN */
+#endif /* XEN || GENPVH */
 
 #include <ddb/db_active.h>
 
@@ -1711,7 +1711,7 @@ init_x86_64(paddr_t first_avail)
 	cpu_info_primary.ci_vcpu = &HYPERVISOR_shared_info->vcpu_info[0];
 #endif
 
-#ifdef XEN
+#if defined(XEN) || defined(GENPVH)
 	if (vm_guest == VM_GUEST_XENPVH || vm_guest == VM_GUEST_GENPVH)
 		xen_parse_cmdline(XEN_PARSE_BOOTFLAGS, NULL);
 #endif
@@ -1974,7 +1974,7 @@ init_x86_64(paddr_t first_avail)
 #ifdef XENPV
 	xen_init_ksyms();
 #else /* XENPV */
-#ifdef XEN
+#if defined(XEN)
 	if (vm_guest == VM_GUEST_XENPVH)
 		xen_init_ksyms();
 	else

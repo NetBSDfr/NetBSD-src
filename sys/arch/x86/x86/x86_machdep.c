@@ -99,7 +99,7 @@ static char x86_cpu_idle_text[16];
 
 static bool x86_user_ldt_enabled __read_mostly = false;
 
-#ifdef XEN
+#if defined(XEN) || defined(GENPVH)
 
 #include <xen/xen.h>
 #include <xen/hypervisor.h>
@@ -855,7 +855,7 @@ x86_load_region(uint64_t seg_start, uint64_t seg_end)
 	}
 }
 
-#ifdef XEN
+#if defined(XEN) || defined(GENPVH)
 static void
 x86_add_xen_clusters(void)
 {
@@ -895,7 +895,7 @@ x86_add_xen_clusters(void)
 		x86_parse_clusters(&xen_mmap.bim);
 	}
 }
-#endif /* XEN */
+#endif /* XEN || GENPVH */
 /*
  * init_x86_clusters: retrieve the memory clusters provided by the BIOS, and
  * initialize mem_clusters.
@@ -910,7 +910,7 @@ init_x86_clusters(void)
 	 * Check to see if we have a memory map from the BIOS (passed to us by
 	 * the boot program).
 	 */
-#ifdef XEN
+#if defined(XEN) || defined(GENPVH)
 	if (vm_guest == VM_GUEST_XENPVH || vm_guest == VM_GUEST_GENPVH) {
 		x86_add_xen_clusters();
 	}

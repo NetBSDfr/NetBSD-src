@@ -35,7 +35,6 @@ __KERNEL_RCSID(0, "$NetBSD: virtio_mmio_cmdline.c");
 
 #define VIRTIO_PRIVATE
 #include <dev/virtio/virtio_mmiovar.h>
-#include <dev/virtio/cmdlinevar.h>
 #include <dev/pv/pvvar.h>
 #include <xen/hypervisor.h>
 

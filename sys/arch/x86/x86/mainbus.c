@@ -247,7 +247,7 @@ mainbus_attach(device_t parent, device_t self, void *aux)
 int
 mainbus_rescan(device_t self, const char *ifattr, const int *locators)
 {
-#if defined(__i386__) && !defined(XEN)
+#if defined(__i386__) && !defined(XEN) && !defined(GENPVH)
 	return i386_mainbus_rescan(self, ifattr, locators);
 #endif
 	return ENOTTY; /* Inappropriate ioctl for this device */
@@ -256,7 +256,7 @@ mainbus_rescan(device_t self, const char *ifattr, const int *locators)
 void
 mainbus_childdetached(device_t self, device_t child)
 {
-#if defined(__i386__) && !defined(XEN)
+#if defined(__i386__) && !defined(XEN) && !defined(GENPVH)
 	i386_mainbus_childdetached(self, child);
 #endif
 }
