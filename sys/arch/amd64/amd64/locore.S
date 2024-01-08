@@ -1026,8 +1026,6 @@ longmode_hi:
 #if defined(XEN) && !defined(XENPV)
 	call	_C_LABEL(init_xen_early)
 #endif
-#ifdef GENPVH
-#endif
 	call	_C_LABEL(init_slotspace)
 	popq	%rdi
 	call	_C_LABEL(init_x86_64)
