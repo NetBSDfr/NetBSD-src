@@ -135,8 +135,6 @@ int mp_eisa_bus = -1;
 extern bool acpi_present;
 extern bool mpacpi_active;
 
-extern struct x86_bus_dma_tag cmdline_bus_dma_tag;
-
 # ifdef MPVERBOSE
 #  if MPVERBOSE > 0
 int mp_verbose = MPVERBOSE;
