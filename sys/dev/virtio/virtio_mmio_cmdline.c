@@ -54,9 +54,6 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: virtio_mmio_cmdline.c");
-
 #include <sys/param.h>
 #include <sys/bus.h>
 #include <sys/device.h>

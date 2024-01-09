@@ -132,9 +132,7 @@ struct virtio_ops {
 	uint16_t	(*read_queue_size)(struct virtio_softc *, uint16_t);
 	void		(*setup_queue)(struct virtio_softc *, uint16_t, uint64_t);
 	void		(*set_status)(struct virtio_softc *, int);
-	int		(*get_status)(struct virtio_softc *);
 	void		(*neg_features)(struct virtio_softc *, uint64_t);
-	int		(*finalize_features)(struct virtio_softc *);
 	int		(*alloc_interrupts)(struct virtio_softc *);
 	void		(*free_interrupts)(struct virtio_softc *);
 	int		(*setup_interrupts)(struct virtio_softc *, int);

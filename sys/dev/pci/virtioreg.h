@@ -144,6 +144,7 @@
  */
 #define VRING_AVAIL_F_NO_INTERRUPT      1
 
+
 /* Virtio ring descriptors: 16 bytes.
  * These can chain together via "next". */
 struct vring_desc {
