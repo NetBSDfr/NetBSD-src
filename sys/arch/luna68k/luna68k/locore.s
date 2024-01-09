@@ -1,4 +1,4 @@
-/* $NetBSD: locore.s,v 1.72 2023/12/29 02:30:36 tsutsui Exp $ */
+/* $NetBSD: locore.s,v 1.74 2024/01/09 07:28:25 thorpej Exp $ */
 
 /*
  * Copyright (c) 1988 University of Utah.
@@ -280,10 +280,8 @@ Lmotommu0:
 	jmp	Lenab1
 Lmotommu1:
 #endif
-	RELOC(protosrp,%a0)		| nolimit + share global + 4 byte PTEs
-	movl	%d1,%a0@(4)		| + segtable address
-	RELOC(protocrp,%a1)
-	movl	%d1,%a1@(4)		| set lower half of %CRP
+	RELOC(protorp,%a0)
+	movl	%d1,%a0@(4)		| segtable address
 	pmove	%a0@,%srp		| load the supervisor root pointer
 	RELOC(protott0,%a0)		| tt0 range 4000.0000-7fff.ffff
 	.long	0xf0100800		| pmove %a0@,mmutt0
@@ -779,27 +777,6 @@ ENTRY(ecacheon)
 ENTRY(ecacheoff)
 	rts
 
-/*
- * Load a new user segment table pointer.
- */
-ENTRY(loadustp)
-	movl	%sp@(4),%d0		| new USTP
-#if defined(M68040)
-	cmpl	#MMU_68040,_C_LABEL(mmutype) | 68040?
-	jne	LmotommuC		| no, skip
-	.word	0xf518			| yes, pflusha
-	.long	0x4e7b0806		| movc %d0,%urp
-	rts
-LmotommuC:
-#endif
-	pflusha				| flush entire TLB
-	lea	_C_LABEL(protocrp),%a0	| %crp prototype
-	movl	%d0,%a0@(4)		| stash USTP
-	pmove	%a0@,%crp		| load root pointer
-	movl	#CACHE_CLR,%d0
-	movc	%d0,%cacr		| invalidate cache(s)
-	rts
-
 ENTRY(getsr)
 	moveq	#0,%d0
 	movw	%sr,%d0
@@ -890,11 +867,6 @@ GLOBAL(mmutype)
 	.long	MMU_68030	| default to 68030
 GLOBAL(fputype)
 	.long	FPU_68881	| default to 68881
-
-GLOBAL(protosrp)
-	.long	MMU51_SRP_BITS,0 | prototype supervisor root pointer
-GLOBAL(protocrp)
-	.long	MMU51_CRP_BITS,0 | prototype CPU root pointer
 
 GLOBAL(prototc)
 	.long	MMU51_TCR_BITS	| %tc -- see pmap.h
