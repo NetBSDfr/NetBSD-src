@@ -165,6 +165,7 @@ amd64_mainbus_attach(device_t parent, device_t self, void *aux)
 #if NISA > 0 || NPCI > 0 || NACPICA > 0 || NIPMI > 0 || NPVBUS > 0
 	union amd64_mainbus_attach_args mba;
 #endif
+
 #if NISADMA > 0 && NACPICA > 0
 	/*
 	 * ACPI needs ISA DMA initialized before they start probing.
@@ -218,7 +219,6 @@ amd64_mainbus_attach(device_t parent, device_t self, void *aux)
 		if (npcibus == 0 && mpacpi_active)
 			npcibus = mp_pci_scan(self, &mba.mba_pba, pcibusprint);
 #endif
-
 #if defined(MPBIOS) && defined(MPBIOS_SCANPCI)
 		if (npcibus == 0 && mpbios_scanned != 0)
 			npcibus = mp_pci_scan(self, &mba.mba_pba, pcibusprint);
