@@ -281,6 +281,7 @@ mpbios_unmap(struct mp_map *handle)
 	pmap_update(pmap_kernel());
 	uvm_km_free(kernel_map, handle->baseva, handle->vsize, UVM_KMF_VAONLY);
 }
+
 /*
  * Look for an Intel MP spec table, indicating SMP capable hardware.
  */
@@ -389,7 +390,6 @@ mpbios_probe(device_t self)
 		    "MP Configuration Table checksum mismatch\n");
 		goto err;
 	}
-
 	return 10;
  err:
 	if (mp_fps) {
