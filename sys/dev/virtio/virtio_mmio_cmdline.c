@@ -66,20 +66,10 @@
 #include <dev/pv/pvvar.h>
 #include <xen/hypervisor.h>
 
-#include <machine/bus_private.h>
-
 #include <machine/i82093var.h>
 #include "ioapic.h"
 
 #define VMMIOSTR "virtio_mmio.device="
-
-struct x86_bus_dma_tag cmdline_bus_dma_tag = {
-	._tag_needs_free	= 0,
-	._bounce_thresh		= 0,
-	._bounce_alloc_lo	= 0,
-	._bounce_alloc_hi	= 0,
-	._may_bounce		= NULL,
-};
 
 struct mmio_args {
 	uint64_t	sz;
@@ -196,29 +186,34 @@ virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 	static int idx = 0;
 	bool hasnext;
 
+	aprint_normal("\n");
+	aprint_naive("\n");
+
 	if (idx == 0) {
 		strcpy(cmdline, xen_start_info.cmd_line);
-		aprint_verbose("\nkernel parameters: %s", cmdline);
+		aprint_verbose("kernel parameters: %s\n", cmdline);
 		if ((p = strstr(cmdline, VMMIOSTR)) == NULL)
 			return;
 	}
 
-	while (*p) {
+	while (*p) { /* manual strtok() */
 		hasnext = false;
-		v = p;
-		while (*p && *p != ' ')
+		v = p; /* start of VMMIOSTR or next param */
+		while (*p && *p != ' ') /* find end of param */
 			p++;
 		if (*p) {
-			n = p;
-			*p = '\0';
-			hasnext = true;
+			n = p; /* record end of param */
+			*p = '\0'; /* end it */
+			hasnext = true; /* more params to come */
 		}
-		p = v;
-		while (*p && *p != '=')
+		if (strncmp(v, VMMIOSTR, strlen(VMMIOSTR)) != 0)
+			continue; /* this was not an MMIO parameter */
+		p = v; /* start of VMMIOSTR */
+		while (*p && *p != '=') /* point to the value */
 			p++;
 		if (*p) {
 			p++;
-			aprint_normal("\nviommio: %s", p);
+			aprint_normal("viommio: %s\n", p);
 			parsearg(margs, p);
 
 			error = virtio_mmio_cmdline_do_attach(self,
@@ -228,7 +223,7 @@ virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 				return;
 		}
 		if (hasnext) {
-			p = n+1;
+			p = n+1; /* previously recorded end of param */
 			idx++;
 			config_found(parent, pvaa, NULL, CFARGS_NONE);
 		}
@@ -261,9 +256,6 @@ virtio_mmio_cmdline_do_attach(device_t self,
 		);
 		return error;
 	}
-
-	aprint_normal("\n");
-	aprint_naive("\n");
 
 	msc->sc_alloc_interrupts = virtio_mmio_cmdline_alloc_interrupts;
 	msc->sc_free_interrupts = virtio_mmio_cmdline_free_interrupts;
