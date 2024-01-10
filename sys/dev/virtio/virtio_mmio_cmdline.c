@@ -190,7 +190,7 @@ virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 	aprint_naive("\n");
 
 	if (idx == 0) {
-		strcpy(cmdline, xen_start_info.cmd_line);
+		strncpy(cmdline, xen_start_info.cmd_line, sizeof(cmdline));
 		aprint_verbose("kernel parameters: %s\n", cmdline);
 		if ((p = strstr(cmdline, VMMIOSTR)) == NULL)
 			return;
