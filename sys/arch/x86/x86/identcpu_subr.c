@@ -69,6 +69,12 @@ cpu_tsc_freq_cpuid(struct cpu_info *ci)
 	uint32_t descs[4];
 	uint32_t denominator, numerator;
 
+	if (vm_guest != VM_GUEST_NO) {
+		x86_cpuid(0x40000010, descs);
+		if (descs[0] > 0)
+			return descs[0] * 1000; /* TSC freq in khz */
+	}
+
 	if (!((ci->ci_max_cpuid >= 0x15) && (cpu_vendor == CPUVENDOR_INTEL)))
 		return 0;
 

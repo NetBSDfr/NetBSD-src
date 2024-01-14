@@ -1139,7 +1139,7 @@ config_search_internal(device_t parent, void *aux,
     const struct cfargs_internal * const args)
 {
 	struct cftable *ct;
-	cfdata_t cf;
+	cfdata_t cf = NULL;
 	struct matchinfo m;
 
 	KASSERT(config_initialized);
@@ -1197,6 +1197,7 @@ config_search_internal(device_t parent, void *aux,
 		}
 	}
 	rnd_add_uint32(&rnd_autoconf_source, 0);
+
 	return m.match;
 }
 
@@ -1853,6 +1854,7 @@ config_attach_internal(device_t parent, cfdata_t cf, void *aux, cfprint_t print,
 
 	device_register_post_config(dev, aux);
 	rnd_add_uint32(&rnd_autoconf_source, 0);
+	aprint_verbose("\n>>> attach %lums\n", (rdtsc() * 1000) / 3850000000);
 	return dev;
 }
 

@@ -1418,6 +1418,8 @@ cpu_get_tsc_freq(struct cpu_info *ci)
 	int64_t overhead;
 
 	if (CPU_IS_PRIMARY(ci) && cpu_hascounter()) {
+		if (ci->ci_data.cpu_cc_freq != 0)
+			return;
 		/*
 		 * If it's the first call of this function, try to get TSC
 		 * freq from CPUID by calling cpu_tsc_freq_cpuid().
@@ -1425,8 +1427,8 @@ cpu_get_tsc_freq(struct cpu_info *ci)
 		 * known. This is required for Intel's Comet Lake and newer
 		 * processors to set LAPIC timer correctly.
 		 */
-		if (ci->ci_data.cpu_cc_freq == 0)
-			freq = freq_from_cpuid = cpu_tsc_freq_cpuid(ci);
+		freq = freq_from_cpuid = cpu_tsc_freq_cpuid(ci);
+
 		if (freq != 0)
 			aprint_debug_dev(ci->ci_dev, "TSC freq "
 			    "from CPUID %" PRIu64 " Hz\n", freq);
