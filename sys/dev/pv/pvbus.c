@@ -51,7 +51,6 @@ struct x86_bus_dma_tag pvbus_bus_dma_tag = {
 static int pv_match(device_t, cfdata_t, void *);
 static void pv_attach(device_t, device_t, void *);
 static int pv_submatch(device_t, cfdata_t, const int *, void *);
-static int pv_print(void *, const char *);
 
 CFATTACH_DECL_NEW(pv, sizeof(struct pv_softc),
 		  pv_match, pv_attach, NULL, NULL);
@@ -82,17 +81,8 @@ pv_submatch(device_t parent, cfdata_t cf, const int *ldesc, void *aux)
 	struct pv_attach_args *pvaa = aux;
 
 	if (config_probe(parent, cf, pvaa)) {
-		config_attach(parent, cf, pvaa, pv_print, CFARGS_NONE);
+		config_attach(parent, cf, pvaa, NULL, CFARGS_NONE);
 		return 0;
 	}
 	return 0;
-}
-
-static int
-pv_print(void *aux, const char *pnp)
-{
-
-	if (pnp != NULL)
-		printf("pv at %s", pnp);
-	return (UNCONF);
 }
