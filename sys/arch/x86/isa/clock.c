@@ -335,6 +335,7 @@ startrtclock(void)
 		char bits[128];
 		snprintb(bits, sizeof(bits), NVRAM_DIAG_BITS, s);
 		printf("RTC BIOS diagnostic error %s\n", bits);
+		return;
 	}
 
 	tc_init(&i8254_timecounter);
