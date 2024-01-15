@@ -180,7 +180,7 @@ virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 	struct virtio_mmio_cmdline_softc *sc = device_private(self);
 	struct pv_attach_args *pvaa = aux;
 	struct mmio_args *margs = &sc->margs;
-	char *v, *n, cmdline[128];
+	char *v, *n, cmdline[LINE_MAX];
 	int error;
 	static char *p = NULL;
 	static int idx = 0;
@@ -227,6 +227,7 @@ virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 			idx++;
 			config_found(parent, pvaa, NULL, CFARGS_NONE);
 		}
+		return;
 	}
 }
 
