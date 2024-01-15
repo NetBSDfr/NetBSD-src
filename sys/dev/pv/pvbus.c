@@ -48,6 +48,14 @@ struct x86_bus_dma_tag pvbus_bus_dma_tag = {
 	._may_bounce		= NULL,
 };
 
+static int pv_match(device_t, cfdata_t, void *);
+static void pv_attach(device_t, device_t, void *);
+static int pv_submatch(device_t, cfdata_t, const int *, void *);
+static int pv_print(void *, const char *);
+
+CFATTACH_DECL_NEW(pv, sizeof(struct pv_softc),
+		  pv_match, pv_attach, NULL, NULL);
+
 static int
 pv_match(device_t parent, cfdata_t match, void *aux)
 {
@@ -55,7 +63,8 @@ pv_match(device_t parent, cfdata_t match, void *aux)
 }
 
 static void
-pv_attach(device_t parent, device_t self, void *aux) {
+pv_attach(device_t parent, device_t self, void *aux)
+{
 	struct pv_attach_args pvaa;
 
 	pvaa.pvaa_memt = x86_bus_space_mem;
@@ -64,8 +73,26 @@ pv_attach(device_t parent, device_t self, void *aux) {
 	aprint_naive("\n");
 	aprint_normal("\n");
 
-	config_found(self, &pvaa, NULL, CFARGS_NONE);
+	config_found(self, &pvaa, NULL, CFARGS(.search = pv_submatch));
 }
 
-CFATTACH_DECL_NEW(pv, sizeof(struct pv_softc),
-		  pv_match, pv_attach, NULL, NULL);
+static int
+pv_submatch(device_t parent, cfdata_t cf, const int *ldesc, void *aux)
+{
+	struct pv_attach_args *pvaa = aux;
+
+	if (config_probe(parent, cf, pvaa)) {
+		config_attach(parent, cf, pvaa, pv_print, CFARGS_NONE);
+		return 0;
+	}
+	return 0;
+}
+
+static int
+pv_print(void *aux, const char *pnp)
+{
+
+	if (pnp != NULL)
+		printf("pv at %s", pnp);
+	return (UNCONF);
+}
