@@ -1,0 +1,1 @@
+void addstage(const char *);
