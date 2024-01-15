@@ -50,6 +50,8 @@ __KERNEL_RCSID(0, "$NetBSD: lapic.c,v 1.89 2022/09/07 00:40:19 knakahara Exp $")
 #include <sys/device.h>
 #include <sys/timetc.h>
 
+#include <sys/tstages.h>
+
 #include <uvm/uvm_extern.h>
 
 #include <dev/ic/i8253reg.h>
@@ -601,8 +603,8 @@ lapic_reset(void)
 static void
 lapic_initclock(void)
 {
-
-	if (curcpu() == &cpu_info_primary) {
+	/* don't use lapic timecounter with VM_GUEST_GENPVH */
+	if (curcpu() == &cpu_info_primary && vm_guest != VM_GUEST_GENPVH) {
 		/*
 		 * Recalibrate the timer using the cycle counter, now that
 		 * the cycle counter itself has been recalibrated.
