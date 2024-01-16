@@ -603,7 +603,10 @@ lapic_reset(void)
 static void
 lapic_initclock(void)
 {
-	/* don't use lapic timecounter with VM_GUEST_GENPVH */
+	/*
+	 * don't use lapic timecounter with VM_GUEST_GENPVH
+	 * XXX use pvclock
+	 */
 	if (curcpu() == &cpu_info_primary && vm_guest != VM_GUEST_GENPVH) {
 		/*
 		 * Recalibrate the timer using the cycle counter, now that

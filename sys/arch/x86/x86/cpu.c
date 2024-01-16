@@ -86,6 +86,8 @@ __KERNEL_RCSID(0, "$NetBSD: cpu.c,v 1.209 2023/07/16 19:55:43 riastradh Exp $");
 #include <sys/reboot.h>
 #include <sys/csan.h>
 
+#include <sys/tstages.h>
+
 #include <uvm/uvm.h>
 
 #include "acpica.h"		/* for NACPICA, for mp_verbose */
@@ -351,6 +353,7 @@ cpu_attach(device_t parent, device_t self, void *aux)
 
 	sc->sc_dev = self;
 
+	addstage("in cpu_attach");
 	if (ncpu > maxcpus) {
 #ifndef _LP64
 		aprint_error(": too many CPUs, please use NetBSD/amd64\n");
@@ -436,7 +439,6 @@ cpu_attach(device_t parent, device_t self, void *aux)
 #ifdef SVS
 	cpu_svs_init(ci);
 #endif
-
 	pmap_reference(pmap_kernel());
 	ci->ci_pmap = pmap_kernel();
 	ci->ci_tlbstate = TLBSTATE_STALE;
@@ -467,13 +469,14 @@ cpu_attach(device_t parent, device_t self, void *aux)
 			/* Enable lapic. */
 			lapic_enable();
 			lapic_set_lvt();
-			if (!vm_guest_is_xenpvh_or_pvhvm())
+			if (!vm_guest_is_xenpvh_or_pvhvm() && vm_guest != VM_GUEST_GENPVH)
 				lapic_calibrate_timer(false);
 		}
 #endif
 		kcsan_cpu_init(ci);
 		again = true;
 	}
+
 
 	/* further PCB init done later. */
 
@@ -550,6 +553,7 @@ cpu_attach(device_t parent, device_t self, void *aux)
 	}
 #endif
 
+	addstage("out cpu_attach");
 	/*
 	 * Postpone the "cpufeaturebus" scan.
 	 * It is safe to scan the pseudo-bus
