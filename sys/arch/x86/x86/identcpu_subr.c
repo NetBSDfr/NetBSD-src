@@ -43,6 +43,8 @@ __KERNEL_RCSID(0, "$NetBSD: identcpu_subr.c,v 1.9 2021/10/07 13:04:18 msaitoh Ex
 
 #include <sys/param.h>
 
+#include <sys/tstages.h>
+
 #ifdef _KERNEL
 #include <sys/systm.h>
 #include <x86/cpuvar.h>
@@ -62,6 +64,66 @@ __KERNEL_RCSID(0, "$NetBSD: identcpu_subr.c,v 1.9 2021/10/07 13:04:18 msaitoh Ex
 #include "cpuctl_i386.h"
 #endif
 
+static uint64_t
+cpu_tsc_freq_intel_brand(struct cpu_info *ci)
+{
+	char brand[48];
+	u_int regs[4];
+	uint64_t freq;
+	char *p;
+	u_int i;
+
+	/*
+	 * Intel Processor Identification and the CPUID Instruction
+	 * Application Note 485.
+	 * http://www.intel.com/assets/pdf/appnote/241618.pdf
+	 */
+	if (ci->ci_max_ext_cpuid >= 0x80000004) {
+		p = brand;
+		for (i = 0x80000002; i < 0x80000005; i++) {
+			x86_cpuid(i, regs);
+			memcpy(p, regs, sizeof(regs));
+			p += sizeof(regs);
+		}
+		p = NULL;
+		for (i = 0; i < sizeof(brand) - 1; i++)
+			if (brand[i] == 'H' && brand[i + 1] == 'z')
+				p = brand + i;
+		if (p != NULL) {
+			p -= 5;
+			switch (p[4]) {
+			case 'M':
+				i = 1;
+				break;
+			case 'G':
+				i = 1000;
+				break;
+			case 'T':
+				i = 1000000;
+				break;
+			default:
+				return 0;
+			}
+#define	C2D(c)	((c) - '0')
+			if (p[1] == '.') {
+				freq = C2D(p[0]) * 1000;
+				freq += C2D(p[2]) * 100;
+				freq += C2D(p[3]) * 10;
+				freq *= i * 1000;
+			} else {
+				freq = C2D(p[0]) * 1000;
+				freq += C2D(p[1]) * 100;
+				freq += C2D(p[2]) * 10;
+				freq += C2D(p[3]);
+				freq *= i * 1000000;
+			}
+#undef C2D
+			return freq;
+		}
+	}
+	return 0;
+}
+
 uint64_t
 cpu_tsc_freq_cpuid(struct cpu_info *ci)
 {
@@ -69,6 +131,7 @@ cpu_tsc_freq_cpuid(struct cpu_info *ci)
 	uint32_t descs[4];
 	uint32_t denominator, numerator;
 
+	addstage("in cpu_tsc_freq_cpuid");
 	if (vm_guest != VM_GUEST_NO) {
 		x86_cpuid(0x40000010, descs);
 		if (descs[0] > 0)
@@ -145,9 +208,14 @@ cpu_tsc_freq_cpuid(struct cpu_info *ci)
 		}
 #endif
 	}
+	/* still no luck, get the frequency from brand */
+	if (freq == 0)
+		freq = cpu_tsc_freq_intel_brand(ci);
+
 	if (freq != 0)
 		aprint_verbose_dev(ci->ci_dev, "TSC freq CPUID %" PRIu64
 		    " Hz\n", freq);
+	addstage("out cpu_tsc_freq_cpuid");
 
 	return freq;
 }
