@@ -390,7 +390,7 @@ END(lwp0uarea)
 LABEL(boottime_low)		.long	0	/* low part of rdtsc */
 END(boottime_low)
 	.type	_C_LABEL(boottime_high), @object
-LABEL(boottime_high)		.long	0	/* low part of rdtsc */
+LABEL(boottime_high)		.long	0	/* high part of rdtsc */
 END(boottime_high)
 
 #ifndef XENPV
