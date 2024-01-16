@@ -1029,7 +1029,8 @@ cpu_identify(struct cpu_info *ci)
 /*
  * Hypervisor
  */
-vm_guest_t vm_guest = VM_GUEST_NO;
+vm_guest_t vm_guest	= VM_GUEST_NO;
+vm_guest_t hv_type	= VM_GUEST_NO;
 
 struct vm_name_guest {
 	const char *name;
@@ -1055,6 +1056,16 @@ static const struct vm_name_guest vm_system_products[] = {
 	{ "KVM", VM_GUEST_VM },				/* KVM */
 };
 
+
+static inline void
+real_hypervisor(vm_guest_t hv)
+{
+	if (vm_guest != VM_GUEST_GENPVH)
+		vm_guest = hv;
+	else
+		hv_type = hv;
+}
+
 void
 identify_hypervisor(void)
 {
@@ -1064,49 +1075,41 @@ identify_hypervisor(void)
 	int i;
 
 	switch (vm_guest) {
+	/* guest type already known, no bios info */
 	case VM_GUEST_XENPV:
 	case VM_GUEST_XENPVH:
-	case VM_GUEST_GENPVH:
-		/* guest type already known, no bios info */
 		return;
 	default:
 		break;
 	}
 
-	/*
-	 * [RFC] CPUID usage for interaction between Hypervisors and Linux.
-	 * http://lkml.org/lkml/2008/10/1/246
-	 *
-	 * KB1009458: Mechanisms to determine if software is running in
-	 * a VMware virtual machine
-	 * http://kb.vmware.com/kb/1009458
-	 */
-	if (ISSET(cpu_feature[1], CPUID2_RAZ)) {
-		vm_guest = VM_GUEST_VM;
-		x86_cpuid(0x40000000, regs);
-		if (regs[0] >= 0x40000000) {
-			memcpy(&hv_vendor[0], &regs[1], sizeof(*regs));
-			memcpy(&hv_vendor[4], &regs[2], sizeof(*regs));
-			memcpy(&hv_vendor[8], &regs[3], sizeof(*regs));
-			if (memcmp(hv_vendor, "VMwareVMware", 12) == 0)
-				vm_guest = VM_GUEST_VMWARE;
-			else if (memcmp(hv_vendor, "Microsoft Hv", 12) == 0) {
-				vm_guest = VM_GUEST_HV;
+	x86_cpuid(0x40000000, regs);
+	if (regs[0] >= 0x40000000) {
+		memcpy(&hv_vendor[0], &regs[1], sizeof(*regs));
+		memcpy(&hv_vendor[4], &regs[2], sizeof(*regs));
+		memcpy(&hv_vendor[8], &regs[3], sizeof(*regs));
+		if (memcmp(hv_vendor, "VMwareVMware", 12) == 0)
+			vm_guest =  VM_GUEST_VMWARE;
+		else if (memcmp(hv_vendor, "Microsoft Hv", 12) == 0) {
 #if NHYPERV > 0
-				hyperv_early_init();
+			hyperv_early_init();
 #endif
-			} else if (memcmp(hv_vendor, "KVMKVMKVM\0\0\0", 12) == 0)
-				vm_guest = VM_GUEST_KVM;
-			else if (memcmp(hv_vendor, "XenVMMXenVMM", 12) == 0)
-				vm_guest = VM_GUEST_XENHVM;
-			/* FreeBSD bhyve: "bhyve bhyve " */
-			/* OpenBSD vmm:   "OpenBSDVMM58" */
-			/* NetBSD nvmm:   "___ NVMM ___" */
-		}
-		// VirtualBox returns KVM, so keep going.
-		if (vm_guest != VM_GUEST_KVM)
-			return;
+			vm_guest =  VM_GUEST_HV;
+		} else if (memcmp(hv_vendor, "KVMKVMKVM\0\0\0", 12) == 0)
+		/*
+		 * The virtual machine manager (qemu, Firecracker...)
+		 * may run KVM as the hypervisor
+		 */
+			real_hypervisor(VM_GUEST_KVM);
+		else if (memcmp(hv_vendor, "XenVMMXenVMM", 12) == 0)
+			vm_guest =  VM_GUEST_XENHVM;
+		/* FreeBSD bhyve: "bhyve bhyve " */
+		/* OpenBSD vmm:   "OpenBSDVMM58" */
+		/* NetBSD nvmm:   "___ NVMM ___" */
 	}
+	// VirtualBox returns KVM, so keep going.
+	if (vm_guest != VM_GUEST_KVM)
+		return;
 
 	/*
 	 * Examine SMBIOS strings for older hypervisors.

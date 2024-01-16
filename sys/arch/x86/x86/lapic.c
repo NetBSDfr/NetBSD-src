@@ -604,10 +604,10 @@ static void
 lapic_initclock(void)
 {
 	/*
-	 * don't use lapic timecounter with VM_GUEST_GENPVH
-	 * XXX use pvclock
+	 * If the hypervisor is KVM, don't use lapic, instead
+	 * use pvclock(4).
 	 */
-	if (curcpu() == &cpu_info_primary && vm_guest != VM_GUEST_GENPVH) {
+	if (curcpu() == &cpu_info_primary && hv_type != VM_GUEST_KVM) {
 		/*
 		 * Recalibrate the timer using the cycle counter, now that
 		 * the cycle counter itself has been recalibrated.
