@@ -43,8 +43,6 @@ __KERNEL_RCSID(0, "$NetBSD: identcpu_subr.c,v 1.9 2021/10/07 13:04:18 msaitoh Ex
 
 #include <sys/param.h>
 
-#include <sys/tstages.h>
-
 #ifdef _KERNEL
 #include <sys/systm.h>
 #include <x86/cpuvar.h>
@@ -131,7 +129,6 @@ cpu_tsc_freq_cpuid(struct cpu_info *ci)
 	uint32_t descs[4];
 	uint32_t denominator, numerator;
 
-	addstage("in cpu_tsc_freq_cpuid");
 	if (vm_guest != VM_GUEST_NO) {
 		x86_cpuid(0x40000010, descs);
 		if (descs[0] > 0)
@@ -215,7 +212,6 @@ cpu_tsc_freq_cpuid(struct cpu_info *ci)
 	if (freq != 0)
 		aprint_verbose_dev(ci->ci_dev, "TSC freq CPUID %" PRIu64
 		    " Hz\n", freq);
-	addstage("out cpu_tsc_freq_cpuid");
 
 	return freq;
 }
