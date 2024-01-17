@@ -1062,7 +1062,7 @@ static inline void
 pvh_real_hypervisor(vm_guest_t hv)
 {
 	if (vm_guest != VM_GUEST_GENPVH)
-		vm_guest = hv;
+		vm_guest = hv_type = hv;
 	else
 		hv_type = hv;
 }
@@ -1081,6 +1081,7 @@ identify_hypervisor(void)
 	case VM_GUEST_XENPV:
 	case VM_GUEST_XENPVH:
 		return;
+	/* continue for hypervisor detection */
 	case VM_GUEST_GENPVH:
 		is_vm = true;
 	default:
@@ -1125,7 +1126,6 @@ identify_hypervisor(void)
 				pvh_real_hypervisor(VM_GUEST_NVMM);
 			/* FreeBSD bhyve: "bhyve bhyve " */
 			/* OpenBSD vmm:   "OpenBSDVMM58" */
-			/* NetBSD nvmm:   "___ NVMM ___" */
 		}
 
 		for (i = 0; i < __arraycount(vm_system_products); i++) {

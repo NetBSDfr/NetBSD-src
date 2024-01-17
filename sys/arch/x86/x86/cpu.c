@@ -75,6 +75,8 @@ __KERNEL_RCSID(0, "$NetBSD: cpu.c,v 1.209 2023/07/16 19:55:43 riastradh Exp $");
 #include "acpica.h"
 #include "hpet.h"
 
+#include "pvclock.h"
+
 #include <sys/param.h>
 #include <sys/proc.h>
 #include <sys/systm.h>
@@ -473,8 +475,11 @@ cpu_attach(device_t parent, device_t self, void *aux)
 			 * If the hypervisor is KVM, don't use lapic, instead
 			 * use pvclock(4).
 			 */
-			if (!vm_guest_is_xenpvh_or_pvhvm() &&
-				hv_type != VM_GUEST_KVM)
+			if (!vm_guest_is_xenpvh_or_pvhvm()
+#if NPVCLOCK > 0
+				&& hv_type != VM_GUEST_KVM
+#endif
+				)
 				lapic_calibrate_timer(false);
 		}
 #endif
@@ -1426,9 +1431,8 @@ cpu_get_tsc_freq(struct cpu_info *ci)
 	uint64_t freq = 0, freq_from_cpuid, t0, t1;
 	int64_t overhead;
 
-	if (CPU_IS_PRIMARY(ci) && cpu_hascounter()) {
-		if (ci->ci_data.cpu_cc_freq != 0)
-			return;
+	if (CPU_IS_PRIMARY(ci) && cpu_hascounter() &&
+		ci->ci_data.cpu_cc_freq == 0) {
 		/*
 		 * If it's the first call of this function, try to get TSC
 		 * freq from CPUID by calling cpu_tsc_freq_cpuid().

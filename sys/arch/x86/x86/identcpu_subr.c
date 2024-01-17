@@ -129,10 +129,15 @@ cpu_tsc_freq_cpuid(struct cpu_info *ci)
 	uint32_t descs[4];
 	uint32_t denominator, numerator;
 
-	if (vm_guest != VM_GUEST_NO) {
+	/* NVMM tsc report is wrong */
+	if (ci->ci_max_ext_cpuid >= 0x40000010) {
+		int mul = 1000; /* TSC freq in khz... */
+		if (hv_type == VM_GUEST_NVMM)
+			mul *= 1000; /* ...except for NVMM */
 		x86_cpuid(0x40000010, descs);
-		if (descs[0] > 0)
-			return descs[0] * 1000; /* TSC freq in khz */
+		if (descs[0] > 0) {
+			return descs[0] * mul;
+		}
 	}
 
 	if (!((ci->ci_max_cpuid >= 0x15) && (cpu_vendor == CPUVENDOR_INTEL)))

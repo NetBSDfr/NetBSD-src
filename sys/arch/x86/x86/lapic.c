@@ -42,7 +42,7 @@ __KERNEL_RCSID(0, "$NetBSD: lapic.c,v 1.89 2022/09/07 00:40:19 knakahara Exp $")
 #include "opt_multiprocessor.h"
 #include "opt_ntp.h"
 #include "opt_xen.h"
-
+#include "pvclock.h"
 
 #include <sys/param.h>
 #include <sys/proc.h>
@@ -603,11 +603,15 @@ lapic_reset(void)
 static void
 lapic_initclock(void)
 {
+#if NPVCLOCK > 0
 	/*
 	 * If the hypervisor is KVM, don't use lapic, instead
 	 * use pvclock(4).
 	 */
-	if (curcpu() == &cpu_info_primary && hv_type != VM_GUEST_KVM) {
+	if (hv_type == VM_GUEST_KVM)
+		return;
+#endif
+	if (curcpu() == &cpu_info_primary) {
 		/*
 		 * Recalibrate the timer using the cycle counter, now that
 		 * the cycle counter itself has been recalibrated.
