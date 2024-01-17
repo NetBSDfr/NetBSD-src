@@ -229,12 +229,12 @@ cpu_tsc_freq_cpuid(struct cpu_info *ci)
 {
 	uint64_t freq = 0;
 
-	if (freq == 0 && cpu_vendor == CPUVENDOR_INTEL)
+	if (cpu_vendor == CPUVENDOR_INTEL)
 		freq = tsc_freq_cpuid(ci);
-	/* vmware compatible tsc query */
+	/* VMware compatible tsc query */
 	if (freq == 0 && vm_guest != VM_GUEST_NO)
 		freq = tsc_freq_cpuid_vm(ci);
-	/* still no luck, get the frequency from brand */
+	/* Still no luck, get the frequency from brand */
 	if (freq == 0 && cpu_vendor == CPUVENDOR_INTEL)
 		freq = tsc_freq_intel_brand(ci);
 
