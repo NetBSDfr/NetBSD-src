@@ -63,7 +63,7 @@ __KERNEL_RCSID(0, "$NetBSD: identcpu_subr.c,v 1.9 2021/10/07 13:04:18 msaitoh Ex
 #endif
 
 static uint64_t
-cpu_tsc_freq_intel_brand(struct cpu_info *ci)
+tsc_freq_intel_brand(struct cpu_info *ci)
 {
 	char brand[48];
 	u_int regs[4];
@@ -116,31 +116,42 @@ cpu_tsc_freq_intel_brand(struct cpu_info *ci)
 				freq *= i * 1000000;
 			}
 #undef C2D
+			aprint_verbose(
+				"got tsc from cpu brand\n");
 			return freq;
 		}
 	}
 	return 0;
 }
 
-uint64_t
-cpu_tsc_freq_cpuid(struct cpu_info *ci)
+static uint64_t
+tsc_freq_cpuid_vm(struct cpu_info *ci)
 {
-	uint64_t freq = 0, khz;
 	uint32_t descs[4];
-	uint32_t denominator, numerator;
 
-	/* NVMM tsc report is wrong */
 	if (ci->ci_max_ext_cpuid >= 0x40000010) {
 		int mul = 1000; /* TSC freq in khz... */
 		if (hv_type == VM_GUEST_NVMM)
 			mul *= 1000; /* ...except for NVMM */
 		x86_cpuid(0x40000010, descs);
 		if (descs[0] > 0) {
+			aprint_verbose(
+				"got tsc from vmware compatible cpuid\n");
 			return descs[0] * mul;
 		}
 	}
 
-	if (!((ci->ci_max_cpuid >= 0x15) && (cpu_vendor == CPUVENDOR_INTEL)))
+	return 0;
+}
+
+static uint64_t
+tsc_freq_cpuid(struct cpu_info *ci)
+{
+	uint64_t freq = 0, khz;
+	uint32_t descs[4];
+	uint32_t denominator, numerator;
+
+	if (!(ci->ci_max_cpuid >= 0x15))
 		return 0;
 
 	x86_cpuid(0x15, descs);
@@ -210,9 +221,22 @@ cpu_tsc_freq_cpuid(struct cpu_info *ci)
 		}
 #endif
 	}
+	return freq;
+}
+
+uint64_t
+cpu_tsc_freq_cpuid(struct cpu_info *ci)
+{
+	uint64_t freq = 0;
+
+	if (freq == 0 && cpu_vendor == CPUVENDOR_INTEL)
+		freq = tsc_freq_cpuid(ci);
+	/* vmware compatible tsc query */
+	if (freq == 0 && vm_guest != VM_GUEST_NO)
+		freq = tsc_freq_cpuid_vm(ci);
 	/* still no luck, get the frequency from brand */
-	if (freq == 0)
-		freq = cpu_tsc_freq_intel_brand(ci);
+	if (freq == 0 && cpu_vendor == CPUVENDOR_INTEL)
+		freq = tsc_freq_intel_brand(ci);
 
 	if (freq != 0)
 		aprint_verbose_dev(ci->ci_dev, "TSC freq CPUID %" PRIu64
