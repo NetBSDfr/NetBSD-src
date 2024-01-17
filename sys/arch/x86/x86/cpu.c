@@ -1431,8 +1431,10 @@ cpu_get_tsc_freq(struct cpu_info *ci)
 	uint64_t freq = 0, freq_from_cpuid, t0, t1;
 	int64_t overhead;
 
-	if (CPU_IS_PRIMARY(ci) && cpu_hascounter() &&
-		ci->ci_data.cpu_cc_freq == 0) {
+	if (ci->ci_data.cpu_cc_freq != 0)
+		return;
+
+	if (CPU_IS_PRIMARY(ci) && cpu_hascounter()) {
 		/*
 		 * If it's the first call of this function, try to get TSC
 		 * freq from CPUID by calling cpu_tsc_freq_cpuid().
