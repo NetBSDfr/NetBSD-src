@@ -78,6 +78,8 @@ __KERNEL_RCSID(0, "$NetBSD: com_isa.c,v 1.41 2018/12/08 17:46:13 thorpej Exp $")
 #include <sys/intr.h>
 #include <sys/bus.h>
 
+#include <sys/tstages.h>
+
 #include <dev/ic/comreg.h>
 #include <dev/ic/comvar.h>
 #ifdef COM_HAYESP

@@ -277,7 +277,9 @@ howlong(void)
 
 	limit = MIN(nrecs, nitems(stages));
 	for (i = 0; i < limit; i++) {
-		aprint_verbose("%s: %lums\n", stages[i].name, ((stages[i].tsc - entrytime) * 1000) / curcpu()->ci_data.cpu_cc_freq);
+		printf("%s: %lums\n", stages[i].name,
+			((stages[i].tsc - entrytime) * 1000) /
+			curcpu()->ci_data.cpu_cc_freq);
 	}
 }
 

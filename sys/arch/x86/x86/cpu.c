@@ -469,7 +469,12 @@ cpu_attach(device_t parent, device_t self, void *aux)
 			/* Enable lapic. */
 			lapic_enable();
 			lapic_set_lvt();
-			if (!vm_guest_is_xenpvh_or_pvhvm() && vm_guest != VM_GUEST_GENPVH)
+			/*
+			 * If the hypervisor is KVM, don't use lapic, instead
+			 * use pvclock(4).
+			 */
+			if (!vm_guest_is_xenpvh_or_pvhvm() &&
+				hv_type != VM_GUEST_KVM)
 				lapic_calibrate_timer(false);
 		}
 #endif

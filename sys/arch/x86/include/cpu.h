@@ -517,9 +517,11 @@ typedef enum vm_guest {
 	VM_GUEST_KVM,
 	VM_GUEST_VIRTUALBOX,
 	VM_GUEST_GENPVH,
+	VM_GUEST_NVMM,
 	VM_LAST
 } vm_guest_t;
 extern vm_guest_t vm_guest;
+extern vm_guest_t hv_type;
 
 static __inline bool __unused
 vm_guest_is_xenpv(void)

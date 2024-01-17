@@ -115,6 +115,8 @@ __KERNEL_RCSID(0, "$NetBSD: subr_autoconf.c,v 1.314 2023/07/18 11:57:37 riastrad
 
 #include <sys/rndsource.h>
 
+#include <sys/tstages.h>
+
 #include <machine/limits.h>
 
 /*
@@ -1854,7 +1856,7 @@ config_attach_internal(device_t parent, cfdata_t cf, void *aux, cfprint_t print,
 
 	device_register_post_config(dev, aux);
 	rnd_add_uint32(&rnd_autoconf_source, 0);
-	aprint_verbose("\n>>> attach %lums\n", (rdtsc() * 1000) / 3850000000);
+	addstage(device_xname(dev));
 	return dev;
 }
 

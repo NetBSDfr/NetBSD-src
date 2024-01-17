@@ -1087,13 +1087,15 @@ ENTRY(start_genpvh)
 	push %ebx
 	xorl %eax, %eax
 	cpuid
-	cmpl $0x1, %eax				/* Check if we can call CPUID with eax=1 */
+	/* Check if we can call CPUID with eax=1 */
+	cmpl $0x1, %eax
 	jb .start_genpvh
 	xorl %eax, %eax
 	inc %eax
 	cpuid
 	shr $31, %ecx
-	testb $1, %cl				/* Check if bit 31 of ECX (hypervisor) is set */
+	/* Check if bit 31 of ECX (hypervisor) is set */
+	testb $1, %cl
 	jz .start_genpvh
 	xorl %eax, %eax
 	inc %eax

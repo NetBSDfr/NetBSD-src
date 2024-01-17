@@ -104,7 +104,7 @@ static inline uint32_t
 pvclock_read_begin(const struct pvclock_time_info *ti)
 {
 	uint32_t ti_version = ti->ti_version & ~0x1;
-	virtio_membar_sync();
+	virtio_membar_consumer();
 	return (ti_version);
 }
 
@@ -112,7 +112,7 @@ static inline int
 pvclock_read_done(const struct pvclock_time_info *ti,
     uint32_t ti_version)
 {
-	virtio_membar_sync();
+	virtio_membar_consumer();
 	return (ti->ti_version == ti_version);
 }
 
