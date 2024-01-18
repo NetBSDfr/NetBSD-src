@@ -1052,8 +1052,8 @@ static const struct vm_name_guest vm_system_products[] = {
 	{ "Virtual Machine", VM_GUEST_VM },		/* Microsoft VirtualPC */
 	{ "VirtualBox", VM_GUEST_VIRTUALBOX },		/* Sun xVM VirtualBox */
 	{ "Parallels Virtual Platform", VM_GUEST_VM },	/* Parallels VM */
-	{ "Generic PVH", VM_GUEST_GENPVH},		/* Generic PVH */
 	{ "KVM", VM_GUEST_KVM },			/* KVM */
+	{ "Generic PVH", VM_GUEST_GENPVH},		/* Generic PVH */
 	{ "NVMM", VM_GUEST_NVMM}			/* NVMM */
 };
 

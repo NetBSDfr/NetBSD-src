@@ -74,8 +74,6 @@ __KERNEL_RCSID(0, "$NetBSD: x86_machdep.c,v 1.154 2023/10/04 20:28:06 ad Exp $")
 
 #include <uvm/uvm_extern.h>
 
-#include <sys/tstages.h>
-
 #include "tsc.h"
 
 #include "acpica.h"
@@ -1530,14 +1528,10 @@ cpu_initclocks(void)
 	 * Re-calibrate TSC on boot CPU using most accurate time source,
 	 * thus making accurate TSC available for x86_initclock_func().
 	 */
-	addstage("before cpu_get_tsc_freq");
 	cpu_get_tsc_freq(curcpu());
-	addstage("after cpu_get_tsc_freq");
 
-	addstage("before x86_initclock_func");
 	/* Now start the clocks on this CPU (the boot CPU). */
 	(*x86_initclock_func)();
-	addstage("after x86_initclock_func");
 }
 
 int

@@ -122,8 +122,6 @@ __KERNEL_RCSID(0, "$NetBSD: com.c,v 1.384 2023/04/11 13:01:41 riastradh Exp $");
 
 #include <sys/bus.h>
 
-#include <sys/tstages.h>
-
 #include <ddb/db_active.h>
 
 #include <dev/ic/comreg.h>

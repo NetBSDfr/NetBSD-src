@@ -232,7 +232,7 @@ extern void *_binary_splash_image_end;
 
 #include <sys/userconf.h>
 
-#include <sys/tstages.h>
+#include <sys/tslog.h>
 
 extern time_t rootfstime;
 
@@ -259,39 +259,13 @@ static void howlong(void);
 extern uint32_t boottime_low;
 extern uint32_t boottime_high;
 
-#define MAXSTAGES 256
-#define nitems(x) __arraycount(x)
-
-static volatile int nrecs = 0;
-
-struct bootstage {
-	const char *name;
-	uint64_t tsc;
-} stages[MAXSTAGES];
-
 static void
 howlong(void)
 {
 	uint64_t entrytime = (uint64_t)boottime_high << 32 | boottime_low;
-	int i, limit;
 
-	limit = MIN(nrecs, nitems(stages));
-	for (i = 0; i < limit; i++) {
-		printf("%s: %lums\n", stages[i].name,
-			((stages[i].tsc - entrytime) * 1000) /
+	printf("boot: %lums\n", ((rdtsc() - entrytime) * 1000) /
 			curcpu()->ci_data.cpu_cc_freq);
-	}
-}
-
-void
-addstage(const char *stage)
-{
-	if (nrecs < nitems(stages)) {
-		stages[nrecs].name = stage;
-		stages[nrecs].tsc = rdtsc();
-
-		atomic_add_int(&nrecs, 1);
-	}
 }
 
 /*
@@ -313,7 +287,7 @@ main(void)
 	CPU_INFO_ITERATOR cii;
 	struct cpu_info *ci;
 
-	addstage("start");
+	TSENTER();
 #ifdef DIAGNOSTIC
 	/*
 	 * Verify that CPU_INFO_FOREACH() knows about the boot CPU
@@ -338,7 +312,6 @@ main(void)
 	 * in case of early panic or other messages.
 	 */
 	consinit();
-	addstage("consinit");
 #ifdef CNMAGIC
 	cn_set_magic(CNMAGIC);
 #endif
@@ -369,8 +342,6 @@ main(void)
 	kprintf_init();
 
 	percpu_init();
-
-	addstage("percpu_init");
 	/* Initialize radix trees (used by numerous subsystems). */
 	radix_tree_init();
 
@@ -409,7 +380,6 @@ main(void)
 	module_init();
 	module_hook_init();
 
-	addstage("module_init");
 	/*
 	 * Initialize the kernel authorization subsystem and start the
 	 * default security model, if any. We need to do this early
@@ -480,8 +450,6 @@ main(void)
 	sleeptab_init(&sleeptab);
 
 	sched_init();
-
-	addstage("sched_init");
 
 	/* Initialize processor-sets */
 	psets_init();
@@ -592,7 +560,6 @@ main(void)
 #ifdef __HAVE_LEGACY_INTRCNT
 	evcnt_attach_legacy_intrcnt();
 #endif
-	addstage("configure");
 
 	/* Enable deferred processing of RNG samples */
 	rnd_init_softint();
@@ -605,7 +572,6 @@ main(void)
 	 * system heartbeat on all CPUs.
 	 */
 	heartbeat_start();
-	addstage("heartbeat_start");
 
 	ssp_init();
 
@@ -613,9 +579,7 @@ main(void)
 
 	mm_init();
 
-	addstage("before configure2");
 	configure2();
-	addstage("configure2");
 
 	/* Initialize the rest of ipi(9) after CPUs have been detected. */
 	ipi_percpu_init();
@@ -632,7 +596,6 @@ main(void)
 
 	/* Initialize exec structures */
 	exec_init(1);		/* seminit calls exithook_establish() */
-	addstage("exec_init");
 
 #if NVERIEXEC > 0
 	/*
@@ -642,7 +605,6 @@ main(void)
 #endif /* NVERIEXEC > 0 */
 
 	pax_init();
-	addstage("pax_init");
 
 #ifdef	IPSEC
 	/* Attach network crypto subsystem */
@@ -686,7 +648,6 @@ main(void)
 	procinit_sysctl();
 
 	scdebug_init();
-	addstage("scdebug_init");
 
 	/*
 	 * Create process 1 (init(8)).  We do this now, as Unix has
@@ -699,7 +660,6 @@ main(void)
 	 */
 	if (fork1(l, 0, SIGCHLD, NULL, 0, start_init, NULL, NULL))
 		panic("fork init");
-	addstage("fork");
 
 	/*
 	 * The initproc variable cannot be initialized in start_init as there
@@ -708,7 +668,6 @@ main(void)
 	mutex_enter(&proc_lock);
 	initproc = proc_find_raw(1);
 	mutex_exit(&proc_lock);
-	addstage("initproc");
 
 	/*
 	 * Load any remaining builtin modules, and hand back temporary
@@ -732,7 +691,6 @@ main(void)
 	 * the root and dump devices.
 	 */
 	cpu_rootconf();
-	addstage("cpu_rootconf");
 	cpu_dumpconf();
 
 	/* Mount the root file system. */
@@ -755,7 +713,6 @@ main(void)
 	 * don't have a non-volatile time-of-day device.
 	 */
 	inittodr(rootfstime);
-	addstage("inittodr");
 
 	/*
 	 * Now can look at time, having had a chance to verify the time
@@ -794,14 +751,9 @@ main(void)
 	    NULL, NULL, "ioflush"))
 		panic("fork syncer");
 
-	addstage("uvm_swap_init");
-
 	/* Wait for final configure threads to complete. */
 	config_finalize_mountroot();
 
-	addstage("config_finalize_mountroot");
-
-	howlong();
 	/*
 	 * Okay, now we can let init(8) exec!  It's off to userland!
 	 */
@@ -810,6 +762,8 @@ main(void)
 	cv_broadcast(&lbolt);
 	mutex_exit(&proc_lock);
 
+	TSEXIT();
+	howlong();
 	/* The scheduler is an infinite loop. */
 	uvm_scheduler();
 	/* NOTREACHED */
@@ -866,9 +820,7 @@ configure2(void)
 	 * Now that we've found all the hardware, start the real time
 	 * and statistics clocks.
 	 */
-	addstage("before initclocks");
 	initclocks();
-	addstage("after initclocks");
 
 	cold = 0;	/* clocks are running, we're warm now! */
 	s = splsched();

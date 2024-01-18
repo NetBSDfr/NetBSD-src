@@ -128,7 +128,6 @@ sysctl_debug_tslog(SYSCTLFN_ARGS)
 			where += slen;
 			buflen -= slen;
 		}
-
 		needed += slen;
 	}
 	first = false;

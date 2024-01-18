@@ -88,8 +88,6 @@ __KERNEL_RCSID(0, "$NetBSD: cpu.c,v 1.209 2023/07/16 19:55:43 riastradh Exp $");
 #include <sys/reboot.h>
 #include <sys/csan.h>
 
-#include <sys/tstages.h>
-
 #include <uvm/uvm.h>
 
 #include "acpica.h"		/* for NACPICA, for mp_verbose */
@@ -355,7 +353,6 @@ cpu_attach(device_t parent, device_t self, void *aux)
 
 	sc->sc_dev = self;
 
-	addstage("in cpu_attach");
 	if (ncpu > maxcpus) {
 #ifndef _LP64
 		aprint_error(": too many CPUs, please use NetBSD/amd64\n");
@@ -563,7 +560,6 @@ cpu_attach(device_t parent, device_t self, void *aux)
 	}
 #endif
 
-	addstage("out cpu_attach");
 	/*
 	 * Postpone the "cpufeaturebus" scan.
 	 * It is safe to scan the pseudo-bus

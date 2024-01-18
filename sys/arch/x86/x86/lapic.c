@@ -50,8 +50,6 @@ __KERNEL_RCSID(0, "$NetBSD: lapic.c,v 1.89 2022/09/07 00:40:19 knakahara Exp $")
 #include <sys/device.h>
 #include <sys/timetc.h>
 
-#include <sys/tstages.h>
-
 #include <uvm/uvm_extern.h>
 
 #include <dev/ic/i8253reg.h>
