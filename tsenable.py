@@ -2,7 +2,7 @@ import re
 import sys
 
 keywords = ["defined", "sizeof", "return", "while", "calc_cache_size", "fork1",
-        "panic"]
+        "panic", "ctob"]
 
 with open(sys.argv[1], 'r') as file:
    lines = file.readlines()
