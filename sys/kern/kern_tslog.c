@@ -297,12 +297,12 @@ SYSCTL_SETUP(sysctl_tslog_setup, "tslog sysctl")
 		CTLTYPE_STRING, "tslog",
 		SYSCTL_DESCR("Dump recorded event timestamps"),
 		sysctl_debug_tslog, 0, NULL, 0,
-		CTL_CREATE, CTL_EOL);
+		CTL_DEBUG, CTL_CREATE, CTL_EOL);
 	sysctl_createv(NULL, 0, NULL, NULL,
 		CTLFLAG_PERMANENT|CTLFLAG_READONLY,
 		CTLTYPE_STRING, "tslog_user",
 		SYSCTL_DESCR("Dump recorded userland event timestamps"),
 		sysctl_debug_tslog_user, 0, NULL, 0,
-		CTL_CREATE, CTL_EOL);
+		CTL_DEBUG, CTL_CREATE, CTL_EOL);
 }
 
