@@ -386,6 +386,12 @@ END(biosextmem)
 	.type	_C_LABEL(lwp0uarea), @object
 LABEL(lwp0uarea)	.quad	0
 END(lwp0uarea)
+	.type	_C_LABEL(boottime_low), @object
+LABEL(boottime_low)		.long	0	/* low part of rdtsc */
+END(boottime_low)
+	.type	_C_LABEL(boottime_high), @object
+LABEL(boottime_high)		.long	0	/* high part of rdtsc */
+END(boottime_high)
 
 #ifndef XENPV
 	.globl	gdt64_lo
@@ -1036,6 +1042,9 @@ END(start)
 /* entry point for Xen PVH */
 	.code32
 ENTRY(start_genpvh)
+	rdtsc
+	movl	%eax, RELOC(boottime_low)
+	movl	%edx, RELOC(boottime_high)
 	/* Xen doesn't start us with a valid gdt */
 	movl    $RELOC(gdtdesc32), %eax
 	lgdt    (%eax)
@@ -1078,13 +1087,15 @@ ENTRY(start_genpvh)
 	push %ebx
 	xorl %eax, %eax
 	cpuid
-	cmpl $0x1, %eax				/* Check if we can call CPUID with eax=1 */
+	/* Check if we can call CPUID with eax=1 */
+	cmpl $0x1, %eax
 	jb .start_genpvh
 	xorl %eax, %eax
 	inc %eax
 	cpuid
 	shr $31, %ecx
-	testb $1, %cl				/* Check if bit 31 of ECX (hypervisor) is set */
+	/* Check if bit 31 of ECX (hypervisor) is set */
+	testb $1, %cl
 	jz .start_genpvh
 	xorl %eax, %eax
 	inc %eax
