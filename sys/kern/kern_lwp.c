@@ -253,6 +253,7 @@ __KERNEL_RCSID(0, "$NetBSD: kern_lwp.c,v 1.269 2023/12/20 21:03:50 andvar Exp $"
 #include <sys/syscallargs.h>
 #include <sys/sysctl.h>
 #include <sys/systm.h>
+#include <sys/tslog.h>
 #include <sys/uidinfo.h>
 #include <sys/xcall.h>
 
@@ -1232,6 +1233,8 @@ lwp_exit(struct lwp *l)
 	 * Free MD LWP resources.
 	 */
 	cpu_lwp_free(l, 0);
+
+	TSTHREAD(l, l->l_name);
 
 	if (current) {
 		/* Switch away into oblivion. */

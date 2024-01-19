@@ -108,6 +108,7 @@ __KERNEL_RCSID(0, "$NetBSD: kern_exit.c,v 1.298 2023/10/08 12:38:58 ad Exp $");
 #include <sys/atomic.h>
 #include <sys/sdt.h>
 #include <sys/psref.h>
+#include <sys/tslog.h>
 
 #include <uvm/uvm_extern.h>
 
@@ -203,6 +204,8 @@ exit1(struct lwp *l, int exitcode, int signo)
 	ksiginfo_t	ksi;
 	ksiginfoq_t	kq;
 	int		wakeinit;
+
+	TSPROCEXIT(l->l_proc->p_pid);
 
 	p = l->l_proc;
 
