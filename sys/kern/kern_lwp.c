@@ -1226,6 +1226,7 @@ lwp_exit(struct lwp *l)
 	mutex_exit(p->p_lock);
 	cv_broadcast(&p->p_lwpcv);
 
+	TSTHREAD(l, l->l_name);
 	/*
 	 * We can no longer block.  At this point, lwp_free() may already
 	 * be gunning for us.  On a multi-CPU system, we may be off p_lwps.
@@ -1233,8 +1234,6 @@ lwp_exit(struct lwp *l)
 	 * Free MD LWP resources.
 	 */
 	cpu_lwp_free(l, 0);
-
-	TSTHREAD(l, l->l_name);
 
 	if (current) {
 		/* Switch away into oblivion. */
