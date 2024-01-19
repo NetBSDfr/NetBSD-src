@@ -214,7 +214,6 @@ tslog_user(pid_t pid, pid_t ppid, const char *execname, const char *namei)
 		procs[pid].execname = malloc(len,
 			M_TSLOGUSER, M_WAITOK | M_ZERO);
 		strlcpy(procs[pid].execname, execname, len);
-		printf("%u %s\n", pid, procs[pid].execname);
 		return;
 	}
 
