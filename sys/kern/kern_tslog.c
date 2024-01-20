@@ -140,8 +140,8 @@ sysctl_debug_tslog(SYSCTLFN_ARGS)
 			strcat(buf, " EVENT");
 			break;
 		}
-		snprintf(buf, LINE_MAX, "%s %s %lu", buf,
-			timestamps[i].f ? timestamps[i].f : "(null)", where - (char *)oldp);
+		snprintf(buf, LINE_MAX, "%s %s", buf,
+			timestamps[i].f ? timestamps[i].f : "(null)");
 		if (timestamps[i].s)
 			snprintf(buf, LINE_MAX, "%s %s\n", buf,
 				timestamps[i].s);
