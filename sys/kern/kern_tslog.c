@@ -94,7 +94,7 @@ tslog(const lwp_t *l, int type, const char *f, const char *s)
 		l = &lwp0;
 
 	/* Store record. */
-	if (nrecs < nitems(timestamps)) {
+	if (lwp_alive(__UNCONST(l)) && nrecs < nitems(timestamps)) {
 		timestamps[nrecs].lid = l->l_lid;
 		timestamps[nrecs].type = type;
 		timestamps[nrecs].f = f;

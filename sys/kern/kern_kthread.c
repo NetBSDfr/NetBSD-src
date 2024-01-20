@@ -96,7 +96,6 @@ kthread_create(pri_t pri, int flag, struct cpu_info *ci,
 		vsnprintf(l->l_name, MAXCOMLEN, fmt, ap);
 		va_end(ap);
 	}
-
 	TSTHREAD(l, l->l_name);
 	/*
 	 * Set parameters.
