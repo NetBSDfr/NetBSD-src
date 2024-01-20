@@ -72,7 +72,7 @@
 
 #define nitems(x) __arraycount(x)
 
-static volatile int nrecs = 0;
+static volatile long nrecs = 0;
 static struct timestamp {
 	lwpid_t lid;
 	int type;
@@ -102,7 +102,7 @@ tslog(const lwp_t *l, int type, const char *f, const char *s)
 		timestamps[nrecs].tsc = tsc;
 
 		/* Grab a slot. */
-		atomic_add_int(&nrecs, 1);
+		atomic_add_long(&nrecs, 1);
 	}
 }
 
@@ -111,12 +111,15 @@ sysctl_debug_tslog(SYSCTLFN_ARGS)
 {
 	char buf[LINE_MAX] = "";
 	char *where = oldp;
-	size_t buflen, slen, i, limit, needed = 0;
+	size_t slen, i, limit;
 	int error = 0;
-	static bool first = true;
-	static size_t max = 0;
+	static size_t needed = 0;
 
-	buflen = *oldlenp;
+	/* sysctl first tries with a size of 1024 */
+	if (*oldlenp < needed) {
+		*oldlenp = needed;
+		return ENOMEM;
+	}
 	/* Add data logged within the kernel. */
 	limit = MIN(nrecs, nitems(timestamps));
 	for (i = 0; i < limit; i++) {
@@ -137,8 +140,8 @@ sysctl_debug_tslog(SYSCTLFN_ARGS)
 			strcat(buf, " EVENT");
 			break;
 		}
-		snprintf(buf, LINE_MAX, "%s %s", buf,
-			timestamps[i].f ? timestamps[i].f : "(null)");
+		snprintf(buf, LINE_MAX, "%s %s %lu", buf,
+			timestamps[i].f ? timestamps[i].f : "(null)", where - (char *)oldp);
 		if (timestamps[i].s)
 			snprintf(buf, LINE_MAX, "%s %s\n", buf,
 				timestamps[i].s);
@@ -147,27 +150,19 @@ sysctl_debug_tslog(SYSCTLFN_ARGS)
 
 		slen = strlen(buf) + 1;
 
-		if (!first) {
-			if (buflen < slen) {
-				/* still not enough space */
-				first = true;
-				continue;
-			}
+		if (where == NULL) /* 1st pass, calculate needed */
+			needed += slen;
+		else {
 			if (i > 0)
 				where--; /* overwrite last \0 */
 			if ((error = copyout(buf, where, slen)))
 				break;
 			where += slen;
-			buflen -= slen;
 		}
-		needed += slen;
 	}
-	first = false;
-
-	if (needed > max) {
-		max = needed;
-	}
-	*oldlenp = max;
+	/* Come back with an address */
+	if (oldp == NULL)
+		*oldlenp = needed;
 
 	return error;
 }
@@ -235,15 +230,18 @@ tslog_user(pid_t pid, pid_t ppid, const char *execname, const char *namei)
 static int
 sysctl_debug_tslog_user(SYSCTLFN_ARGS)
 {
-	char buf[LINE_MAX];
-	char *where = oldp;
-	size_t buflen, slen, needed = 0;
-	int error = 0;
-	static bool first = true;
-	static size_t max = 0;
 	pid_t pid;
+	char buf[LINE_MAX] = "";
+	char *where = oldp;
+	size_t slen;
+	int error = 0;
+	static size_t needed = 0;
 
-	buflen = *oldlenp;
+	/* sysctl first tries with a size of 1024 */
+	if (*oldlenp < needed) {
+		*oldlenp = needed;
+		return ENOMEM;
+	}
 	/* Export the data we logged. */
 	for (pid = 0; pid <= PID_MAX; pid++) {
 		if (procs[pid].tsc_forked == 0 &&
@@ -265,27 +263,19 @@ sysctl_debug_tslog_user(SYSCTLFN_ARGS)
 
 		slen = strlen(buf) + 1;
 
-		if (!first) {
-			if (buflen < slen) {
-				/* still not enough space */
-				first = true;
-				continue;
-			}
+		if (where == NULL) /* 1st pass, calculate needed */
+			needed += slen;
+		else {
 			if (pid > 0)
 				where--; /* overwrite last \0 */
 			if ((error = copyout(buf, where, slen)))
 				break;
 			where += slen;
-			buflen -= slen;
 		}
-		needed += slen;
 	}
-	first = false;
-
-	if (needed > max) {
-		max = needed;
-	}
-	*oldlenp = max;
+	/* Come back with an address */
+	if (oldp == NULL)
+		*oldlenp = needed;
 
 	return (error);
 }
