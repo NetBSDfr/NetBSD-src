@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.s,v 1.101 2022/03/16 20:31:02 andvar Exp $	*/
+/*	$NetBSD: locore.s,v 1.110 2024/01/17 12:33:50 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1980, 1990, 1993
@@ -435,31 +435,12 @@ Lbrkpt2:
 	movl	%sp@,%sp		| ... and sp
 	rte				| all done
 
-/* Use common m68k sigreturn */
-#include <m68k/m68k/sigreturn.s>
-
 /*
  * Interrupt handlers.  Most are auto-vectored,
  * and hard-wired the same way on all sun3 models.
  * Format in the stack is:
  *   %d0,%d1,%a0,%a1, sr, pc, vo
  */
-
-/*
- * This is the common auto-vector interrupt handler,
- * for which the CPU provides the vector=0x18+level.
- * These are installed in the interrupt vector table.
- */
-#ifdef __ELF__
-	.align	4
-#else
-	.align	2
-#endif
-GLOBAL(_isr_autovec)
-	INTERRUPT_SAVEREG
-	jbsr	_C_LABEL(isr_autovec)
-	INTERRUPT_RESTOREREG
-	jra	_ASM_LABEL(rei)
 
 /* clock: see clock.c */
 #ifdef __ELF__
@@ -472,37 +453,6 @@ GLOBAL(_isr_clock)
 	jbsr	_C_LABEL(clock_intr)
 	INTERRUPT_RESTOREREG
 	jra	_ASM_LABEL(rei)
-
-| Handler for all vectored interrupts (i.e. VME interrupts)
-#ifdef __ELF__
-	.align	4
-#else
-	.align	2
-#endif
-GLOBAL(_isr_vectored)
-	INTERRUPT_SAVEREG
-	jbsr	_C_LABEL(isr_vectored)
-	INTERRUPT_RESTOREREG
-	jra	_ASM_LABEL(rei)
-
-/* interrupt counters (needed by vmstat) */
-GLOBAL(intrnames)
-	.asciz	"spur"	| 0
-	.asciz	"lev1"	| 1
-	.asciz	"lev2"	| 2
-	.asciz	"lev3"	| 3
-	.asciz	"lev4"	| 4
-	.asciz	"clock"	| 5
-	.asciz	"lev6"	| 6
-	.asciz	"nmi"	| 7
-GLOBAL(eintrnames)
-
-	.data
-	.even
-GLOBAL(intrcnt)
-	.long	0,0,0,0,0,0,0,0
-GLOBAL(eintrcnt)
-	.text
 
 /*
  * Emulation of VAX REI instruction.
@@ -572,23 +522,8 @@ Ldorte:
  */
 
 /*
- * Use common m68k sigcode.
- */
-#include <m68k/m68k/sigcode.s>
-#ifdef COMPAT_SUNOS
-#include <m68k/m68k/sunos_sigcode.s>
-#endif
-
-	.text
-
-/*
  * Primitives
  */
-
-/*
- * Use common m68k support routines.
- */
-#include <m68k/m68k/support.s>
 
 /*
  * Use common m68k process/lwp switch and context save subroutines.
@@ -619,62 +554,7 @@ ENTRY(DCIU)
 /* ICPL, ICPP, DCPL, DCPP, DCPA, DCFL, DCFP */
 /* PCIA, ecacheon, ecacheoff */
 
-/*
- * Get callers current SP value.
- * Note that simply taking the address of a local variable in a C function
- * doesn't work because callee saved registers may be outside the stack frame
- * defined by A6 (e.g. GCC generated code).
- *
- * [I don't think the ENTRY() macro will do the right thing with this -- glass]
- */
-GLOBAL(getsp)
-	movl	%sp,%d0			| get current SP
-	addql	#4,%d0			| compensate for return address
-	movl	%d0,%a0
-	rts
-
-ENTRY(getvbr)
-	movc	%vbr,%a0
-	rts
-
-ENTRY(setvbr)
-	movl	%sp@(4),%d0
-	movc	%d0,%vbr
-	rts
-
 /* loadustp, ptest_addr */
-
-/*
- * Set processor priority level calls.  Most are implemented with
- * inline asm expansions.  However, we need one instantiation here
- * in case some non-optimized code makes external references.
- * Most places will use the inlined functions param.h supplies.
- */
-
-ENTRY(_getsr)
-	clrl	%d0
-	movw	%sr,%d0
-	movl	%d0,%a0
-	rts
-
-ENTRY(_spl)
-	clrl	%d0
-	movw	%sr,%d0
-	movl	%sp@(4),%d1
-	movw	%d1,%sr
-	rts
-
-ENTRY(_splraise)
-	clrl	%d0
-	movw	%sr,%d0
-	movl	%d0,%d1
-	andl	#PSL_HIGHIPL,%d1	| old &= PSL_HIGHIPL
-	cmpl	%sp@(4),%d1		| (old - new)
-	bge	Lsplr
-	movl	%sp@(4),%d1
-	movw	%d1,%sr
-Lsplr:
-	rts
 
 /*
  * _delay(unsigned N)

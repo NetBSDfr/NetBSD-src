@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.c,v 1.6 2024/01/08 05:10:51 thorpej Exp $	*/
+/*	$NetBSD: machdep.c,v 1.8 2024/01/13 17:10:58 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1988 University of Utah.
@@ -39,7 +39,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.6 2024/01/08 05:10:51 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.8 2024/01/13 17:10:58 thorpej Exp $");
 
 #include "opt_ddb.h"
 #include "opt_m060sp.h"
@@ -113,7 +113,6 @@ paddr_t msgbufpa;		/* PA of message buffer */
 
 // int	maxmem;			/* max memory per process */
 
-extern	u_int lowram;
 extern	short exframesize[];
 
 /* prototypes for local functions */ 
@@ -803,41 +802,7 @@ dumpsys(void)
 void
 initcpu(void)
 {
-#if defined(M68060)
-	extern void *vectab[256];
-#if defined(M060SP)
-	extern uint8_t I_CALL_TOP[];
-	extern uint8_t FP_CALL_TOP[];
-#else
-	extern uint8_t illinst;
-#endif
-	extern uint8_t fpfault;
-#endif
-
-#if defined(M68060)
-	if (cputype == CPU_68060) {
-#if defined(M060SP)
-		/* integer support */
-		vectab[61] = &I_CALL_TOP[128 + 0x00];
-
-		/* floating point support */
-		vectab[11] = &FP_CALL_TOP[128 + 0x30];
-		vectab[55] = &FP_CALL_TOP[128 + 0x38];
-		vectab[60] = &FP_CALL_TOP[128 + 0x40];
-
-		vectab[54] = &FP_CALL_TOP[128 + 0x00];
-		vectab[52] = &FP_CALL_TOP[128 + 0x08];
-		vectab[53] = &FP_CALL_TOP[128 + 0x10];
-		vectab[51] = &FP_CALL_TOP[128 + 0x18];
-		vectab[50] = &FP_CALL_TOP[128 + 0x20];
-		vectab[49] = &FP_CALL_TOP[128 + 0x28];
-#else
-		vectab[61] = &illinst;
-#endif
-		vectab[48] = &fpfault;
-	}
-	DCIS();
-#endif
+	/* No work to do. */
 }
 
 void
@@ -902,6 +867,18 @@ const uint16_t ipl2psl_table[NIPL] = {
 int
 mm_md_physacc(paddr_t pa, vm_prot_t prot)
 {
+	psize_t size;
+	int i;
 
-	return (pa < lowram || pa >= 0xfffffffc) ? EFAULT : 0;
+	for (i = 0; i < bootinfo_mem_nsegments; i++) {
+		if (pa < bootinfo_mem_segments[i].mem_addr) {
+			continue;
+		}
+		size = trunc_page(bootinfo_mem_segments[i].mem_size);
+		if (pa >= bootinfo_mem_segments[i].mem_addr + size) {
+			continue;
+		}
+		return 0;
+	}
+	return EFAULT;
 }

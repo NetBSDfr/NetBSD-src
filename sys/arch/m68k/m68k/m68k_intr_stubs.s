@@ -1,17 +1,16 @@
-/*	$NetBSD: sigreturn.s,v 1.11 2011/02/08 20:20:16 rmind Exp $	*/
+/*	$NetBSD: m68k_intr_stubs.s,v 1.3 2024/01/16 02:14:33 thorpej Exp $	*/
 
 /*
- * Copyright (c) 1988 University of Utah.
  * Copyright (c) 1980, 1990, 1993
- *	The Regents of the University of California.  All rights reserved.
+ *      The Regents of the University of California.  All rights reserved.
  *
  * This code is derived from software contributed to Berkeley by
  * the Systems Programming Group of the University of Utah Computer
  * Science Department.
- *
+ *      
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
- * are met:
+ * are met:     
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -20,7 +19,7 @@
  * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
- *
+ *      
  * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -32,31 +31,54 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * from: Utah $Hdr: locore.s 1.66 92/12/22$
- *
- *	@(#)locore.s	8.6 (Berkeley) 5/27/94
- */
+ *      
+ *	from: Utah $Hdr: locore.s 1.66 92/12/22$
+ *	@(#)locore.s    8.6 (Berkeley) 5/27/94
+ */     
 
-#include "opt_compat_sunos.h"
+#include <machine/asm.h>
 
-/*
- * NOTICE: This is not a standalone file.  To use it, #include it in
- * your port's locore.s, like so:
- *
- *	#include <m68k/m68k/sigreturn.s>
- */
+#include "assym.h"
 
-#if defined(COMPAT_16)
-/*
- * Pull in the NetBSD 1.6 sigreturn stub.
- */
-#include <m68k/m68k/compat_16_sigreturn14.s>
+	.file   "m68k_intr_stubs.s"
+	.text
+
+#ifdef __ELF__
+#define	INTRSTUB_ALIGN	.align 4
+#else
+#define	INTRSTUB_ALIGN	.align 2
 #endif
 
-#if defined(COMPAT_13) || defined(COMPAT_SUNOS)
 /*
- * Pull in the NetBSD 1.3 sigreturn stub.
+ * XXX Some platforms (e.g. news68k) have hardware-assisted ASTs, and
+ * XXX thus don't need to branch to rei() after an interrupt.  Figure
+ * XXX out a way to handle these platforms.  This works for now; the
+ * XXX hardware-assist is just an optimization.
  */
-#include <m68k/m68k/compat_13_sigreturn13.s>
-#endif
+
+/*
+ * Vector stub for auto-vectored interrupts.  Calls the dispatch
+ * routine with the frame BY VALUE (saves a few instructions).
+ */
+	INTRSTUB_ALIGN
+ENTRY_NOPROFILE(intrstub_autovec)
+	addql	#1,_C_LABEL(idepth)
+	INTERRUPT_SAVEREG
+	jbsr	_C_LABEL(m68k_intr_autovec)
+	INTERRUPT_RESTOREREG
+	subql	#1,_C_LABEL(idepth)
+	jra	_ASM_LABEL(rei)
+
+#ifdef __HAVE_M68K_INTR_VECTORED
+/*
+ * Vector stub for vectored interrupts.  Same stack situation as above.
+ */
+	INTRSTUB_ALIGN
+ENTRY_NOPROFILE(intrstub_vectored)
+	addql	#1,_C_LABEL(idepth)
+	INTERRUPT_SAVEREG
+	jbsr	_C_LABEL(m68k_intr_vectored)
+	INTERRUPT_RESTOREREG
+	subql	#1,_C_LABEL(idepth)
+	jra	_ASM_LABEL(rei)
+#endif /* __HAVE_M68K_INTR_VECTORED */

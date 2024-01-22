@@ -1,4 +1,4 @@
-/*	$NetBSD: externs1.h,v 1.209 2023/12/10 15:29:38 rillig Exp $	*/
+/*	$NetBSD: externs1.h,v 1.211 2024/01/11 23:06:19 rillig Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -289,9 +289,9 @@ tnode_t *promote(op_t, bool, tnode_t *);
 tnode_t *convert(op_t, int, type_t *, tnode_t *);
 void convert_constant(op_t, int, const type_t *, val_t *, val_t *);
 tnode_t *build_sizeof(const type_t *);
-tnode_t *build_offsetof(const type_t *, const sym_t *);
+tnode_t *build_offsetof(const type_t *, designation);
 tnode_t *build_alignof(const type_t *);
-tnode_t *cast(tnode_t *, type_t *);
+tnode_t *cast(tnode_t *, bool, type_t *);
 tnode_t *build_function_argument(tnode_t *, tnode_t *);
 tnode_t *build_function_call(tnode_t *, bool, tnode_t *);
 val_t *integer_constant(tnode_t *, bool);
@@ -368,6 +368,7 @@ void init_expr(tnode_t *);
 void begin_designation(void);
 void add_designator_member(sbuf_t *);
 void add_designator_subscript(range_t);
+void designation_push(designation *, designator_kind, const sym_t *, size_t);
 
 /*
  * emit.c

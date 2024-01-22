@@ -1,4 +1,4 @@
-/*	$NetBSD: tree.c,v 1.591 2024/01/07 12:43:16 rillig Exp $	*/
+/*	$NetBSD: tree.c,v 1.595 2024/01/11 23:26:39 rillig Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -37,7 +37,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: tree.c,v 1.591 2024/01/07 12:43:16 rillig Exp $");
+__RCSID("$NetBSD: tree.c,v 1.595 2024/01/11 23:26:39 rillig Exp $");
 #endif
 
 #include <float.h>
@@ -802,7 +802,7 @@ fold_constant_integer(tnode_t *tn)
 	if (is_binary(tn))
 		ur = sr = tn->tn_right->tn_val.u.integer;
 
-	int64_t mask = (int64_t)value_bits(size_in_bits(t));
+	uint64_t mask = value_bits(size_in_bits(t));
 	bool ovfl = false;
 
 	int64_t si;
@@ -821,7 +821,7 @@ fold_constant_integer(tnode_t *tn)
 	case MULT:
 		if (utyp) {
 			si = (int64_t)(ul * ur);
-			if (si != (si & mask))
+			if (si != (si & (int64_t)mask))
 				ovfl = true;
 			else if (ul != 0 && si / ul != ur)
 				ovfl = true;
@@ -836,6 +836,11 @@ fold_constant_integer(tnode_t *tn)
 			/* division by 0 */
 			error(139);
 			si = utyp ? -1 : INT64_MAX;
+		} else if (!utyp
+		    && (sl & mask) == (mask ^ (mask >> 1)) && sr == -1) {
+			/* operator '%s' produces integer overflow */
+			warning(141, op_name(DIV));
+			si = sl;
 		} else {
 			si = utyp ? (int64_t)(ul / ur) : sl / sr;
 		}
@@ -910,7 +915,7 @@ fold_constant_integer(tnode_t *tn)
 
 	/* XXX: The overflow check does not work for 64-bit integers. */
 	if (ovfl ||
-	    ((uint64_t)(si | mask) != ~(uint64_t)0 && (si & ~mask) != 0)) {
+	    ((si | mask) != ~(uint64_t)0 && (si & ~mask) != 0)) {
 		if (hflag)
 			/* operator '%s' produces integer overflow */
 			warning(141, op_name(tn->tn_op));
@@ -3884,7 +3889,7 @@ build_sizeof(const type_t *tp)
 }
 
 tnode_t *
-build_offsetof(const type_t *tp, const sym_t *sym)
+build_offsetof(const type_t *tp, designation dn)
 {
 	unsigned int offset_in_bits = 0;
 
@@ -3893,13 +3898,29 @@ build_offsetof(const type_t *tp, const sym_t *sym)
 		error(111, "offsetof");
 		goto proceed;
 	}
-	sym_t *mem = find_member(tp->t_sou, sym->s_name);
-	if (mem == NULL) {
-		/* type '%s' does not have member '%s' */
-		error(101, sym->s_name, type_name(tp));
-		goto proceed;
+	for (size_t i = 0; i < dn.dn_len; i++) {
+		const designator *dr = dn.dn_items + i;
+		if (dr->dr_kind == DK_SUBSCRIPT) {
+			if (tp->t_tspec != ARRAY)
+				goto proceed;	/* silent error */
+			tp = tp->t_subt;
+			offset_in_bits += (unsigned) dr->dr_subscript
+			    * type_size_in_bits(tp);
+		} else {
+			if (!is_struct_or_union(tp->t_tspec))
+				goto proceed;	/* silent error */
+			const char *name = dr->dr_member->s_name;
+			sym_t *mem = find_member(tp->t_sou, name);
+			if (mem == NULL) {
+				/* type '%s' does not have member '%s' */
+				error(101, name, type_name(tp));
+				goto proceed;
+			}
+			tp = mem->s_type;
+			offset_in_bits += mem->u.s_member.sm_offset_in_bits;
+		}
 	}
-	offset_in_bits = mem->u.s_member.sm_offset_in_bits;
+	free(dn.dn_items);
 
 proceed:;
 	unsigned int offset_in_bytes = offset_in_bits / CHAR_SIZE;
@@ -3996,7 +4017,7 @@ build_alignof(const type_t *tp)
 }
 
 static tnode_t *
-cast_to_union(tnode_t *otn, type_t *ntp)
+cast_to_union(tnode_t *otn, bool sys, type_t *ntp)
 {
 
 	if (!allow_gcc) {
@@ -4009,12 +4030,8 @@ cast_to_union(tnode_t *otn, type_t *ntp)
 	    m != NULL; m = m->s_next) {
 		if (types_compatible(m->s_type, otn->tn_type,
 		    false, false, NULL)) {
-			tnode_t *ntn = expr_alloc_tnode();
-			ntn->tn_op = CVT;
-			ntn->tn_type = ntp;
+			tnode_t *ntn = build_op(CVT, sys, ntp, otn, NULL);
 			ntn->tn_cast = true;
-			ntn->tn_left = otn;
-			ntn->tn_right = NULL;
 			return ntn;
 		}
 	}
@@ -4025,7 +4042,7 @@ cast_to_union(tnode_t *otn, type_t *ntp)
 }
 
 tnode_t *
-cast(tnode_t *tn, type_t *tp)
+cast(tnode_t *tn, bool sys, type_t *tp)
 {
 
 	if (tn == NULL)
@@ -4044,7 +4061,7 @@ cast(tnode_t *tn, type_t *tp)
 		 * scalar type to a scalar type.
 		 */
 	} else if (nt == UNION)
-		return cast_to_union(tn, tp);
+		return cast_to_union(tn, sys, tp);
 	else if (nt == STRUCT || nt == ARRAY || nt == FUNC) {
 		/* Casting to a struct is an undocumented GCC extension. */
 		if (!(allow_gcc && nt == STRUCT))
@@ -4078,6 +4095,7 @@ cast(tnode_t *tn, type_t *tp)
 
 	tn = convert(CVT, 0, tp, tn);
 	tn->tn_cast = true;
+	tn->tn_sys = sys;
 
 	return tn;
 

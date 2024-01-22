@@ -1,12 +1,30 @@
-#	$NetBSD: files.m68k,v 1.51 2020/10/21 13:31:51 christos Exp $
+#	$NetBSD: files.m68k,v 1.57 2024/01/18 14:39:06 thorpej Exp $
 #
 
+version	20240118		# mkflagvar
+
 defflag	opt_fpsp.h		FPSP
+
+defflag	opt_m68k_arch.h		M68K_MMU_HP
+defflag	opt_m68k_arch.h		M68K_MMU_SUN
+defflag	opt_m68k_arch.h		M68K_MMU_SUN2: M68K_MMU_SUN
+defflag	opt_m68k_arch.h		M68K_MMU_SUN3: M68K_MMU_SUN
+defflag	opt_m68k_arch.h		M68K_MMU_MOTOROLA
+defflag	opt_m68k_arch.h		M68K_MMU_68851: M68K_MMU_MOTOROLA
+defflag	opt_m68k_arch.h		M68K_MMU_68030: M68K_MMU_MOTOROLA
+defflag	opt_m68k_arch.h		M68K_MMU_68040: M68K_MMU_MOTOROLA
+defflag	opt_m68k_arch.h		M68K_MMU_68060: M68K_MMU_MOTOROLA
+
 defflag	opt_m68k_arch.h		M68010
 defflag	opt_m68k_arch.h		M68020
-defflag	opt_m68k_arch.h		M68030
-defflag	opt_m68k_arch.h		M68040
-defflag	opt_m68k_arch.h		M68060
+defflag	opt_m68k_arch.h		M68030: M68K_MMU_68030
+defflag	opt_m68k_arch.h		M68040: M68K_MMU_68040
+defflag	opt_m68k_arch.h		M68060: M68K_MMU_68060
+
+# Emit Makefile vars for these kernel options so that compiler flags
+# can be tuned for CPU support.
+mkflagvar M68010 M68020 M68030 M68040 M68060
+
 defflag				FPU_EMULATE
 defflag				PMAP_DEBUG
 
@@ -26,11 +44,19 @@ file	arch/m68k/m68k/process_machdep.c
 file	arch/m68k/m68k/reenter_syscall.s
 file	arch/m68k/m68k/regdump.c
 file	arch/m68k/m68k/sig_machdep.c
+file	arch/m68k/m68k/sigcode.s
+file	arch/m68k/m68k/support.s
 file	arch/m68k/m68k/m68k_syscall.c
+
+file	arch/m68k/m68k/sunos_sigcode.s		compat_sunos
 file	arch/m68k/m68k/sunos_syscall.c		compat_sunos
+
 file	arch/m68k/m68k/linux_syscall.c		compat_linux
 
 file	arch/m68k/m68k/compat_13_machdep.c	compat_13
+file	arch/m68k/m68k/compat_13_sigreturn13.s	compat_13 | compat_sunos
+
 file	arch/m68k/m68k/compat_16_machdep.c	compat_16
+file	arch/m68k/m68k/compat_16_sigreturn14.s	compat_16
 
 include "compat/m68k4k/files.m68k4k"

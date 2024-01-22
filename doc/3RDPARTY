@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1974 2023/12/23 20:49:22 christos Exp $
+#	$NetBSD: 3RDPARTY,v 1.1976 2024/01/16 09:42:44 wiz Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -716,7 +716,7 @@ Talk to mrg before importing any new version.
 
 Package:	libarchive
 Version:	3.4.0
-Current Vers:	3.6.2
+Current Vers:	3.7.2
 Maintainer:	kientzle@freebsd.org, joerg@NetBSD.org
 Archive Site:	https://github.com/libarchive/libarchive/releases
 Home Page: 	http://www.libarchive.org
@@ -1328,10 +1328,10 @@ original.
 
 Package:	sqlite
 Version:	3.43.0
-Current Vers:	3.44.0
+Current Vers:	3.45.0
 Maintainer:	Richard Hipp <drh@sqlite.org>
 Home Page:	http://www.sqlite.org
-Date: 		2023-09-04
+Date: 		2024-01-16
 Responsible:	joerg
 License:	Public domain
 Location:	external/public-domain/sqlite/dist

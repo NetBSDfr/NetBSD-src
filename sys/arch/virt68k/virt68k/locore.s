@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.s,v 1.5 2024/01/09 07:28:26 thorpej Exp $	*/
+/*	$NetBSD: locore.s,v 1.14 2024/01/18 12:07:51 isaki Exp $	*/
 
 /*
  * Copyright (c) 1988 University of Utah.
@@ -72,8 +72,6 @@
 	.space	PAGE_SIZE
 ASLOCAL(tmpstk)
 
-#include <virt68k/virt68k/vectors.s>
-
 /*
  * Macro to relocate a symbol, used before MMU is enabled.
  */
@@ -83,7 +81,6 @@ ASLOCAL(tmpstk)
 #define	RELOC(var, ar)		_RELOC(_C_LABEL(var), ar)
 #define	ASRELOC(var, ar)	_RELOC(_ASM_LABEL(var), ar)
 
-BSS(lowram,4)
 BSS(esym,4)
 
 	.globl	_C_LABEL(edata)
@@ -113,9 +110,6 @@ ASENTRY_NOPROFILE(start)
 1:	clrl	%a0@+
 	dbra	%d0,1b
 
-	RELOC(lowram, %a0)
-	movl	%a5,%a0@		| store start of physical memory
-
 	/*
 	 * Qemu does not pass us the symbols, so leave esym alone.
 	 * The bootinfo immediately follows the kernel.  Go parse
@@ -132,36 +126,6 @@ ASENTRY_NOPROFILE(start)
 	movc	%d0,%cacr		| clear and disable on-chip cache(s)
 	/* XXX XXX XXX */
 
-	/*
-	 * bootinfo_start() will have determined what kind of CPU
-	 * we have, so it's time to fix up the vector table:
-	 *
-	 *	vectab+8	bus error
-	 *	vectab+12	address error
-	 */
-	RELOC(cputype, %a0)
-	movl    #_C_LABEL(vectab),%a2
-	addl	%a5,%a2
-#if defined(M68040)
-	cmpl	#CPU_68040,%a0@		| 68040?
-	jne	1f			| no, skip
-	movl	#_C_LABEL(buserr40),%a2@(8)
-	movl	#_C_LABEL(addrerr4060),%a2@(12)
-	jra	Lstart1
-1:
-#endif /* M68040 */
-#if defined(M68030)
-	cmpl	#CPU_68040,%a0@		| 68040?
-	jeq	1f			| yes, skip
-	movl	#_C_LABEL(busaddrerr2030),%a2@(8)
-	movl	#_C_LABEL(busaddrerr2030),%a2@(12)
-	jra	Lstart1
-1:
-#endif /* M68030 */
-
-	/* Config botch.  No hope.  SOLDIER ON! */
-
-Lstart1:
 /* initialize source/destination control registers for movs */
 	moveq	#FC_USERD,%d0		| user space
 	movc	%d0,%sfc		|   as source
@@ -235,18 +199,21 @@ Lnot060cache:
 	jmp	Lenab1
 
 Lmotommu2:
+	movl	#VIRT68K_TT30_IO,%sp@-	| TT0 maps the I/O space
+	.long	0xf0170800		| pmove %sp@,%tt0
+	clrl	%sp@			| ensure TT1 is disabled
+	.long	0xf0170c00		| pmove %sp@,%tt1
+
 	pflusha
-	movl	#MMU51_TCR_BITS,%sp@-	| value to load TC with
+	movl	#MMU51_TCR_BITS,%sp@	| value to load TC with
 	pmove	%sp@,%tc		| load it
 
 /*
  * Should be running mapped from this point on
  */
 Lenab1:
-/* Point the CPU VBR at our vector table */
-	movl	#_C_LABEL(vectab),%d0	| get our VBR address
-	movc	%d0,%vbr
-	lea	_ASM_LABEL(tmpstk),%sp	| temporary stack
+	lea	_ASM_LABEL(tmpstk),%sp	| re-load the temporary stack
+	jbsr	_C_LABEL(vec_init)	| initialize the vector table
 /* call final pmap setup */
 	jbsr	_C_LABEL(pmap_bootstrap_finalize)
 /* set kernel stack, user SP */
@@ -521,11 +488,6 @@ Lbrkpt3:
 	rte				| all done
 
 /*
- * Use common m68k sigreturn routine.
- */
-#include <m68k/m68k/sigreturn.s>
-
-/*
  * Interrupt handlers.
  *
  * For auto-vectored interrupts, the CPU provides the
@@ -595,21 +557,8 @@ Laststkadj:
 	rte				| and do real RTE
 
 /*
- * Use common m68k sigcode.
- */
-#include <m68k/m68k/sigcode.s>
-#ifdef COMPAT_SUNOS
-#include <m68k/m68k/sunos_sigcode.s>
-#endif
-
-/*
  * Primitives
  */
-
-/*
- * Use common m68k support routines.
- */
-#include <m68k/m68k/support.s>
 
 /*
  * Use common m68k process/lwp switch and context save subroutines.
@@ -653,23 +602,6 @@ ENTRY(ecacheoff)
 	rts
 
 /*
- * Get callers current SP value.
- * Note that simply taking the address of a local variable in a C function
- * doesn't work because callee saved registers may be outside the stack frame
- * defined by A6 (e.g. GCC generated code).
- */
-ENTRY_NOPROFILE(getsp)
-	movl	%sp,%d0			| get current SP
-	addql	#4,%d0			| compensate for return address
-	movl	%d0,%a0
-	rts
-
-ENTRY(getsr)
-	moveq	#0,%d0
-	movw	%sr,%d0
-	rts
-
-/*
  * Misc. global variables.
  */
 	.data
@@ -682,24 +614,3 @@ GLOBAL(cputype)
 
 GLOBAL(fputype)
 	.long	FPU_68040	| default to FPU_68040
-
-/*
- * interrupt counters.
- * XXXSCW: Will go away soon; kept here to keep vmstat happy
- */
-GLOBAL(intrnames)
-	.asciz	"spur"
-	.asciz	"lev1"
-	.asciz	"lev2"
-	.asciz	"lev3"
-	.asciz	"lev4"
-	.asciz	"clock"
-	.asciz	"lev6"
-	.asciz	"nmi"
-	.asciz	"statclock"
-GLOBAL(eintrnames)
-	.even
-
-GLOBAL(intrcnt)
-	.long	0,0,0,0,0,0,0,0,0
-GLOBAL(eintrcnt)

@@ -1,4 +1,4 @@
-/* $NetBSD: device.h,v 1.186 2023/05/22 14:58:22 riastradh Exp $ */
+/* $NetBSD: device.h,v 1.188 2024/01/15 18:15:37 thorpej Exp $ */
 
 /*
  * Copyright (c) 2021 The NetBSD Foundation, Inc.

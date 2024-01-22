@@ -1,4 +1,4 @@
-/*	$NetBSD: clock.c,v 1.65 2021/04/02 12:11:41 rin Exp $	*/
+/*	$NetBSD: clock.c,v 1.68 2024/01/15 18:47:03 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1982, 1990, 1993
@@ -83,13 +83,14 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.65 2021/04/02 12:11:41 rin Exp $");
+__KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.68 2024/01/15 18:47:03 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/time.h>
 #include <sys/kernel.h>
 #include <sys/device.h>
+#include <sys/intr.h>
 
 #include <uvm/uvm_extern.h>
 
@@ -99,6 +100,7 @@ __KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.65 2021/04/02 12:11:41 rin Exp $");
 #include <machine/bus.h>
 #include <machine/cpu.h>
 #include <machine/leds.h>
+#include <machine/vectors.h>
 
 #include <sun3/sun3/control.h>
 #include <sun3/sun3/interreg.h>
@@ -107,8 +109,6 @@ __KERNEL_RCSID(0, "$NetBSD: clock.c,v 1.65 2021/04/02 12:11:41 rin Exp $");
 #include <dev/clock_subr.h>
 #include <dev/ic/intersil7170reg.h>
 #include <dev/ic/intersil7170var.h>
-
-extern u_int intrcnt[];
 
 #define	CLOCK_PRI	5
 #define IREG_CLK_BITS	(IREG_CLOCK_ENAB_7 | IREG_CLOCK_ENAB_5)
@@ -274,7 +274,7 @@ cpu_initclocks(void)
 	s = splhigh();
 
 	/* Install isr (in locore.s) that calls clock_intr(). */
-	isr_add_custom(CLOCK_PRI, (void *)_isr_clock);
+	vec_set_entry(VECI_INTRAV0 + CLOCK_PRI, (void *)_isr_clock);
 
 	/* Now enable the clock at level 5 in the interrupt reg. */
 	set_clk_mode(IREG_CLOCK_ENAB_5, 0, 1);
@@ -316,8 +316,7 @@ clock_intr(struct clockframe cf)
 	/* Read the clock intr. reg. AGAIN! */
 	intersil_clear();
 
-	intrcnt[CLOCK_PRI]++;
-	curcpu()->ci_data.cpu_nintr++;
+	m68k_count_intr(CLOCK_PRI);
 
 	{ /* Entertainment! */
 #ifdef	LED_IDLE_CHECK

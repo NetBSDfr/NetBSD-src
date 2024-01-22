@@ -1,4 +1,4 @@
-/*	$NetBSD: cpu.h,v 1.47 2024/01/09 04:16:26 thorpej Exp $	*/
+/*	$NetBSD: cpu.h,v 1.53 2024/01/18 14:39:07 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1988 University of Utah.
@@ -43,7 +43,7 @@
 
 #if defined(_KERNEL_OPT)
 #include "opt_lockdebug.h"
-#include "opt_m68k_arch.h"
+#include "opt_newsconf.h"
 #endif
 
 /*
@@ -80,19 +80,20 @@
 /*
  * Arguments to hardclock and gatherstats encapsulate the previous
  * machine state in an opaque clockframe.  On the news68k, we use
- * what the hardware pushes on an interrupt (frame format 0).
+ * what the locore.s glue puts on the stack before calling C-code.
  */
 struct clockframe {
-	u_short	sr;		/* sr at time of interrupt */
-	u_long	pc;		/* pc at time of interrupt */
-	u_short	vo;		/* vector offset (4-word frame) */
-};
+	u_int	cf_regs[4];	/* d0,d1,a0,a1 */
+	u_short	cf_sr;		/* sr at time of interrupt */
+	u_long	cf_pc;		/* pc at time of interrupt */
+	u_short	cf_vo;		/* vector offset (4-word frame) */
+} __attribute__((packed));
 
-#define CLKF_USERMODE(framep)	(((framep)->sr & PSL_S) == 0)
-#define CLKF_PC(framep)		((framep)->pc)
+#define CLKF_USERMODE(framep)	(((framep)->cf_sr & PSL_S) == 0)
+#define CLKF_PC(framep)		((framep)->cf_pc)
 #if 0
 /* We would like to do it this way... */
-#define CLKF_INTR(framep)	(((framep)->sr & PSL_M) == 0)
+#define CLKF_INTR(framep)	(((framep)->cf_sr & PSL_M) == 0)
 #else
 /* but until we start using PSL_M, we have to do this instead */
 #include <machine/intr.h>
@@ -128,13 +129,6 @@ extern volatile u_char *ctrl_ast;
 #define aston()		\
 	do { astpending++; *ctrl_ast = 0xff; } while (/* CONSTCOND */0)
 
-#if defined(news1700) || defined(news1200)
-#ifndef M68030
-#define M68030
-#endif
-#define M68K_MMU_MOTOROLA
-#endif
-
 #if defined(news1700)
 #define CACHE_HAVE_PAC
 #endif
@@ -147,18 +141,10 @@ extern int cpuspeed;
 extern char *intiobase, *intiolimit, *extiobase;
 extern u_int intiobase_phys, intiotop_phys;
 extern u_int extiobase_phys, extiotop_phys;
-extern u_int intrcnt[];
 
-extern void (*vectab[])(void);
 extern void *romcallvec;
 
 struct frame;
-
-/* locore.s functions */
-void badtrap(void);
-void intrhand_vectored(void);
-int getsr(void);
-
 
 void doboot(int)
 	__attribute__((__noreturn__));
