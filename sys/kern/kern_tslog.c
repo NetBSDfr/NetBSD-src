@@ -115,6 +115,11 @@ tslog(const lwp_t *l, int type, const char *f, const char *s)
 	if (pos < nitems(timestamps)) {
 		timestamps[pos].l = l;
 		timestamps[pos].type = type;
+		/*
+		 * Must record it:
+		 * - the compiled string is a format string
+		 * - kernel thread might be destroyed
+		 */
 		if (f != NULL)
 			strlcpy(timestamps[pos].f, f, MAX_FUNC_NAME);
 		else
