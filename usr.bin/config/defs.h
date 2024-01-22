@@ -1,4 +1,4 @@
-/*	$NetBSD: defs.h,v 1.106 2020/04/03 19:53:41 joerg Exp $	*/
+/*	$NetBSD: defs.h,v 1.108 2024/01/18 05:41:38 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1992, 1993
@@ -107,7 +107,7 @@ extern const char *progname;
  * The next two lines define the current version of the config(1) binary,
  * and the minimum version of the configuration files it supports.
  */
-#define CONFIG_VERSION		20180827
+#define CONFIG_VERSION		20240118
 #define CONFIG_MINVERSION	0
 
 struct where {
@@ -151,6 +151,7 @@ struct defoptlist {
 	const char *dl_value;
 	const char *dl_lintvalue;
 	int dl_obsolete;
+	int dl_mkvar;
 	struct nvlist *dl_depends;
 	struct where	dl_where;
 };
@@ -591,10 +592,12 @@ void	delfsoption(const char *, int);
 void	delmkoption(const char *, int);
 int	devbase_has_instances(struct devbase *, int);
 struct where *find_declared_option(const char *);
+struct defoptlist *find_declared_option_option(const char *name);
 int	deva_has_instances(struct deva *, int);
 void	setupdirs(void);
 void	fixmaxusers(void);
 void	fixmkoption(void);
+void	mkflagvar(struct defoptlist *);
 const char *strtolower(const char *);
 
 /* tests on option types */

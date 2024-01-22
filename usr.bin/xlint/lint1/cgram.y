@@ -1,5 +1,5 @@
 %{
-/* $NetBSD: cgram.y,v 1.478 2024/01/09 23:46:54 rillig Exp $ */
+/* $NetBSD: cgram.y,v 1.483 2024/01/13 11:24:57 rillig Exp $ */
 
 /*
  * Copyright (c) 1996 Christopher G. Demetriou.  All Rights Reserved.
@@ -35,7 +35,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: cgram.y,v 1.478 2024/01/09 23:46:54 rillig Exp $");
+__RCSID("$NetBSD: cgram.y,v 1.483 2024/01/13 11:24:57 rillig Exp $");
 #endif
 
 #include <limits.h>
@@ -295,7 +295,6 @@ is_either(const char *s, const char *a, const char *b)
 %type	<y_generic>	generic_assoc_list
 %type	<y_generic>	generic_association
 %type	<y_tnode>	postfix_expression
-/* No type for comma_opt. */
 %type	<y_tnode>	gcc_statement_expr_list
 %type	<y_tnode>	gcc_statement_expr_item
 %type	<y_op>		point_or_arrow
@@ -328,7 +327,6 @@ is_either(const char *s, const char *a, const char *b)
 %type	<y_type>	struct_or_union_specifier
 %type	<y_tspec>	struct_or_union
 %type	<y_sym>		braced_member_declaration_list
-/* No type for member_declaration_lbrace. */
 %type	<y_sym>		member_declaration_list_with_rbrace
 %type	<y_sym>		member_declaration_list
 %type	<y_sym>		member_declaration
@@ -339,7 +337,6 @@ is_either(const char *s, const char *a, const char *b)
 %type	<y_type>	enum_specifier
 /* No type for enum. */
 %type	<y_sym>		enum_declaration
-/* No type for enum_decl_lbrace. */
 %type	<y_sym>		enums_with_opt_comma
 %type	<y_sym>		enumerator_list
 %type	<y_sym>		enumerator
@@ -361,9 +358,7 @@ is_either(const char *s, const char *a, const char *b)
 %type	<y_sym>		direct_param_declarator
 %type	<y_sym>		direct_notype_param_declarator
 %type	<y_parameter_list>	param_list
-/* No type for id_list_lparen. */
 %type	<y_array_size>	array_size_opt
-%type	<y_tnode>	array_size
 %type	<y_sym>		identifier_list
 %type	<y_type>	type_name
 %type	<y_sym>		abstract_declaration
@@ -377,9 +372,7 @@ is_either(const char *s, const char *a, const char *b)
 /* No type for braced_initializer. */
 /* No type for initializer. */
 /* No type for initializer_list. */
-/* No type for initializer_list_item. */
 /* No type for designation. */
-/* No type for begin_designation. */
 /* No type for designator_list. */
 /* No type for designator. */
 /* No type for static_assert_declaration. */
@@ -407,7 +400,6 @@ is_either(const char *s, const char *a, const char *b)
 /* No type for while_expr. */
 /* No type for do_statement. */
 /* No type for do. */
-%type	<y_tnode>	do_while_expr
 /* No type for for_start. */
 /* No type for for_exprs. */
 /* No type for jump_statement. */
@@ -512,17 +504,17 @@ primary_expression:
 member_designator:
 	identifier {
 		$$ = (designation) { .dn_len = 0 };
-		designation_push(&$$, DK_STRUCT /* or union */, getsym($1), 0);
+		designation_push(&$$, DK_MEMBER, getsym($1), 0);
 	}
 |	member_designator T_LBRACK range T_RBRACK {
 		$$ = $1;
-		designation_push(&$$, DK_ARRAY, NULL, $3.lo);
+		designation_push(&$$, DK_SUBSCRIPT, NULL, $3.lo);
 	}
 |	member_designator T_POINT {
 		set_symtyp(FMEMBER);
 	} identifier {
 		$$ = $1;
-		designation_push(&$$, DK_STRUCT /* or union */, getsym($4), 0);
+		designation_push(&$$, DK_MEMBER, getsym($4), 0);
 	}
 ;
 
@@ -595,11 +587,6 @@ postfix_expression:
 	} compound_statement_rbrace T_RPAREN {
 		$$ = end_statement_expr();
 	}
-;
-
-comma_opt:			/* helper for 'postfix_expression' */
-	/* empty */
-|	T_COMMA
 ;
 
 /*
@@ -724,8 +711,8 @@ unary_expression:
 /* K&R 7.2, C90 ???, C99 6.5.4, C11 6.5.4 */
 cast_expression:
 	unary_expression
-|	T_LPAREN type_name T_RPAREN cast_expression {
-		$$ = cast($4, $2);
+|	T_LPAREN type_name T_RPAREN sys cast_expression {
+		$$ = cast($5, $4, $2);
 	}
 ;
 
@@ -1041,14 +1028,10 @@ struct_or_union:
 ;
 
 braced_member_declaration_list:	/* see C99 6.7.2.1 */
-	member_declaration_lbrace member_declaration_list_with_rbrace {
-		$$ = $2;
-	}
-;
-
-member_declaration_lbrace:	/* see C99 6.7.2.1 */
 	T_LBRACE {
 		set_symtyp(FVFT);
+	} member_declaration_list_with_rbrace {
+		$$ = $3;
 	}
 ;
 
@@ -1195,15 +1178,11 @@ enum:				/* helper for C99 6.7.2.2 */
 ;
 
 enum_declaration:		/* helper for C99 6.7.2.2 */
-	enum_decl_lbrace enums_with_opt_comma T_RBRACE {
-		$$ = $2;
-	}
-;
-
-enum_decl_lbrace:		/* helper for C99 6.7.2.2 */
 	T_LBRACE {
 		set_symtyp(FVFT);
 		enumval = 0;
+	} enums_with_opt_comma T_RBRACE {
+		$$ = $3;
 	}
 ;
 
@@ -1438,17 +1417,13 @@ direct_notype_param_declarator:
 ;
 
 param_list:
-	id_list_lparen identifier_list T_RPAREN {
-		$$ = (struct parameter_list){ .first = $2 };
-	}
-|	abstract_decl_param_list
-;
-
-id_list_lparen:
 	T_LPAREN {
 		block_level++;
 		begin_declaration_level(DLK_PROTO_PARAMS);
+	} identifier_list T_RPAREN {
+		$$ = (struct parameter_list){ .first = $3 };
 	}
+|	abstract_decl_param_list
 ;
 
 array_size_opt:
@@ -1461,28 +1436,26 @@ array_size_opt:
 		$$.has_dim = false; /* TODO: maybe change to true */
 		$$.dim = 0;	/* just as a placeholder */
 	}
-|	array_size {
-		$$.has_dim = true;
-		$$.dim = $1 == NULL ? 0 : to_int_constant($1, false);
-	}
-;
-
-array_size:
-	type_qualifier_list_opt T_SCLASS constant_expression {
+|	type_qualifier_list_opt T_SCLASS constant_expression {
 		/* C11 6.7.6.3p7 */
 		if ($2 != STATIC)
 			yyerror("Bad attribute");
 		/* static array size requires C11 or later */
 		c11ism(343);
-		$$ = $3;
+		$$.has_dim = true;
+		$$.dim = $3 == NULL ? 0 : to_int_constant($3, false);
 	}
 |	type_qualifier {
 		/* C11 6.7.6.2 */
 		if (!$1.tq_restrict)
 			yyerror("Bad attribute");
-		$$ = NULL;
+		$$.has_dim = true;
+		$$.dim = 0;
 	}
-|	constant_expression
+|	constant_expression {
+		$$.has_dim = true;
+		$$.dim = $1 == NULL ? 0 : to_int_constant($1, false);
+	}
 ;
 
 identifier_list:		/* C99 6.7.5 */
@@ -1656,7 +1629,8 @@ braced_initializer:
 		c23ism(353);
 	}
 	/* K&R ---, C90 ---, C99 6.7.8, C11 6.7.9, C23 6.7.10 */
-|	init_lbrace initializer_list comma_opt init_rbrace
+|	init_lbrace initializer_list init_rbrace
+|	init_lbrace initializer_list T_COMMA init_rbrace
 ;
 
 initializer:			/* C99 6.7.8 "Initialization" */
@@ -1666,34 +1640,28 @@ initializer:			/* C99 6.7.8 "Initialization" */
 |	init_lbrace init_rbrace {
 		/* XXX: Empty braces are not covered by C99 6.7.8. */
 	}
-|	init_lbrace initializer_list comma_opt init_rbrace
+|	init_lbrace initializer_list init_rbrace
+|	init_lbrace initializer_list T_COMMA init_rbrace
 	/* XXX: What is this error handling for? */
 |	error
 ;
 
 initializer_list:		/* C99 6.7.8 "Initialization" */
-	initializer_list_item
-|	initializer_list T_COMMA initializer_list_item
-;
-
-initializer_list_item:		/* helper */
-	designation initializer
-|	initializer
+	initializer
+|	designation initializer
+|	initializer_list T_COMMA initializer
+|	initializer_list T_COMMA designation initializer
 ;
 
 designation:			/* C99 6.7.8 "Initialization" */
-	begin_designation designator_list T_ASSIGN
+	{
+		begin_designation();
+	} designator_list T_ASSIGN
 |	identifier T_COLON {
 		/* GCC style struct or union member name in initializer */
 		gnuism(315);
 		begin_designation();
 		add_designator_member($1);
-	}
-;
-
-begin_designation:		/* lint-specific helper */
-	/* empty */ {
-		begin_designation();
 	}
 ;
 
@@ -1936,8 +1904,8 @@ iteration_statement:		/* C99 6.8.5 */
 		clear_warning_flags();
 		stmt_while_expr_stmt();
 	}
-|	do_statement do_while_expr {
-		stmt_do_while_expr($2);
+|	do_statement T_WHILE T_LPAREN expression T_RPAREN T_SEMI {
+		stmt_do_while_expr($4);
 		suppress_fallthrough = false;
 	}
 |	do error {
@@ -1974,12 +1942,6 @@ do_statement:			/* see C99 6.8.5 */
 do:				/* see C99 6.8.5 */
 	T_DO {
 		stmt_do();
-	}
-;
-
-do_while_expr:			/* see C99 6.8.5 */
-	T_WHILE T_LPAREN expression T_RPAREN T_SEMI {
-		$$ = $3;
 	}
 ;
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.s,v 1.39 2024/01/09 07:28:25 thorpej Exp $	*/
+/*	$NetBSD: locore.s,v 1.46 2024/01/17 12:33:49 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1980, 1990, 1993
@@ -107,10 +107,7 @@ GLOBAL(kernel_text)
 	.space	PAGE_SIZE
 ASLOCAL(tmpstk)
 
-#include <cesfic/cesfic/vectors.s>
-
 	.text
-
 /*
  * Macro to relocate a symbol, used before MMU is enabled.
  */
@@ -323,15 +320,14 @@ Lenab1:
 	nop
 	nop
 	nop
-	movl	#_C_LABEL(vectab),%d0	| set Vector Base Register
-	movc	%d0,%vbr
 	moveq	#0,%d0			| ensure TT regs are disabled
 	.long	0x4e7b0004		| movc d0,itt0
 	.long	0x4e7b0005		| movc d0,itt1
 	.long	0x4e7b0006		| movc d0,dtt0
 	.long	0x4e7b0007		| movc d0,dtt1
 
-	lea	_ASM_LABEL(tmpstk),%sp	| temporary stack
+	lea	_ASM_LABEL(tmpstk),%sp	| re-load temporary stack
+	jbsr	_C_LABEL(vec_init)	| initialize vector table
 /* call final pmap setup */
 	jbsr	_C_LABEL(pmap_bootstrap_finalize)
 /* set kernel stack, user SP */
@@ -600,31 +596,9 @@ Lbrkpt2:
 	movl	%sp@,%sp			| ... and %sp
 	rte				| all done
 
-/* Use common m68k sigreturn */
-#include <m68k/m68k/sigreturn.s>
-
 /*
  * Interrupt handlers.
- * All device interrupts are auto-vectored.  The CPU provides
- * the vector 0x18+level.  Note we count spurious interrupts, but
- * we don't do anything else with them.
  */
-
-ENTRY_NOPROFILE(spurintr)	/* level 0 */
-	addql	#1,_C_LABEL(intrcnt)+0
-	INTERRUPT_SAVEREG
-	CPUINFO_INCREMENT(CI_NINTR)
-	INTERRUPT_RESTOREREG
-	jra	_ASM_LABEL(rei)
-
-ENTRY_NOPROFILE(intrhand)	/* levels 1 through 5 */
-	INTERRUPT_SAVEREG
-	movw	%sp@(22),%sp@-		| push exception vector info
-	clrw	%sp@-
-	jbsr	_C_LABEL(isrdispatch)	| call dispatch routine
-	addql	#4,%sp
-	INTERRUPT_RESTOREREG
-	jra	_ASM_LABEL(rei)		| all done
 
 ENTRY_NOPROFILE(lev6intr)	/* Level 6: clock */
 	INTERRUPT_SAVEREG
@@ -634,8 +608,8 @@ ENTRY_NOPROFILE(lev6intr)	/* Level 6: clock */
 	movl %d0, %a0@
 	btst #2, %d0
 	jeq 1f
-	addql	#1,_C_LABEL(intrcnt)+24
-	lea	%sp@(16), %a1		| a1 = &clockframe
+	addql	#1,_C_LABEL(m68k_intr_evcnt)+CLOCK_INTRCNT
+	lea	%sp@(0), %a1		| a1 = &clockframe
 	movl	%a1, %sp@-
 	jbsr	_C_LABEL(hardclock)	| hardclock(&frame)
 	addql	#4, %sp
@@ -649,7 +623,7 @@ ENTRY_NOPROFILE(lev6intr)	/* Level 6: clock */
 	jra	_ASM_LABEL(rei)		| all done
 
 ENTRY_NOPROFILE(lev7intr)	/* level 7: parity errors, reset key */
-	addql	#1,_C_LABEL(intrcnt)+28
+	addql	#1,_C_LABEL(m68k_intr_evcnt)+NMI_INTRCNT
 	clrl	%sp@-
 	moveml	#0xFFFF,%sp@-		| save registers
 	movl	%usp,%a0			| and save
@@ -746,21 +720,8 @@ Ldorte:
 	rte				| real return
 
 /*
- * Use common m68k sigcode.
- */
-#include <m68k/m68k/sigcode.s>
-#ifdef COMPAT_SUNOS
-#include <m68k/m68k/sunos_sigcode.s>
-#endif
-
-/*
  * Primitives
  */ 
-
-/*
- * Use common m68k support routines.
- */
-#include <m68k/m68k/support.s>
 
 /*
  * Use common m68k process/lwp switch and context save subroutines.
@@ -857,19 +818,3 @@ fulltflush:
 fullcflush:
 	.long	0
 #endif
-
-/* interrupt counters */
-GLOBAL(intrnames)
-	.asciz	"spur"
-	.asciz	"lev1"
-	.asciz	"lev2"
-	.asciz	"lev3"
-	.asciz	"lev4"
-	.asciz	"lev5"
-	.asciz	"clock"
-	.asciz	"nmi"
-GLOBAL(eintrnames)
-	.even
-GLOBAL(intrcnt)
-	.long	0,0,0,0,0,0,0,0
-GLOBAL(eintrcnt)

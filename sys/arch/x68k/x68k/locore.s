@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.s,v 1.128 2024/01/09 07:28:26 thorpej Exp $	*/
+/*	$NetBSD: locore.s,v 1.131 2024/01/17 12:33:51 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1988 University of Utah.
@@ -620,9 +620,6 @@ Lbrkpt3:
 	movl	%sp@,%sp		| ... and %sp
 	rte				| all done
 
-/* Use common m68k sigreturn */
-#include <m68k/m68k/sigreturn.s>
-
 /*
  * Provide a generic interrupt dispatcher, only handle hardclock (int6)
  * specially, to improve performance
@@ -761,21 +758,8 @@ Laststkadj:
 	rte				| and do real RTE
 
 /*
- * Use common m68k sigcode.
- */
-#include <m68k/m68k/sigcode.s>
-#ifdef COMPAT_SUNOS
-#include <m68k/m68k/sunos_sigcode.s>
-#endif
-
-/*
  * Primitives
  */
-
-/*
- * Use common m68k support routines.
- */
-#include <m68k/m68k/support.s>
 
 /*
  * Use common m68k process/lwp switch and context save subroutines.

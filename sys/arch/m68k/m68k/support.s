@@ -1,4 +1,4 @@
-/*	$NetBSD: support.s,v 1.8 2013/08/01 13:42:52 matt Exp $	*/
+/*	$NetBSD: support.s,v 1.10 2024/01/16 15:38:59 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1988 University of Utah.
@@ -42,12 +42,12 @@
  * Miscellaneous support routines common to all m68k ports.
  */
 
-/*
- * NOTICE: This is not a standalone file.  To use it, #include it in
- * your port's locore.s, like so:
- *
- *	#include <m68k/m68k/support.s>
- */
+#include <machine/asm.h>
+
+#include "assym.h"
+
+	.file	"support.s"
+	.text
 
 /*
  * non-local gotos
@@ -64,15 +64,4 @@ ENTRY(longjmp)
 	moveml	(%a0)+,#0xFCFC
 	movl	(%a0),(%sp)
 	moveq	#1,%d0
-	rts
-
-/*
- * fetch registers for debugger
- */
-ENTRY_NOPROFILE(getsfc)
-	movc	%sfc,%d0
-	rts
-
-ENTRY_NOPROFILE(getdfc)
-	movc	%dfc,%d0
 	rts
