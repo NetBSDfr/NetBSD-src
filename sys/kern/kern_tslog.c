@@ -116,9 +116,12 @@ tslog(const lwp_t *l, int type, const char *f, const char *s)
 		timestamps[pos].l = l;
 		timestamps[pos].type = type;
 		/*
-		 * Must record it:
+		 * Must record it for TSTHREAD
 		 * - the compiled string is a format string
 		 * - kernel thread might be destroyed
+		 *
+		 * As this variable might also be used for
+		 * function names, MAXCOMLEN is not enough.
 		 */
 		if (f != NULL)
 			strlcpy(timestamps[pos].f, f, MAX_FUNC_NAME);
