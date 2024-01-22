@@ -57,6 +57,7 @@
 
 #include <sys/param.h>
 #include <sys/kernel.h>
+#include <sys/kmem.h>
 #include <sys/malloc.h>
 #include <sys/proc.h>
 #include <sys/sysctl.h>
@@ -72,11 +73,26 @@
 
 #define nitems(x) __arraycount(x)
 
+static __inline uint64_t
+atomic_fetchadd_long(volatile uint64_t *p, uint64_t v)
+{
+	uint64_t oldval, newval;
+
+	do {
+		oldval = *p;
+		newval = oldval + v;
+	} while (atomic_cas_ulong(p, oldval, newval) != oldval);
+
+	return oldval;
+}
+
+#define MAX_FUNC_NAME 128
+
 static volatile long nrecs = 0;
 static struct timestamp {
-	lwpid_t lid;
+	const lwp_t *l;
 	int type;
-	const char *f;
+	char f[MAX_FUNC_NAME];
 	const char *s;
 	uint64_t tsc;
 } timestamps[TSLOGSIZE];
@@ -88,23 +104,27 @@ void
 tslog(const lwp_t *l, int type, const char *f, const char *s)
 {
 	uint64_t tsc = rdtsc();
+	long pos;
 
 	/* A NULL thread is lwp0 before curthread is set. */
 	if (l == NULL)
 		l = &lwp0;
 
-	/* Store record. */
-	if (lwp_alive(__UNCONST(l)) && nrecs < nitems(timestamps)) {
-		timestamps[nrecs].lid = l->l_lid;
-		timestamps[nrecs].type = type;
-		timestamps[nrecs].f = f;
-		timestamps[nrecs].s = s;
-		timestamps[nrecs].tsc = tsc;
-
-		/* Grab a slot. */
-		atomic_add_long(&nrecs, 1);
+	/* Grab a slot. */
+	pos = atomic_fetchadd_long(&nrecs, 1);
+	if (pos < nitems(timestamps)) {
+		timestamps[pos].l = l;
+		timestamps[pos].type = type;
+		if (f != NULL)
+			strlcpy(timestamps[pos].f, f, MAX_FUNC_NAME);
+		else
+			strcpy(timestamps[pos].f, "(null)");
+		timestamps[pos].s = s;
+		timestamps[pos].tsc = tsc;
 	}
 }
+
+#undef MAX_FUNC_NAME
 
 static int
 sysctl_debug_tslog(SYSCTLFN_ARGS)
@@ -123,9 +143,8 @@ sysctl_debug_tslog(SYSCTLFN_ARGS)
 	/* Add data logged within the kernel. */
 	limit = MIN(nrecs, nitems(timestamps));
 	for (i = 0; i < limit; i++) {
-		snprintf(buf, LINE_MAX, "0x%x %llu",
-			timestamps[i].lid,
-			(unsigned long long)timestamps[i].tsc);
+		snprintf(buf, LINE_MAX, "0x%x %lu",
+			timestamps[i].l->l_lid, timestamps[i].tsc);
 		switch (timestamps[i].type) {
 		case TS_ENTER:
 			strcat(buf, " ENTER");
@@ -140,8 +159,7 @@ sysctl_debug_tslog(SYSCTLFN_ARGS)
 			strcat(buf, " EVENT");
 			break;
 		}
-		snprintf(buf, LINE_MAX, "%s %s", buf,
-			timestamps[i].f ? timestamps[i].f : "(null)");
+		snprintf(buf, LINE_MAX, "%s %s", buf, timestamps[i].f);
 		if (timestamps[i].s)
 			snprintf(buf, LINE_MAX, "%s %s\n", buf,
 				timestamps[i].s);
