@@ -1,4 +1,4 @@
-/*	$NetBSD: gzip.c,v 1.119 2023/06/10 04:45:25 simonb Exp $	*/
+/*	$NetBSD: gzip.c,v 1.121 2024/01/15 17:35:48 christos Exp $	*/
 
 /*
  * Copyright (c) 1997, 1998, 2003, 2004, 2006, 2008, 2009, 2010, 2011, 2015, 2017
@@ -31,7 +31,7 @@
 #ifndef lint
 __COPYRIGHT("@(#) Copyright (c) 1997, 1998, 2003, 2004, 2006, 2008,\
  2009, 2010, 2011, 2015, 2017 Matthew R. Green.  All rights reserved.");
-__RCSID("$NetBSD: gzip.c,v 1.119 2023/06/10 04:45:25 simonb Exp $");
+__RCSID("$NetBSD: gzip.c,v 1.121 2024/01/15 17:35:48 christos Exp $");
 #endif /* not lint */
 
 /*
@@ -1114,14 +1114,14 @@ copymodes(int fd, const struct stat *sbp, const char *file)
 	if (fchmod(fd, sb.st_mode) < 0)
 		maybe_warn("couldn't fchmod: %s", file);
 
-	/* only try flags if they exist already */
-        if (sb.st_flags != 0 && fchflags(fd, sb.st_flags) < 0)
-		maybe_warn("couldn't fchflags: %s", file);
-
 	TIMESPEC_TO_TIMEVAL(&times[0], &sb.st_atimespec);
 	TIMESPEC_TO_TIMEVAL(&times[1], &sb.st_mtimespec);
 	if (futimes(fd, times) < 0)
 		maybe_warn("couldn't utimes: %s", file);
+
+	/* finally, only try flags if they exist already */
+        if (sb.st_flags != 0 && fchflags(fd, sb.st_flags) < 0)
+		maybe_warn("couldn't fchflags: %s", file);
 }
 #endif
 
@@ -2037,7 +2037,7 @@ handle_dir(char *dir)
 
 	path_argv[0] = dir;
 	path_argv[1] = 0;
-	fts = fts_open(path_argv, FTS_PHYSICAL, NULL);
+	fts = fts_open(path_argv, FTS_PHYSICAL | FTS_NOCHDIR, NULL);
 	if (fts == NULL) {
 		warn("couldn't fts_open %s", dir);
 		return;
@@ -2055,7 +2055,7 @@ handle_dir(char *dir)
 			maybe_warn("%s", entry->fts_path);
 			continue;
 		case FTS_F:
-			handle_file(entry->fts_name, entry->fts_statp);
+			handle_file(entry->fts_path, entry->fts_statp);
 		}
 	}
 	(void)fts_close(fts);

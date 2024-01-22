@@ -1,7 +1,7 @@
-/*	$NetBSD: isr.h,v 1.7 2008/04/28 20:23:30 martin Exp $	*/
+/*	$NetBSD: isr.h,v 1.11 2024/01/16 01:17:59 thorpej Exp $	*/
 
 /*-
- * Copyright (c) 1996 The NetBSD Foundation, Inc.
+ * Copyright (c) 2004 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
@@ -29,52 +29,43 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <sys/queue.h>
+#ifndef _NEWS68k_ISR_H_
+#define	_NEWS68k_ISR_H_
+
+#include <sys/intr.h>
 
 /*
- * The location and size of the autovectored interrupt portion
- * of the vector table.
+ * Aliases for the legacy news68k ISR routines.
  */
-#define ISRAUTOVEC	0x18
-#define NISRAUTOVEC	8
 
-#define NVECTORS	(ISRAUTOVEC + NISRAUTOVEC)
+static inline void
+isrinit(void)
+{
+	m68k_intr_init(NULL);
+}
 
-/*
- * The location and size of the vectored interrupt portion
- * of the vector table.
- */
-#define ISRVECTORED	0x40
-#define NISRVECTORED	192
+static inline void
+isrlink_autovec(int (*func)(void *), void *arg, int ipl, int isrpri)
+{
+	/* XXX leaks interrupt handle. */
+	m68k_intr_establish(func, arg, NULL, 0, ipl, isrpri, 0);
+}
 
-/*
- * Autovectored interrupt handler cookie.
- */
-struct isr_autovec {
-	LIST_ENTRY(isr_autovec) isr_link;
-	int  (*isr_func)(void *);
-	void *isr_arg;
-	int  isr_ipl;
-	int  isr_priority;
-};
+static inline void
+isrlink_vectored(int (*func)(void *), void *arg, int ipl, int vec)
+{
+	/* XXX leaks interrupt handle. */
+	m68k_intr_establish(func, arg, NULL, vec, ipl, 0, 0);
+}
 
-typedef LIST_HEAD(, isr_autovec) isr_autovec_list_t;
+static inline void
+isrunlink_vectored(int vec)
+{
+	/* XXX isrlink_vectored() should return a handle. */
+	void *ih = m68k_intrvec_intrhand(vec);
+	if (ih != NULL) {
+		m68k_intr_disestablish(ih);
+	}
+}
 
-/*
- * Vectored interrupt handler cookie.  The handler may request to
- * receive the exception frame as an argument by specifying NULL
- * when establishing the interrupt.
- */
-struct isr_vectored {
-	int  (*isr_func)(void *);
-	void *isr_arg;
-	int  isr_ipl;
-};
-
-void isrinit(void);
-void isrlink_autovec(int (*)(void *), void *, int, int);
-void isrlink_vectored(int (*)(void *), void *, int, int);
-void isrunlink_vectored(int);
-void isrdispatch_autovec(int);
-void isrdispatch_vectored(int, int, void *);
-void isrlink_custom(int, void *);
+#endif /* _NEWS68k_ISR_H_ */

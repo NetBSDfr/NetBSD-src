@@ -1,4 +1,4 @@
-/*	$NetBSD: cpu.h,v 1.53 2024/01/09 04:16:26 thorpej Exp $	*/
+/*	$NetBSD: cpu.h,v 1.56 2024/01/18 14:39:07 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1988 University of Utah.
@@ -43,7 +43,6 @@
 
 #if defined(_KERNEL_OPT)
 #include "opt_lockdebug.h"
-#include "opt_m68k_arch.h"
 #endif
 
 /*
@@ -53,11 +52,6 @@
 
 #if defined(_KERNEL)
 /*
- * Exported definitions unique to next68k/68k cpu support.
- */
-#define	M68K_MMU_MOTOROLA
-
-/*
  * Get interrupt glue.
  */
 #include <machine/intr.h>
@@ -65,17 +59,17 @@
 /*
  * Arguments to hardclock and gatherstats encapsulate the previous
  * machine state in an opaque clockframe.  On the next68k, we use
- * what the hardware pushes on an interrupt (frame format 0).
+ * what the locore.s glue puts on the stack before calling C-code.
  */
 struct clockframe {
-	u_short	sr;		/* sr at time of interrupt */
-	u_long	pc;		/* pc at time of interrupt */
-	u_short	fmt:4,
-		vec:12;		/* vector offset (4-word frame) */
+	u_int	cf_regs[4];	/* d0,d1,a0,a1 */
+	u_short	cf_sr;		/* sr at time of interrupt */
+	u_long	cf_pc;		/* pc at time of interrupt */
+	u_short	cf_vo;		/* vector offset (4-word frame) */
 } __attribute__((packed));
 
-#define	CLKF_USERMODE(framep)	(((framep)->sr & PSL_S) == 0)
-#define	CLKF_PC(framep)		((framep)->pc)
+#define	CLKF_USERMODE(framep)	(((framep)->cf_sr & PSL_S) == 0)
+#define	CLKF_PC(framep)		((framep)->cf_pc)
 
 /*
  * The clock interrupt handler can determine if it's a nested
@@ -83,8 +77,7 @@ struct clockframe {
  * (Remember, the clock interrupt handler itself will cause the
  * depth counter to be incremented).
  */
-extern volatile unsigned int interrupt_depth;
-#define	CLKF_INTR(framep)	(interrupt_depth > 1)
+#define	CLKF_INTR(framep)	(idepth > 1)
 
 /*
  * Preempt the current process if in interrupt from user mode,
@@ -111,8 +104,6 @@ extern volatile unsigned int interrupt_depth;
 #define aston() (astpending++)
 
 extern	int	astpending;	/* need to trap before returning to user mode */
-
-extern	void (*vectab[])(void);
 
 /* locore.s functions */
 void	doboot(void) __attribute__((__noreturn__));

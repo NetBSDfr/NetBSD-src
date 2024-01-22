@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.s,v 1.179 2024/01/09 07:28:25 thorpej Exp $	*/
+/*	$NetBSD: locore.s,v 1.184 2024/01/17 12:33:49 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1980, 1990, 1993
@@ -127,8 +127,6 @@ GLOBAL(kernel_text)
 	.data
 	.space	PAGE_SIZE
 ASLOCAL(tmpstk)
-
-#include <hp300/hp300/vectors.s>
 
 /*
  * Macro to relocate a symbol, used before MMU is enabled.
@@ -370,36 +368,6 @@ Lis320:
 	 */
 
 Lstart1:
-	/*
-	 * Now that we know what CPU we have, initialize the address error
-	 * and bus error handlers in the vector table:
-	 *
-	 *	vectab+8	bus error
-	 *	vectab+12	address error
-	 */
-	RELOC(cputype, %a0)
-	movl	#_C_LABEL(vectab),%a2
-	addl	%a5,%a2
-#if defined(M68040)
-	cmpl	#CPU_68040,%a0@		| 68040?
-	jne	1f			| no, skip
-	movl	#_C_LABEL(buserr40),%a2@(8)
-	movl	#_C_LABEL(addrerr4060),%a2@(12)
-	jra	Lstart2
-1:
-#endif
-#if defined(M68020) || defined(M68030)
-	cmpl	#CPU_68040,%a0@		| 68040?
-	jeq	1f			| yes, skip
-	movl	#_C_LABEL(busaddrerr2030),%a2@(8)
-	movl	#_C_LABEL(busaddrerr2030),%a2@(12)
-	jra	Lstart2
-1:
-#endif
-	/* Config botch; no hope. */
-	DOREBOOT
-
-Lstart2:
 	movl	#0,%a1@(MMUCMD)		| clear out MMU again
 /* initialize source/destination control registers for movs */
 	moveq	#FC_USERD,%d0		| user space
@@ -493,13 +461,6 @@ Lcodecopy:
 	 */
 
 Lhighcode:
-	/*
-	 * Set up the vector table, and race to get the MMU
-	 * enabled.
-	 */
-	movl	#_C_LABEL(vectab),%d0	| set Vector Base Register
-	movc	%d0,%vbr
-
 	RELOC(mmutype, %a0)
 	tstl	%a0@			| HP MMU?
 	jeq	Lhpmmu3			| yes, skip
@@ -542,7 +503,8 @@ Lehighcode:
  * Should be running mapped from this point on
  */
 Lenab1:
-	lea	_ASM_LABEL(tmpstk),%sp	| temporary stack
+	lea	_ASM_LABEL(tmpstk),%sp	| re-load the temporary stack
+	jbsr	_C_LABEL(vec_init)	| initialize the vector table
 /* call final pmap setup */
 	jbsr	_C_LABEL(pmap_bootstrap_finalize)
 /* set kernel stack, user SP */
@@ -824,9 +786,6 @@ Lbrkpt3:
 	movl	%sp@,%sp		| ... and %sp
 	rte				| all done
 
-/* Use common m68k sigreturn */
-#include <m68k/m68k/sigreturn.s>
-
 /*
  * Interrupt handlers.
  * All device interrupts are auto-vectored.  The CPU provides
@@ -836,31 +795,13 @@ Lbrkpt3:
 
 /* 64-bit evcnt counter increments */
 #define EVCNT_COUNTER(ipl)					\
-	_C_LABEL(hp300_intr_list) + (ipl)*SIZEOF_HI + HI_EVCNT
+	_C_LABEL(m68k_intr_evcnt) + (ipl)*SIZEOF_EVCNT + EV_COUNT
 #define EVCNT_INCREMENT(ipl)					\
 	clrl	%d0;						\
 	addql	#1,EVCNT_COUNTER(ipl)+4;			\
 	movel	EVCNT_COUNTER(ipl),%d1;				\
 	addxl	%d0,%d1;					\
 	movel	%d1,EVCNT_COUNTER(ipl)
-
-ENTRY_NOPROFILE(spurintr)	/* level 0 */
-	INTERRUPT_SAVEREG
-	EVCNT_INCREMENT(0)
-	CPUINFO_INCREMENT(CI_NINTR)
-	INTERRUPT_RESTOREREG
-	jra	_ASM_LABEL(rei)
-
-ENTRY_NOPROFILE(intrhand)	/* levels 1 through 5 */
-	addql	#1,_C_LABEL(idepth)	| entering interrupt
-	INTERRUPT_SAVEREG
-	movw	%sp@(22),%sp@-		| push exception vector info
-	clrw	%sp@-
-	jbsr	_C_LABEL(intr_dispatch)	| call dispatch routine
-	addql	#4,%sp
-	INTERRUPT_RESTOREREG
-	subql	#1,_C_LABEL(idepth)	| exiting from interrupt
-	jra	_ASM_LABEL(rei)		| all done
 
 ENTRY_NOPROFILE(lev6intr)	/* level 6: clock */
 	addql	#1,_C_LABEL(idepth)	| entering interrupt
@@ -877,7 +818,7 @@ Lnotim1:
 	btst	#2,%d0			| timer3 interrupt?
 	jeq	Lnotim3			| no, skip statclock
 	movpw	%a0@(CLKMSB3),%d1	| clear timer3 interrupt
-	lea	%sp@(16),%a1		| a1 = &clockframe
+	lea	%sp@(0),%a1		| a1 = &clockframe
 	movl	%d0,%sp@-		| save status
 	movl	%a1,%sp@-
 	jbsr	_C_LABEL(statintr)	| statintr(&frame)
@@ -888,7 +829,7 @@ Lnotim3:
 	btst	#0,%d0			| timer1 interrupt?
 	jeq	Lrecheck		| no, skip hardclock
 	EVCNT_INCREMENT(6)
-	lea	%sp@(16),%a1		| a1 = &clockframe
+	lea	%sp@(0),%a1		| a1 = &clockframe
 	movl	%a1,%sp@-
 #ifdef USELEDS
 	tstl	_C_LABEL(ledaddr)	| using LEDs?
@@ -927,10 +868,9 @@ Lrecheck:
 	movb	%a0@(CLKSR),%d0		| see if anything happened
 	jmi	Lclkagain		|  while we were in hardclock/statintr
 #if NAUDIO >0
-	movw	%sp@(22),%sp@-		| push exception vector info
-	clrw	%sp@-
-	jbsr	_C_LABEL(intr_dispatch)	| call dispatch routine
-	addql	#4,%sp
+	jbsr	_C_LABEL(m68k_intr_autovec) | call dispatch routine
+					    |  in case the audio device
+					    |  generated the interrupt
 #endif
 	INTERRUPT_RESTOREREG
 	subql	#1,_C_LABEL(idepth)	| exiting from interrupt
@@ -1002,21 +942,8 @@ Laststkadj:
 	rte				| and do real RTE
 
 /*
- * Use common m68k sigcode.
- */
-#include <m68k/m68k/sigcode.s>
-#ifdef COMPAT_SUNOS
-#include <m68k/m68k/sunos_sigcode.s>
-#endif
-
-/*
  * Primitives
  */
-
-/*
- * Use common m68k support routines.
- */
-#include <m68k/m68k/support.s>
 
 /*
  * Use common m68k process/lwp switch and context save subroutines.

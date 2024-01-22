@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.s,v 1.122 2024/01/09 04:16:23 thorpej Exp $	*/
+/*	$NetBSD: locore.s,v 1.126 2024/01/17 12:33:49 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1988 University of Utah.
@@ -618,9 +618,6 @@ Lbrkpt3:
 	movl	%sp@,%sp		| ... and sp
 	rte				| all done
 
-/* Use common m68k sigreturn */
-#include <m68k/m68k/sigreturn.s>
-
 /*
  * Interrupt handlers.
  *
@@ -1040,21 +1037,8 @@ Lnoflush:
 	rte
 
 /*
- * Use common m68k sigcode.
- */
-#include <m68k/m68k/sigcode.s>
-#ifdef COMPAT_SUNOS
-#include <m68k/m68k/sunos_sigcode.s>
-#endif
-
-/*
  * Primitives
  */
-
-/*
- * Use common m68k support routines.
- */
-#include <m68k/m68k/support.s>
 
 /*
  * non-local gotos
@@ -1107,17 +1091,6 @@ ENTRY(ecacheon)
 	rts
 
 ENTRY(ecacheoff)
-	rts
-
-/*
- * Get callers current SP value.
- * Note that simply taking the address of a local variable in a C function
- * doesn't work because callee saved registers may be outside the stack frame
- * defined by A6 (e.g. GCC generated code).
- */
-ENTRY_NOPROFILE(getsp)
-	movl	%sp,%d0			|  get current SP
-	addql	#4,%d0			|  compensate for return address
 	rts
 
 /*

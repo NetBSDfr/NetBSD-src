@@ -1,4 +1,4 @@
-/*	$NetBSD: machdep.h,v 1.13 2017/06/16 18:17:42 jdolecek Exp $	*/
+/*	$NetBSD: machdep.h,v 1.16 2024/01/13 00:44:42 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1982, 1990 The Regents of the University of California.
@@ -112,19 +112,9 @@ void	dumpsys(void);
 
 int 	fpu_emulate(struct trapframe *, struct fpframe *, ksiginfo_t *);
 
-int 	getdfc(void);
-int 	getsfc(void);
-
-/* Backward compatibility... */
-#define getsr	_getsr
-
-void**	getvbr(void);
-
 void	initfpu(void);
 
 void	set_clk_mode(int, int);
-
-void	setvbr(void **);
 
 void	g0_entry(void);
 void	g4_entry(void);

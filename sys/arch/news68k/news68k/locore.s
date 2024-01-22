@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.s,v 1.77 2024/01/09 07:28:26 thorpej Exp $	*/
+/*	$NetBSD: locore.s,v 1.85 2024/01/17 12:33:50 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1988 University of Utah.
@@ -67,14 +67,8 @@
 	.space	PAGE_SIZE
 ASLOCAL(tmpstk)
 
-ASLOCAL(monitor_vbr)
-	.long	0
-
 ASLOCAL(monitor)
 	.long	0
-
-#include <news68k/news68k/vectors.s>
-
 
 /*
  * Macro to relocate a symbol, used before MMU is enabled.
@@ -254,11 +248,6 @@ Lnot1200:
 	movl	#CTRL_LED1700,%a0@	| CTRL_LED port for news1700
 Lcom030:
 
-	RELOC(vectab,%a0)
-	RELOC(busaddrerr2030,%a1)
-	movl	%a1,%a0@(8)
-	movl	%a1,%a0@(12)
-
 	movl	%d4,%d1
 	addl	%a5,%d1
 	moveq	#PGSHIFT,%d2
@@ -341,12 +330,6 @@ Lstart2:
  * Enable the MMU.
  * Since the kernel is mapped logical == physical, we just turn it on.
  */
-	movc	%vbr,%d0		| Preserve monitor's VBR address
-	movl	%d0,_ASM_LABEL(monitor_vbr)
-
-	movl	#_C_LABEL(vectab),%d0	| get our VBR address
-	movc	%d0,%vbr
-
 	RELOC(Sysseg_pa, %a0)		| system segment table addr
 	movl	%a0@,%d1		| read value (a PA)
 	RELOC(mmutype, %a0)
@@ -392,7 +375,8 @@ Lmotommu2:
  * Should be running mapped from this point on
  */
 Lenab1:
-	lea	_ASM_LABEL(tmpstk),%sp	| temporary stack
+	lea	_ASM_LABEL(tmpstk),%sp	| re-load temporary stack
+	jbsr	_C_LABEL(vec_init)	| initialize vector table
 /* call final pmap setup */
 	jbsr	_C_LABEL(pmap_bootstrap_finalize)
 /* set kernel stack, user SP */
@@ -659,50 +643,14 @@ Lbrkpt3:
 	rte				| all done
 
 /*
- * Use common m68k sigreturn routine.
- */
-#include <m68k/m68k/sigreturn.s>
-
-/*
  * Interrupt handlers.
- *
- * For auto-vectored interrupts, the CPU provides the
- * vector 0x18+level.  Note we count spurious interrupts,
- * but don't do anything else with them.
- *
- * _intrhand_autovec is the entry point for auto-vectored
- * interrupts.
- *
- * For vectored interrupts, we pull the pc, evec, and exception frame
- * and pass them to the vectored interrupt dispatcher.  The vectored
- * interrupt dispatcher will deal with strays.
- *
- * _intrhand_vectored is the entry point for vectored interrupts.
  */
-
-ENTRY_NOPROFILE(spurintr)	/* Level 0 */
-	addql	#1,_C_LABEL(intrcnt)+0
-	INTERRUPT_SAVEREG
-	CPUINFO_INCREMENT(CI_NINTR)
-	INTERRUPT_RESTOREREG
-	rte
-
-ENTRY_NOPROFILE(intrhand_autovec)	/* Levels 1 through 6 */
-	addql	#1,_C_LABEL(idepth)
-	INTERRUPT_SAVEREG
-	movw	%sp@(22),%sp@-		| push exception vector
-	clrw	%sp@-
-	jbsr	_C_LABEL(isrdispatch_autovec) | call dispatcher
-	addql	#4,%sp
-	INTERRUPT_RESTOREREG
-	subql	#1,_C_LABEL(idepth)
-	rte
 
 ENTRY_NOPROFILE(lev1intr)		/* Level 1: AST interrupt */
 	addql	#1,_C_LABEL(idepth)
 	INTERRUPT_SAVEREG
 	CPUINFO_INCREMENT(CI_NINTR)
-	addql	#1,_C_LABEL(intrcnt)+4
+	addql	#1,_C_LABEL(m68k_intr_evcnt)+AST_INTRCNT
 	movl	_C_LABEL(ctrl_ast),%a0
 	clrb	%a0@			| disable AST interrupt
 	INTERRUPT_RESTOREREG
@@ -733,30 +681,17 @@ ENTRY_NOPROFILE(lev4intr)		/* Level 4: scsi, le, vme etc. */
 	subql	#1,_C_LABEL(idepth)
 	rte
 
-#if 0
-ENTRY_NOPROFILE(lev5intr)		/* Level 5: kb, ms (zs is vectored) */
-	addql	#1,_C_LABEL(idepth)
-	INTERRUPT_SAVEREG
-	jbsr	_C_LABEL(intrhand_lev5)
-	INTERRUPT_RESTOREREG
-	subql	#1,_C_LABEL(idepth)
-	rte
-#endif
-
 ENTRY_NOPROFILE(_isr_clock)		/* Level 6: clock (see clock_hb.c) */
 	addql	#1,_C_LABEL(idepth)
 	INTERRUPT_SAVEREG
-	lea	%sp@(16),%a1
-	movl	%a1,%sp@-
 	jbsr	_C_LABEL(clock_intr)
-	addql	#4,%sp
 	INTERRUPT_RESTOREREG
 	subql	#1,_C_LABEL(idepth)
 	rte
 
 #if 0
 ENTRY_NOPROFILE(lev7intr)		/* Level 7: NMI */
-	addql	#1,_C_LABEL(intrcnt)+32
+	addql	#1,_C_LABEL(intrcnt)+NMI_INTRCNT
 	clrl	%sp@-
 	moveml	#0xFFFF,%sp@-		| save registers
 	movl	%usp,%a0		| and save
@@ -768,20 +703,6 @@ ENTRY_NOPROFILE(lev7intr)		/* Level 7: NMI */
 	addql	#8,%sp			| pop SP and stack adjust
 	rte
 #endif
-
-ENTRY_NOPROFILE(intrhand_vectored)
-	addql	#1,_C_LABEL(idepth)
-	INTERRUPT_SAVEREG
-	lea	%sp@(16),%a1		| get pointer to frame
-	movl	%a1,%sp@-
-	movw	%sp@(26),%d0
-	movl	%d0,%sp@-		| push exception vector info
-	movl	%sp@(26),%sp@-		| and PC
-	jbsr	_C_LABEL(isrdispatch_vectored) | call dispatcher
-	lea	%sp@(12),%sp		| pop value args
-	INTERRUPT_RESTOREREG
-	subql	#1,_C_LABEL(idepth)
-	rte
 
 /*
  * Emulation of VAX REI instruction.
@@ -841,21 +762,8 @@ Laststkadj:
 	rte				| real return
 
 /*
- * Use common m68k sigcode.
- */
-#include <m68k/m68k/sigcode.s>
-#ifdef COMPAT_SUNOS
-#include <m68k/m68k/sunos_sigcode.s>
-#endif
-
-/*
  * Primitives
  */
-
-/*
- * Use common m68k support routines.
- */
-#include <m68k/m68k/support.s>
 
 /*
  * Use common m68k process/lwp switch and context save subroutines.
@@ -878,11 +786,6 @@ ENTRY(ecacheoff)
 	movl	_C_LABEL(cache_ctl),%a0
 	sf	%a0@			| NEWS-OS does `sf 0xe1300000'
 Lnocache8:
-	rts
-
-ENTRY(getsr)
-	moveq	#0,%d0
-	movw	%sr,%d0
 	rts
 
 /*
@@ -930,7 +833,7 @@ Lnocache5:
 	movl	_C_LABEL(bootdev),%d6	| load bootdev
 	movl	%sp@(4),%d2		| arg
 	movl	_C_LABEL(ctrl_power),%a0| CTRL_POWER port
-	movl	_ASM_LABEL(monitor_vbr),%d3	| Fetch original VBR value
+	movl	_C_LABEL(saved_vbr),%d3	| Fetch original VBR value
 	lea	_ASM_LABEL(tmpstk),%sp	| physical SP in case of NMI
 	movl	#0,%a7@-		| value for pmove to TC (turn off MMU)
 	pmove	%a7@,%tc		| disable MMU
@@ -1053,21 +956,3 @@ GLOBAL(cache_clr)
 
 GLOBAL(romcallvec)
 	.long	0
-
-
-/* interrupt counters */
-GLOBAL(intrnames)
-	.asciz	"spur"
-	.asciz	"AST"		| lev1: AST
-	.asciz	"softint"	| lev2: software interrupt
-	.asciz	"lev3"		| lev3: slot intr, VME intr 2, fd, lpt
-	.asciz	"lev4"		| lev4: slot intr, VME intr 4, le, scsi
-	.asciz	"lev5"		| lev5: kb, ms, zs
-	.asciz	"clock"		| lev6: clock
-	.asciz	"nmi"		| parity error
-GLOBAL(eintrnames)
-	.even
-
-GLOBAL(intrcnt)
-	.long	0,0,0,0,0,0,0,0
-GLOBAL(eintrcnt)

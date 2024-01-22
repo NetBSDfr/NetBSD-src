@@ -1,4 +1,4 @@
-/*	$NetBSD: locore.s,v 1.79 2024/01/09 07:28:26 thorpej Exp $	*/
+/*	$NetBSD: locore.s,v 1.85 2024/01/17 12:33:50 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1998 Darrin B. Jewell
@@ -124,8 +124,6 @@ GLOBAL(endstack)
 	.space	PAGE_SIZE
 GLOBAL(bgnstack)
 ASLOCAL(tmpstk)
-
-#include <next68k/next68k/vectors.s>
 
 /*
  * Macro to relocate a symbol, used before MMU is enabled.
@@ -258,41 +256,6 @@ Lis68020:
 	 */
 
 Lstart1:
-	/*
-	 * Now that we know what CPU we have, initialize the address error
-	 * and bus error handlers in the vector table:
-	 *
-	 *	vectab+8	bus error
-	 *	vectab+12	address error
-	 */
-	RELOC(cputype, %a0)
-#if 0
-	/* XXX assembler/linker feature/bug */
-	RELOC(vectab, %a2)
-#else
-	movl	#_C_LABEL(vectab),%a2
-	addl	%a5,%a2
-#endif
-#if defined(M68040)
-	cmpl	#CPU_68040,%a0@		| 68040?
-	jne	1f			| no, skip
-	movl	#_C_LABEL(buserr40),%a2@(8)
-	movl	#_C_LABEL(addrerr4060),%a2@(12)
-	jra	Lstart2
-1:
-#endif
-#if defined(M68020) || defined(M68030)
-	cmpl	#CPU_68040,%a0@		| 68040?
-	jeq	1f			| yes, skip
-	movl	#_C_LABEL(busaddrerr2030),%a2@(8)
-	movl	#_C_LABEL(busaddrerr2030),%a2@(12)
-	jra	Lstart2
-1:
-#endif
-	/* Config botch; no hope. */
-	PANIC("Config botch in locore")
-
-Lstart2:
 /* initialize source/destination control registers for movs */
 	moveq	#FC_USERD,%d0		| user space
 	movc	%d0,%sfc		|   as source
@@ -340,19 +303,8 @@ Lmotommu1:
 	movl	%d1,%a0@(4)		| segtable address
 	pmove	%a0@,%srp		| load the supervisor root pointer
 #endif /* M68030 */
+
 Lstploaddone:
-
-	/*
-	 * Set up the vector table, and race to get the MMU
-	 * enabled.
-	 */
-
-	movc    %vbr,%d0		| Keep copy of ROM VBR
-	ASRELOC(save_vbr,%a0)
-	movl    %d0,%a0@
-	movl	#_C_LABEL(vectab),%d0	| set Vector Base Register
-	movc	%d0,%vbr
-
 	RELOC(mmutype, %a0)
 	cmpl	#MMU_68040,%a0@		| 68040?
 	jne	Lmotommu2		| no, skip
@@ -382,6 +334,7 @@ Lturnoffttr:
 	.long	0x4e7b0005		| movc %d0,%itt1
 	.long	0x4e7b0007		| movc %d0,%dtt1
 	jmp	Lenab1
+
 Lmotommu2:
 	pflusha
 	RELOC(prototc, %a2)
@@ -393,10 +346,8 @@ Lmotommu2:
  * Should be running mapped from this point on
  */
 Lenab1:
-	lea	_ASM_LABEL(tmpstk),%sp	| temporary stack
-	bsr     Lpushpc			| Push the PC on the stack.
-Lpushpc:
-
+	lea	_ASM_LABEL(tmpstk),%sp	| re-load temporary stack
+	jbsr	_C_LABEL(vec_init)	| initialize vector table
 /* call final pmap setup */
 	jbsr	_C_LABEL(pmap_bootstrap_finalize)
 /* set kernel stack, user SP */
@@ -549,13 +500,7 @@ ENTRY_NOPROFILE(trap0)
 	jbsr	_C_LABEL(syscall)	| handle it
 	addql	#4,%sp			| pop syscall arg
 	tstl	_C_LABEL(astpending)
-	jne	Lrei2
-	tstb	_C_LABEL(ssir)
-	jeq	Ltrap1
-	movw	#SPL1,%sr
-	tstb	_C_LABEL(ssir)
-	jne	Lsir1
-Ltrap1:
+	jne	Lrei
 	movl	%sp@(FR_SP),%a0		| grab and restore
 	movl	%a0,%usp		|   user SP
 	moveml	%sp@+,#0x7FFF		| restore most registers
@@ -681,9 +626,6 @@ Lbrkpt3:
 	movl	%sp@,%sp		| ... and %sp
 	rte				| all done
 
-/* Use common m68k sigreturn */
-#include <m68k/m68k/sigreturn.s>
-
 /*
  * Interrupt handlers.
  *
@@ -697,28 +639,10 @@ Lbrkpt3:
  * For vectored interrupts, we pull the pc, evec, and exception frame
  * and pass them to the vectored interrupt dispatcher.  The vectored
  * interrupt dispatcher will deal with strays.
- *
- * intrhand_vectored is the entry point for vectored interrupts.
  */
 
-ENTRY_NOPROFILE(spurintr)	/* Level 0 */
-	addql	#1,_C_LABEL(intrcnt)+0
-	INTERRUPT_SAVEREG
-	CPUINFO_INCREMENT(CI_NINTR)
-	INTERRUPT_RESTOREREG
-	jra	_ASM_LABEL(rei)
-
-ENTRY_NOPROFILE(intrhand_autovec)	/* Levels 1 through 6 */
-	addql	#1,_C_LABEL(interrupt_depth)
-	INTERRUPT_SAVEREG
-	lea	%sp@(16),%a1		| get pointer to frame
-	movl	%a1,%sp@-
-	jbsr	_C_LABEL(isrdispatch_autovec)	| call dispatcher
-	addql	#4,%sp
-	jbra	Lintrhand_exit
-
 ENTRY_NOPROFILE(lev7intr)	/* level 7: parity errors, reset key */
-	addql	#1,_C_LABEL(intrcnt)+32
+	addql	#1,_C_LABEL(m68k_intr_evcnt)+NMI_INTRCNT
 	clrl	%sp@-
 	moveml	#0xFFFF,%sp@-		| save registers
 	movl	%usp,%a0		| and save
@@ -728,23 +652,6 @@ ENTRY_NOPROFILE(lev7intr)	/* level 7: parity errors, reset key */
 	movl	%a0,%usp			|   user SP
 	moveml	%sp@+,#0x7FFF		| and remaining registers
 	addql	#8,%sp			| pop SP and stack adjust
-	jra	_ASM_LABEL(rei)		| all done
-
-ENTRY_NOPROFILE(intrhand_vectored)
-	addql	#1,_C_LABEL(interrupt_depth)
-	INTERRUPT_SAVEREG
-	lea	%sp@(16),%a1		| get pointer to frame
-	movl	%a1,%sp@-
-	movw	%sr,%d0
-	bfextu	%d0,21,3,%d0		| Get current ipl
-	movl	%d0,%sp@-		| Push it
-	jbsr	_C_LABEL(isrdispatch_vectored)	| call dispatcher
-	addql	#8,%sp
-Lintrhand_exit:
-	INTERRUPT_RESTOREREG
-	subql	#1,_C_LABEL(interrupt_depth)
-
-	/* FALLTHROUGH to rei */
 	jra	_ASM_LABEL(rei)		| all done
 
 /*
@@ -763,16 +670,19 @@ Lintrhand_exit:
 
 ASENTRY_NOPROFILE(rei)
 	tstl	_C_LABEL(astpending)	| AST pending?
-	jeq	Lchksir			| no, go check for SIR
-Lrei1:
+	jne	1f			| no, done
+	rte
+1:
 	btst	#5,%sp@			| yes, are we returning to user mode?
-	jne	Lchksir			| no, go check for SIR
+	jeq	2f			| no, done
+	rte
+2:
 	movw	#PSL_LOWIPL,%sr		| lower SPL
 	clrl	%sp@-			| stack adjust
 	moveml	#0xFFFF,%sp@-		| save all registers
 	movl	%usp,%a1		| including
 	movl	%a1,%sp@(FR_SP)		|    the users SP
-Lrei2:
+Lrei:
 	clrl	%sp@-			| VA == none
 	clrl	%sp@-			| code == none
 	movl	#T_ASTFLT,%sp@-		| type == async system trap
@@ -797,55 +707,10 @@ Laststkadj:
 	moveml	%sp@+,#0x7FFF		| restore user registers
 	movl	%sp@,%sp		| and our SP
 	rte				| and do real RTE
-Lchksir:
-	tstb	_C_LABEL(ssir)		| SIR pending?
-	jeq	Ldorte			| no, all done
-	movl	%d0,%sp@-		| need a scratch register
-	movw	%sp@(4),%d0		| get SR
-	andw	#PSL_IPL7,%d0		| mask all but IPL
-	jne	Lnosir			| came from interrupt, no can do
-	movl	%sp@+,%d0		| restore scratch register
-Lgotsir:
-	movw	#SPL1,%sr		| prevent others from servicing int
-	tstb	_C_LABEL(ssir)		| too late?
-	jeq	Ldorte			| yes, oh well...
-	clrl	%sp@-			| stack adjust
-	moveml	#0xFFFF,%sp@-		| save all registers
-	movl	%usp,%a1		| including
-	movl	%a1,%sp@(FR_SP)		|    the users SP
-Lsir1:
-	clrl	%sp@-			| VA == none
-	clrl	%sp@-			| code == none
-	movl	#T_SSIR,%sp@-		| type == software interrupt
-	pea	%sp@(12)		| fp == address of trap frame
-	jbsr	_C_LABEL(trap)		| go handle it
-	lea	%sp@(16),%sp		| pop value args
-	movl	%sp@(FR_SP),%a0		| restore
-	movl	%a0,%usp		|   user SP
-	moveml	%sp@+,#0x7FFF		| and all remaining registers
-	addql	#8,%sp			| pop SP and stack adjust
-	rte
-Lnosir:
-	movl	%sp@+,%d0		| restore scratch register
-Ldorte:
-	rte				| real return
-
-/*
- * Use common m68k sigcode.
- */
-#include <m68k/m68k/sigcode.s>
-#ifdef COMPAT_SUNOS
-#include <m68k/m68k/sunos_sigcode.s>
-#endif
 
 /*
  * Primitives
  */
-
-/*
- * Use common m68k support routines.
- */
-#include <m68k/m68k/support.s>
 
 /*
  * Use common m68k process/lwp switch and context save subroutines.
@@ -881,31 +746,6 @@ Lsldone:
 	clrl	%a1@(PCB_ONFAULT) 	| clear fault address
 	rts
 #endif
-
-/*
- * Set processor priority level calls.  Most are implemented with
- * inline asm expansions.  However, spl0 requires special handling
- * as we need to check for our emulated software interrupts.
- */
-
-ENTRY(spl0)
-	moveq	#0,%d0
-	movw	%sr,%d0			| get old SR for return
-	movw	#PSL_LOWIPL,%sr		| restore new SR
-	tstb	_C_LABEL(ssir)		| software interrupt pending?
-	jeq	Lspldone		| no, all done
-	subql	#4,%sp			| make room for RTE frame
-	movl	%sp@(4),%sp@(2)		| position return address
-	clrw	%sp@(6)			| set frame type 0
-	movw	#PSL_LOWIPL,%sp@	| and new SR
-	jra	Lgotsir			| go handle it
-Lspldone:
-	rts
-
-ENTRY(getsr)
-	moveq	#0,%d0
-	movw	%sr,%d0
-	rts
 
 /*
  * _delay(u_int N)
@@ -969,7 +809,7 @@ ENTRY_NOPROFILE(doboot)
 	ASRELOC(Ldoboot1, %a0)
 	jmp     %a0@			| jump into physical address space.
 Ldoboot1:
-	ASRELOC(save_vbr, %a0)
+	RELOC(saved_vbr, %a0)
 	movl    %a0@,%d0
 	movc    %d0,%vbr
 
@@ -1027,9 +867,6 @@ GLOBAL(fbbasepa)
 GLOBAL(fblimitpa)
 	.long	MONOTOP		| PA of end of framebuffer
 
-ASLOCAL(save_vbr)		| VBR from ROM
-	.long 0xdeadbeef
-
 GLOBAL(monbootflag)
 	.long 0
 
@@ -1048,22 +885,3 @@ ASGLOBAL(fulltflush)
 ASGLOBAL(fullcflush)
 	.long	0
 #endif
-
-/* interrupt counters */
-GLOBAL(intrnames)
-	.asciz	"spur"
-	.asciz	"lev1"
-	.asciz	"lev2"
-	.asciz	"lev3"
-	.asciz	"lev4"
-	.asciz	"lev5"
-	.asciz	"lev6"
-	.asciz  "lev7"
-	.asciz	"nmi"
-	.asciz	"statclock"
-GLOBAL(eintrnames)
-	.even
-GLOBAL(intrcnt)
-	.long	0,0,0,0,0,0,0,0,0,0
-GLOBAL(eintrcnt)
-
