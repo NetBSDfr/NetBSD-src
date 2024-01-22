@@ -86,7 +86,7 @@ atomic_fetchadd_long(volatile uint64_t *p, uint64_t v)
 	return oldval;
 }
 
-/* from nm(1), biggest function name is 67 chars long */
+/* from nm(1), GENERIC biggest symbol is 85 chars long */
 #define MAX_FUNC_NAME 128
 
 static volatile long nrecs = 0;
