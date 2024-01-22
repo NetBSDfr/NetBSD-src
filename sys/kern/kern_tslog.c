@@ -86,6 +86,7 @@ atomic_fetchadd_long(volatile uint64_t *p, uint64_t v)
 	return oldval;
 }
 
+/* from nm(1), biggest function name is 67 chars long */
 #define MAX_FUNC_NAME 128
 
 static volatile long nrecs = 0;
@@ -276,14 +277,14 @@ sysctl_debug_tslog_user(SYSCTLFN_ARGS)
 			procs[pid].tsc_exited == 0)
 			continue;
 		snprintf(buf, LINE_MAX, "%zu", (size_t)pid);
-		snprintf(buf, LINE_MAX, "%s  %zu", buf, (size_t)procs[pid].ppid);
-		snprintf(buf, LINE_MAX, "%s  %llu", buf,
+		snprintf(buf, LINE_MAX, "%s %zu", buf, (size_t)procs[pid].ppid);
+		snprintf(buf, LINE_MAX, "%s %llu", buf,
 		    (unsigned long long)procs[pid].tsc_forked);
-		snprintf(buf, LINE_MAX, "%s  %llu", buf,
+		snprintf(buf, LINE_MAX, "%s %llu", buf,
 		    (unsigned long long)procs[pid].tsc_exited);
-		snprintf(buf, LINE_MAX, "%s  \"%s\"", buf, procs[pid].execname ?
+		snprintf(buf, LINE_MAX, "%s \"%s\"", buf, procs[pid].execname ?
 		    procs[pid].execname : "");
-		snprintf(buf, LINE_MAX, "%s  \"%s\"", buf, procs[pid].namei ?
+		snprintf(buf, LINE_MAX, "%s \"%s\"", buf, procs[pid].namei ?
 		    procs[pid].namei : "");
 		strcat(buf, "\n");
 
@@ -292,7 +293,7 @@ sysctl_debug_tslog_user(SYSCTLFN_ARGS)
 		if (where == NULL) /* 1st pass, calculate needed */
 			needed += slen;
 		else {
-			if (pid > 0)
+			if (pid > 1)
 				where--; /* overwrite last \0 */
 			if ((error = copyout(buf, where, slen)))
 				break;
