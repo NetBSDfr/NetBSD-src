@@ -254,19 +254,22 @@ static void configure(void);
 static void configure2(void);
 static void configure3(void);
 void main(void);
-static void howlong(void);
+#ifdef BOOTTIME
+static void boottime(void);
 
 extern uint32_t boottime_low;
 extern uint32_t boottime_high;
 
 static void
-howlong(void)
+boottime(void)
 {
 	uint64_t entrytime = (uint64_t)boottime_high << 32 | boottime_low;
 
-	printf("boot: %lums\n", ((rdtsc() - entrytime) * 1000) /
-			curcpu()->ci_data.cpu_cc_freq);
+	printf_nolog("boot: %lums (entry tsc: %lu)\n",
+			((rdtsc() - entrytime) * 1000) /
+			curcpu()->ci_data.cpu_cc_freq, entrytime);
 }
+#endif
 
 /*
  * System startup; initialize the world, create process 0, mount root
@@ -763,7 +766,9 @@ main(void)
 	mutex_exit(&proc_lock);
 
 	TSEXIT();
-	howlong();
+#ifdef BOOTTIME
+	boottime();
+#endif
 	/* The scheduler is an infinite loop. */
 	uvm_scheduler();
 	/* NOTREACHED */
