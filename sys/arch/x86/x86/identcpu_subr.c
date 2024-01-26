@@ -189,7 +189,6 @@ tsc_freq_amd_msr(struct cpu_info *ci)
 	switch (family) {
 	case 0x17:
 	case 0x19:
-		printf("\nAMD FAMILY MATCHES %u\n", family);
 		/*
 		 * PPR for AMD Family 17h [...]:
 		 * Models 01h,08h B2, Rev 3.03, pp. 33, 139-140
@@ -216,14 +215,11 @@ tsc_freq_amd_msr(struct cpu_info *ci)
 	default:
 		return 0;
 	}
-	freq = base * multiplier / divisor;
-
-	printf("\nGOT %lu FROM AMD\n", freq);
 
 	return base * multiplier / divisor;
 }
 
-/* Ported from sys/x86/x86/tsc.c */
+/* Ported from FreeBSD sys/x86/x86/tsc.c */
 static uint64_t
 tsc_freq_intel_brand(struct cpu_info *ci)
 {
