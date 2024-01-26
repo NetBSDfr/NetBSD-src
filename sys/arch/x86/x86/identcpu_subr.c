@@ -163,7 +163,7 @@ tsc_freq_cpuid(struct cpu_info *ci)
 static uint64_t
 tsc_freq_amd_msr(struct cpu_info *ci)
 {
-	uint64_t base, def, divisor, multiplier, freq;
+	uint64_t base, def, divisor, multiplier;
 	uint32_t family = CPUID_TO_FAMILY(ci->ci_signature);
 
 	/*
