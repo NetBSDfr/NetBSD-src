@@ -68,14 +68,11 @@ tsc_freq_cpuid_vm(struct cpu_info *ci)
 	uint32_t descs[4];
 
 	if (ci->ci_max_ext_cpuid >= 0x40000010) {
-		int mul = 1000; /* TSC freq in khz... */
-		if (hv_type == VM_GUEST_NVMM)
-			mul *= 1000; /* ...except for NVMM */
 		x86_cpuid(0x40000010, descs);
 		if (descs[0] > 0) {
 			aprint_verbose(
 				"got tsc from vmware compatible cpuid\n");
-			return descs[0] * mul;
+			return descs[0] * 1000;
 		}
 	}
 
@@ -300,8 +297,7 @@ cpu_tsc_freq_cpuid(struct cpu_info *ci)
 	if (freq == 0 && cpu_vendor == CPUVENDOR_AMD)
 		freq = tsc_freq_amd_msr(ci);
 	/* VMware compatible tsc query */
-	if (freq == 0 && vm_guest != VM_GUEST_NO &&
-		hv_type != VM_GUEST_NVMM) /* NVMM replies junk */
+	if (freq == 0 && vm_guest != VM_GUEST_NO)
 		freq = tsc_freq_cpuid_vm(ci);
 	/* Still no luck, get the frequency from brand */
 	if (freq == 0 && cpu_vendor == CPUVENDOR_INTEL)
