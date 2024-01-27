@@ -1,7 +1,5 @@
-/*	$NetBSD: nvmm_ioctl.h,v 1.12 2020/09/08 16:58:38 maxv Exp $	*/
-
 /*
- * Copyright (c) 2018-2020 Maxime Villard, m00nbsd.net
+ * Copyright (c) 2018-2021 Maxime Villard, m00nbsd.net
  * All rights reserved.
  *
  * This code is part of the NVMM hypervisor.
@@ -32,7 +30,14 @@
 #define _NVMM_IOCTL_H_
 
 #include <sys/ioccom.h>
+
+#if defined(__NetBSD__)
 #include <dev/nvmm/nvmm.h>
+#elif defined(__DragonFly__)
+#include <dev/virtual/nvmm/nvmm.h>
+#else
+#error "Unsupported OS."
+#endif
 
 struct nvmm_ioc_capability {
 	struct nvmm_capability cap;
@@ -55,6 +60,7 @@ struct nvmm_ioc_machine_configure {
 struct nvmm_ioc_vcpu_create {
 	nvmm_machid_t machid;
 	nvmm_cpuid_t cpuid;
+	struct nvmm_comm_page *comm;
 };
 
 struct nvmm_ioc_vcpu_destroy {
@@ -142,7 +148,7 @@ struct nvmm_ioc_ctl {
 #define NVMM_IOC_MACHINE_CREATE		_IOWR('N',  1, struct nvmm_ioc_machine_create)
 #define NVMM_IOC_MACHINE_DESTROY	_IOW ('N',  2, struct nvmm_ioc_machine_destroy)
 #define NVMM_IOC_MACHINE_CONFIGURE	_IOW ('N',  3, struct nvmm_ioc_machine_configure)
-#define NVMM_IOC_VCPU_CREATE		_IOW ('N',  4, struct nvmm_ioc_vcpu_create)
+#define NVMM_IOC_VCPU_CREATE		_IOWR('N',  4, struct nvmm_ioc_vcpu_create)
 #define NVMM_IOC_VCPU_DESTROY		_IOW ('N',  5, struct nvmm_ioc_vcpu_destroy)
 #define NVMM_IOC_VCPU_CONFIGURE		_IOW ('N',  6, struct nvmm_ioc_vcpu_configure)
 #define NVMM_IOC_VCPU_SETSTATE		_IOW ('N',  7, struct nvmm_ioc_vcpu_setstate)

@@ -1,7 +1,5 @@
-/*	$NetBSD: nvmm.c,v 1.47 2022/09/13 20:10:04 riastradh Exp $	*/
-
 /*
- * Copyright (c) 2018-2020 Maxime Villard, m00nbsd.net
+ * Copyright (c) 2018-2021 Maxime Villard, m00nbsd.net
  * All rights reserved.
  *
  * This code is part of the NVMM hypervisor.
@@ -28,45 +26,18 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nvmm.c,v 1.47 2022/09/13 20:10:04 riastradh Exp $");
-
 #include <sys/param.h>
 #include <sys/systm.h>
+
 #include <sys/kernel.h>
-
-#include <sys/atomic.h>
-#include <sys/cpu.h>
-#include <sys/conf.h>
-#include <sys/kmem.h>
-#include <sys/module.h>
-#include <sys/proc.h>
 #include <sys/mman.h>
-#include <sys/file.h>
-#include <sys/filedesc.h>
-#include <sys/device.h>
 
-#include <uvm/uvm_aobj.h>
-#include <uvm/uvm_extern.h>
-#include <uvm/uvm_page.h>
-
-#include "ioconf.h"
-
-#include <dev/nvmm/nvmm.h>
-#include <dev/nvmm/nvmm_internal.h>
-#include <dev/nvmm/nvmm_ioctl.h>
+#include "nvmm.h"
+#include "nvmm_internal.h"
+#include "nvmm_ioctl.h"
 
 static struct nvmm_machine machines[NVMM_MAX_MACHINES];
-static volatile unsigned int nmachines __cacheline_aligned;
-
-static struct {
-	kmutex_t	lock;
-	kcondvar_t	suspendcv;
-	kcondvar_t	resumecv;
-	unsigned	users;
-} suspension;
-
-volatile bool nvmm_suspending;
+volatile unsigned int nmachines __cacheline_aligned;
 
 static const struct nvmm_impl *nvmm_impl_list[] = {
 #if defined(__x86_64__)
@@ -75,53 +46,9 @@ static const struct nvmm_impl *nvmm_impl_list[] = {
 #endif
 };
 
-static const struct nvmm_impl *nvmm_impl __read_mostly = NULL;
+const struct nvmm_impl *nvmm_impl __read_mostly = NULL;
 
-static struct nvmm_owner root_owner;
-
-/* -------------------------------------------------------------------------- */
-
-static int
-nvmm_enter_sig(void)
-{
-	int error;
-
-	mutex_enter(&suspension.lock);
-	while (nvmm_suspending) {
-		error = cv_wait_sig(&suspension.resumecv, &suspension.lock);
-		if (error)
-			goto out;
-	}
-	KASSERT(suspension.users < UINT_MAX);
-	suspension.users++;
-	error = 0;
-out:	mutex_exit(&suspension.lock);
-
-	return 0;
-}
-
-static void
-nvmm_enter(void)
-{
-
-	mutex_enter(&suspension.lock);
-	while (nvmm_suspending)
-		cv_wait(&suspension.resumecv, &suspension.lock);
-	KASSERT(suspension.users < UINT_MAX);
-	suspension.users++;
-	mutex_exit(&suspension.lock);
-}
-
-static void
-nvmm_exit(void)
-{
-
-	mutex_enter(&suspension.lock);
-	KASSERT(suspension.users > 0);
-	if (--suspension.users == 0)
-		cv_signal(&suspension.suspendcv);
-	mutex_exit(&suspension.lock);
-}
+struct nvmm_owner nvmm_root_owner;
 
 /* -------------------------------------------------------------------------- */
 
@@ -134,16 +61,16 @@ nvmm_machine_alloc(struct nvmm_machine **ret)
 	for (i = 0; i < NVMM_MAX_MACHINES; i++) {
 		mach = &machines[i];
 
-		rw_enter(&mach->lock, RW_WRITER);
+		os_rwl_wlock(&mach->lock);
 		if (mach->present) {
-			rw_exit(&mach->lock);
+			os_rwl_unlock(&mach->lock);
 			continue;
 		}
 
 		mach->present = true;
 		mach->time = time_second;
 		*ret = mach;
-		atomic_inc_uint(&nmachines);
+		os_atomic_inc_uint(&nmachines);
 		return 0;
 	}
 
@@ -153,10 +80,10 @@ nvmm_machine_alloc(struct nvmm_machine **ret)
 static void
 nvmm_machine_free(struct nvmm_machine *mach)
 {
-	KASSERT(rw_write_held(&mach->lock));
-	KASSERT(mach->present);
+	OS_ASSERT(os_rwl_wheld(&mach->lock));
+	OS_ASSERT(mach->present);
 	mach->present = false;
-	atomic_dec_uint(&nmachines);
+	os_atomic_dec_uint(&nmachines);
 }
 
 static int
@@ -164,20 +91,24 @@ nvmm_machine_get(struct nvmm_owner *owner, nvmm_machid_t machid,
     struct nvmm_machine **ret, bool writer)
 {
 	struct nvmm_machine *mach;
-	krw_t op = writer ? RW_WRITER : RW_READER;
 
 	if (__predict_false(machid >= NVMM_MAX_MACHINES)) {
 		return EINVAL;
 	}
 	mach = &machines[machid];
 
-	rw_enter(&mach->lock, op);
+	if (__predict_false(writer)) {
+		os_rwl_wlock(&mach->lock);
+	} else {
+		os_rwl_rlock(&mach->lock);
+	}
 	if (__predict_false(!mach->present)) {
-		rw_exit(&mach->lock);
+		os_rwl_unlock(&mach->lock);
 		return ENOENT;
 	}
-	if (__predict_false(mach->owner != owner && owner != &root_owner)) {
-		rw_exit(&mach->lock);
+	if (__predict_false(mach->owner != owner &&
+			    owner != &nvmm_root_owner)) {
+		os_rwl_unlock(&mach->lock);
 		return EPERM;
 	}
 	*ret = mach;
@@ -188,7 +119,7 @@ nvmm_machine_get(struct nvmm_owner *owner, nvmm_machid_t machid,
 static void
 nvmm_machine_put(struct nvmm_machine *mach)
 {
-	rw_exit(&mach->lock);
+	os_rwl_unlock(&mach->lock);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -204,9 +135,9 @@ nvmm_vcpu_alloc(struct nvmm_machine *mach, nvmm_cpuid_t cpuid,
 	}
 	vcpu = &mach->cpus[cpuid];
 
-	mutex_enter(&vcpu->lock);
+	os_mtx_lock(&vcpu->lock);
 	if (vcpu->present) {
-		mutex_exit(&vcpu->lock);
+		os_mtx_unlock(&vcpu->lock);
 		return EBUSY;
 	}
 
@@ -220,10 +151,16 @@ nvmm_vcpu_alloc(struct nvmm_machine *mach, nvmm_cpuid_t cpuid,
 static void
 nvmm_vcpu_free(struct nvmm_machine *mach, struct nvmm_cpu *vcpu)
 {
-	KASSERT(mutex_owned(&vcpu->lock));
+	OS_ASSERT(os_mtx_owned(&vcpu->lock));
 	vcpu->present = false;
 	if (vcpu->comm != NULL) {
-		uvm_deallocate(kernel_map, (vaddr_t)vcpu->comm, PAGE_SIZE);
+		os_vmobj_unmap(os_kernel_map, (vaddr_t)vcpu->comm,
+		    (vaddr_t)vcpu->comm + NVMM_COMM_PAGE_SIZE, true);
+		/*
+		 * Require userland to unmap the comm page from its address
+		 * space, because os_curproc_map at this point (fd close)
+		 * is not guaranteed to be the correct address space.
+		 */
 	}
 }
 
@@ -238,9 +175,9 @@ nvmm_vcpu_get(struct nvmm_machine *mach, nvmm_cpuid_t cpuid,
 	}
 	vcpu = &mach->cpus[cpuid];
 
-	mutex_enter(&vcpu->lock);
+	os_mtx_lock(&vcpu->lock);
 	if (__predict_false(!vcpu->present)) {
-		mutex_exit(&vcpu->lock);
+		os_mtx_unlock(&vcpu->lock);
 		return ENOENT;
 	}
 	*ret = vcpu;
@@ -251,12 +188,12 @@ nvmm_vcpu_get(struct nvmm_machine *mach, nvmm_cpuid_t cpuid,
 static void
 nvmm_vcpu_put(struct nvmm_cpu *vcpu)
 {
-	mutex_exit(&vcpu->lock);
+	os_mtx_unlock(&vcpu->lock);
 }
 
 /* -------------------------------------------------------------------------- */
 
-static void
+void
 nvmm_kill_machines(struct nvmm_owner *owner)
 {
 	struct nvmm_machine *mach;
@@ -267,9 +204,9 @@ nvmm_kill_machines(struct nvmm_owner *owner)
 	for (i = 0; i < NVMM_MAX_MACHINES; i++) {
 		mach = &machines[i];
 
-		rw_enter(&mach->lock, RW_WRITER);
+		os_rwl_wlock(&mach->lock);
 		if (!mach->present || mach->owner != owner) {
-			rw_exit(&mach->lock);
+			os_rwl_unlock(&mach->lock);
 			continue;
 		}
 
@@ -281,21 +218,21 @@ nvmm_kill_machines(struct nvmm_owner *owner)
 			(*nvmm_impl->vcpu_destroy)(mach, vcpu);
 			nvmm_vcpu_free(mach, vcpu);
 			nvmm_vcpu_put(vcpu);
-			atomic_dec_uint(&mach->ncpus);
+			os_atomic_dec_uint(&mach->ncpus);
 		}
 		(*nvmm_impl->machine_destroy)(mach);
-		uvmspace_free(mach->vm);
+		os_vmspace_destroy(mach->vm);
 
-		/* Drop the kernel UOBJ refs. */
+		/* Drop the kernel vmobj refs. */
 		for (j = 0; j < NVMM_MAX_HMAPPINGS; j++) {
 			if (!mach->hmap[j].present)
 				continue;
-			uao_detach(mach->hmap[j].uobj);
+			os_vmobj_rel(mach->hmap[j].vmobj);
 		}
 
 		nvmm_machine_free(mach);
 
-		rw_exit(&mach->lock);
+		os_rwl_unlock(&mach->lock);
 	}
 }
 
@@ -306,6 +243,7 @@ nvmm_capability(struct nvmm_owner *owner, struct nvmm_ioc_capability *args)
 {
 	args->cap.version = NVMM_KERN_VERSION;
 	args->cap.state_size = nvmm_impl->state_size;
+	args->cap.comm_size = NVMM_COMM_PAGE_SIZE;
 	args->cap.max_machines = NVMM_MAX_MACHINES;
 	args->cap.max_vcpus = NVMM_MAX_VCPUS;
 	args->cap.max_ram = NVMM_MAX_RAM;
@@ -335,10 +273,11 @@ nvmm_machine_create(struct nvmm_owner *owner,
 	/* Create the machine vmspace. */
 	mach->gpa_begin = 0;
 	mach->gpa_end = NVMM_MAX_RAM;
-	mach->vm = uvmspace_alloc(0, mach->gpa_end - mach->gpa_begin, false);
+	mach->vm = os_vmspace_create(mach->gpa_begin, mach->gpa_end);
 
-	/* Create the comm uobj. */
-	mach->commuobj = uao_create(NVMM_MAX_VCPUS * PAGE_SIZE, 0);
+	/* Create the comm vmobj. */
+	mach->commvmobj = os_vmobj_create(
+	    NVMM_MAX_VCPUS * NVMM_COMM_PAGE_SIZE);
 
 	(*nvmm_impl->machine_create)(mach);
 
@@ -369,19 +308,19 @@ nvmm_machine_destroy(struct nvmm_owner *owner,
 		(*nvmm_impl->vcpu_destroy)(mach, vcpu);
 		nvmm_vcpu_free(mach, vcpu);
 		nvmm_vcpu_put(vcpu);
-		atomic_dec_uint(&mach->ncpus);
+		os_atomic_dec_uint(&mach->ncpus);
 	}
 
 	(*nvmm_impl->machine_destroy)(mach);
 
 	/* Free the machine vmspace. */
-	uvmspace_free(mach->vm);
+	os_vmspace_destroy(mach->vm);
 
-	/* Drop the kernel UOBJ refs. */
+	/* Drop the kernel vmobj refs. */
 	for (i = 0; i < NVMM_MAX_HMAPPINGS; i++) {
 		if (!mach->hmap[i].present)
 			continue;
-		uao_detach(mach->hmap[i].uobj);
+		os_vmobj_rel(mach->hmap[i].vmobj);
 	}
 
 	nvmm_machine_free(mach);
@@ -406,11 +345,11 @@ nvmm_machine_configure(struct nvmm_owner *owner,
 	}
 
 	allocsz = nvmm_impl->mach_conf_sizes[op];
-	data = kmem_alloc(allocsz, KM_SLEEP);
+	data = os_mem_alloc(allocsz);
 
 	error = nvmm_machine_get(owner, args->machid, &mach, true);
 	if (error) {
-		kmem_free(data, allocsz);
+		os_mem_free(data, allocsz);
 		return error;
 	}
 
@@ -423,7 +362,7 @@ nvmm_machine_configure(struct nvmm_owner *owner,
 
 out:
 	nvmm_machine_put(mach);
-	kmem_free(data, allocsz);
+	os_mem_free(data, allocsz);
 	return error;
 }
 
@@ -442,25 +381,31 @@ nvmm_vcpu_create(struct nvmm_owner *owner, struct nvmm_ioc_vcpu_create *args)
 	if (error)
 		goto out;
 
-	/* Allocate the comm page. */
-	uao_reference(mach->commuobj);
-	error = uvm_map(kernel_map, (vaddr_t *)&vcpu->comm, PAGE_SIZE,
-	    mach->commuobj, args->cpuid * PAGE_SIZE, 0, UVM_MAPFLAG(UVM_PROT_RW,
-	    UVM_PROT_RW, UVM_INH_SHARE, UVM_ADV_RANDOM, 0));
-	if (error) {
-		uao_detach(mach->commuobj);
-		nvmm_vcpu_free(mach, vcpu);
-		nvmm_vcpu_put(vcpu);
-		goto out;
-	}
-	error = uvm_map_pageable(kernel_map, (vaddr_t)vcpu->comm,
-	    (vaddr_t)vcpu->comm + PAGE_SIZE, false, 0);
+	/* Map the comm page on the kernel side, as wired. */
+	error = os_vmobj_map(os_kernel_map, (vaddr_t *)&vcpu->comm,
+	    NVMM_COMM_PAGE_SIZE, mach->commvmobj,
+	    args->cpuid * NVMM_COMM_PAGE_SIZE, true /* wired */,
+	    false /* !fixed */, true /* shared */, PROT_READ | PROT_WRITE,
+	    PROT_READ | PROT_WRITE);
 	if (error) {
 		nvmm_vcpu_free(mach, vcpu);
 		nvmm_vcpu_put(vcpu);
 		goto out;
 	}
-	memset(vcpu->comm, 0, PAGE_SIZE);
+
+	memset(vcpu->comm, 0, NVMM_COMM_PAGE_SIZE);
+
+	/* Map the comm page on the user side, as pageable. */
+	error = os_vmobj_map(os_curproc_map, (vaddr_t *)&args->comm,
+	    NVMM_COMM_PAGE_SIZE, mach->commvmobj,
+	    args->cpuid * NVMM_COMM_PAGE_SIZE, false /* !wired */,
+	    false /* !fixed */, true /* shared */, PROT_READ | PROT_WRITE,
+	    PROT_READ | PROT_WRITE);
+	if (error) {
+		nvmm_vcpu_free(mach, vcpu);
+		nvmm_vcpu_put(vcpu);
+		goto out;
+	}
 
 	error = (*nvmm_impl->vcpu_create)(mach, vcpu);
 	if (error) {
@@ -470,7 +415,7 @@ nvmm_vcpu_create(struct nvmm_owner *owner, struct nvmm_ioc_vcpu_create *args)
 	}
 
 	nvmm_vcpu_put(vcpu);
-	atomic_inc_uint(&mach->ncpus);
+	os_atomic_inc_uint(&mach->ncpus);
 
 out:
 	nvmm_machine_put(mach);
@@ -495,7 +440,7 @@ nvmm_vcpu_destroy(struct nvmm_owner *owner, struct nvmm_ioc_vcpu_destroy *args)
 	(*nvmm_impl->vcpu_destroy)(mach, vcpu);
 	nvmm_vcpu_free(mach, vcpu);
 	nvmm_vcpu_put(vcpu);
-	atomic_dec_uint(&mach->ncpus);
+	os_atomic_dec_uint(&mach->ncpus);
 
 out:
 	nvmm_machine_put(mach);
@@ -518,18 +463,18 @@ nvmm_vcpu_configure(struct nvmm_owner *owner,
 		return EINVAL;
 
 	allocsz = nvmm_impl->vcpu_conf_sizes[op];
-	data = kmem_alloc(allocsz, KM_SLEEP);
+	data = os_mem_alloc(allocsz);
 
 	error = nvmm_machine_get(owner, args->machid, &mach, false);
 	if (error) {
-		kmem_free(data, allocsz);
+		os_mem_free(data, allocsz);
 		return error;
 	}
 
 	error = nvmm_vcpu_get(mach, args->cpuid, &vcpu);
 	if (error) {
 		nvmm_machine_put(mach);
-		kmem_free(data, allocsz);
+		os_mem_free(data, allocsz);
 		return error;
 	}
 
@@ -543,7 +488,7 @@ nvmm_vcpu_configure(struct nvmm_owner *owner,
 out:
 	nvmm_vcpu_put(vcpu);
 	nvmm_machine_put(mach);
-	kmem_free(data, allocsz);
+	os_mem_free(data, allocsz);
 	return error;
 }
 
@@ -627,7 +572,8 @@ nvmm_do_vcpu_run(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 
 	while (1) {
 		/* Got a signal? Or pending resched? Leave. */
-		if (__predict_false(nvmm_return_needed(vcpu, exit))) {
+		if (__predict_false(os_return_needed())) {
+			exit->reason = NVMM_VCPU_EXIT_NONE;
 			return 0;
 		}
 
@@ -644,7 +590,7 @@ nvmm_do_vcpu_run(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 		if (exit->u.mem.gpa >= mach->gpa_end) {
 			break;
 		}
-		if (uvm_fault(&vm->vm_map, exit->u.mem.gpa, exit->u.mem.prot)) {
+		if (os_vmspace_fault(vm, exit->u.mem.gpa, exit->u.mem.prot)) {
 			break;
 		}
 	}
@@ -656,7 +602,7 @@ static int
 nvmm_vcpu_run(struct nvmm_owner *owner, struct nvmm_ioc_vcpu_run *args)
 {
 	struct nvmm_machine *mach;
-	struct nvmm_cpu *vcpu = NULL;
+	struct nvmm_cpu *vcpu;
 	int error;
 
 	error = nvmm_machine_get(owner, args->machid, &mach, false);
@@ -672,15 +618,13 @@ nvmm_vcpu_run(struct nvmm_owner *owner, struct nvmm_ioc_vcpu_run *args)
 
 out:
 	nvmm_machine_put(mach);
-	if (vcpu)
-		vcpu->comm->stop = 0;
 	return error;
 }
 
 /* -------------------------------------------------------------------------- */
 
-static struct uvm_object *
-nvmm_hmapping_getuobj(struct nvmm_machine *mach, uintptr_t hva, size_t size,
+static os_vmobj_t *
+nvmm_hmapping_getvmobj(struct nvmm_machine *mach, uintptr_t hva, size_t size,
    size_t *off)
 {
 	struct nvmm_hmapping *hmapping;
@@ -694,7 +638,7 @@ nvmm_hmapping_getuobj(struct nvmm_machine *mach, uintptr_t hva, size_t size,
 		if (hva >= hmapping->hva &&
 		    hva + size <= hmapping->hva + hmapping->size) {
 			*off = hva - hmapping->hva;
-			return hmapping->uobj;
+			return hmapping->vmobj;
 		}
 	}
 
@@ -706,6 +650,8 @@ nvmm_hmapping_validate(struct nvmm_machine *mach, uintptr_t hva, size_t size)
 {
 	struct nvmm_hmapping *hmapping;
 	size_t i;
+	uintptr_t hva_end;
+	uintptr_t hmap_end;
 
 	if ((hva % PAGE_SIZE) != 0 || (size % PAGE_SIZE) != 0) {
 		return EINVAL;
@@ -714,29 +660,33 @@ nvmm_hmapping_validate(struct nvmm_machine *mach, uintptr_t hva, size_t size)
 		return EINVAL;
 	}
 
+	/*
+	 * Overflow tests MUST be done very carefully to avoid compiler
+	 * optimizations from effectively deleting the test.
+	 */
+	hva_end = hva + size;
+	if (hva_end <= hva)
+		return EINVAL;
+
+	/*
+	 * Overlap tests
+	 */
 	for (i = 0; i < NVMM_MAX_HMAPPINGS; i++) {
 		hmapping = &mach->hmap[i];
+
 		if (!hmapping->present) {
 			continue;
 		}
+		hmap_end = hmapping->hva + hmapping->size;
 
-		if (hva >= hmapping->hva &&
-		    hva + size <= hmapping->hva + hmapping->size) {
+		if (hva >= hmapping->hva && hva_end <= hmap_end)
 			break;
-		}
-
-		if (hva >= hmapping->hva &&
-		    hva < hmapping->hva + hmapping->size) {
+		if (hva >= hmapping->hva && hva < hmap_end)
 			return EEXIST;
-		}
-		if (hva + size > hmapping->hva &&
-		    hva + size <= hmapping->hva + hmapping->size) {
+		if (hva_end > hmapping->hva && hva_end <= hmap_end)
 			return EEXIST;
-		}
-		if (hva <= hmapping->hva &&
-		    hva + size >= hmapping->hva + hmapping->size) {
+		if (hva <= hmapping->hva && hva_end >= hmap_end)
 			return EEXIST;
-		}
 	}
 
 	return 0;
@@ -762,7 +712,6 @@ nvmm_hmapping_alloc(struct nvmm_machine *mach)
 static int
 nvmm_hmapping_free(struct nvmm_machine *mach, uintptr_t hva, size_t size)
 {
-	struct vmspace *vmspace = curproc->p_vmspace;
 	struct nvmm_hmapping *hmapping;
 	size_t i;
 
@@ -773,11 +722,11 @@ nvmm_hmapping_free(struct nvmm_machine *mach, uintptr_t hva, size_t size)
 			continue;
 		}
 
-		uvm_unmap(&vmspace->vm_map, hmapping->hva,
-		    hmapping->hva + hmapping->size);
-		uao_detach(hmapping->uobj);
+		os_vmobj_unmap(os_curproc_map, hmapping->hva,
+		    hmapping->hva + hmapping->size, false);
+		os_vmobj_rel(hmapping->vmobj);
 
-		hmapping->uobj = NULL;
+		hmapping->vmobj = NULL;
 		hmapping->present = false;
 
 		return 0;
@@ -789,7 +738,6 @@ nvmm_hmapping_free(struct nvmm_machine *mach, uintptr_t hva, size_t size)
 static int
 nvmm_hva_map(struct nvmm_owner *owner, struct nvmm_ioc_hva_map *args)
 {
-	struct vmspace *vmspace = curproc->p_vmspace;
 	struct nvmm_machine *mach;
 	struct nvmm_hmapping *hmapping;
 	vaddr_t uva;
@@ -811,19 +759,13 @@ nvmm_hva_map(struct nvmm_owner *owner, struct nvmm_ioc_hva_map *args)
 
 	hmapping->hva = args->hva;
 	hmapping->size = args->size;
-	hmapping->uobj = uao_create(hmapping->size, 0);
+	hmapping->vmobj = os_vmobj_create(hmapping->size);
 	uva = hmapping->hva;
 
-	/* Take a reference for the user. */
-	uao_reference(hmapping->uobj);
-
-	/* Map the uobj into the user address space, as pageable. */
-	error = uvm_map(&vmspace->vm_map, &uva, hmapping->size, hmapping->uobj,
-	    0, 0, UVM_MAPFLAG(UVM_PROT_RW, UVM_PROT_RW, UVM_INH_SHARE,
-	    UVM_ADV_RANDOM, UVM_FLAG_FIXED|UVM_FLAG_UNMAP));
-	if (error) {
-		uao_detach(hmapping->uobj);
-	}
+	/* Map the vmobj into the user address space, as pageable. */
+	error = os_vmobj_map(os_curproc_map, &uva, hmapping->size,
+	    hmapping->vmobj, 0, false /* !wired */, true /* fixed */,
+	    true /* shared */, PROT_READ | PROT_WRITE, PROT_READ | PROT_WRITE);
 
 out:
 	nvmm_machine_put(mach);
@@ -852,8 +794,9 @@ static int
 nvmm_gpa_map(struct nvmm_owner *owner, struct nvmm_ioc_gpa_map *args)
 {
 	struct nvmm_machine *mach;
-	struct uvm_object *uobj;
+	os_vmobj_t *vmobj;
 	gpaddr_t gpa;
+	gpaddr_t gpa_end;
 	size_t off;
 	int error;
 
@@ -866,7 +809,18 @@ nvmm_gpa_map(struct nvmm_owner *owner, struct nvmm_ioc_gpa_map *args)
 		goto out;
 	}
 
-	if ((args->gpa % PAGE_SIZE) != 0 || (args->size % PAGE_SIZE) != 0 ||
+	/*
+	 * Overflow tests MUST be done very carefully to avoid compiler
+	 * optimizations from effectively deleting the test.
+	 */
+	gpa = args->gpa;
+	gpa_end = gpa + args->size;
+	if (gpa_end <= gpa) {
+		error = EINVAL;
+		goto out;
+	}
+
+	if ((gpa % PAGE_SIZE) != 0 || (args->size % PAGE_SIZE) != 0 ||
 	    (args->hva % PAGE_SIZE) != 0) {
 		error = EINVAL;
 		goto out;
@@ -875,43 +829,26 @@ nvmm_gpa_map(struct nvmm_owner *owner, struct nvmm_ioc_gpa_map *args)
 		error = EINVAL;
 		goto out;
 	}
-	if (args->gpa < mach->gpa_begin || args->gpa >= mach->gpa_end) {
-		error = EINVAL;
-		goto out;
-	}
-	if (args->gpa + args->size <= args->gpa) {
-		error = EINVAL;
-		goto out;
-	}
-	if (args->gpa + args->size > mach->gpa_end) {
-		error = EINVAL;
-		goto out;
-	}
-	gpa = args->gpa;
 
-	uobj = nvmm_hmapping_getuobj(mach, args->hva, args->size, &off);
-	if (uobj == NULL) {
+	if (gpa < mach->gpa_begin || gpa >= mach->gpa_end) {
+		error = EINVAL;
+		goto out;
+	}
+	if (gpa_end  > mach->gpa_end) {
 		error = EINVAL;
 		goto out;
 	}
 
-	/* Take a reference for the machine. */
-	uao_reference(uobj);
-
-	/* Map the uobj into the machine address space, as pageable. */
-	error = uvm_map(&mach->vm->vm_map, &gpa, args->size, uobj, off, 0,
-	    UVM_MAPFLAG(args->prot, UVM_PROT_RWX, UVM_INH_NONE,
-	    UVM_ADV_RANDOM, UVM_FLAG_FIXED|UVM_FLAG_UNMAP));
-	if (error) {
-		uao_detach(uobj);
-		goto out;
-	}
-	if (gpa != args->gpa) {
-		uao_detach(uobj);
-		printf("[!] uvm_map problem\n");
+	vmobj = nvmm_hmapping_getvmobj(mach, args->hva, args->size, &off);
+	if (vmobj == NULL) {
 		error = EINVAL;
 		goto out;
 	}
+
+	/* Map the vmobj into the machine address space, as pageable. */
+	error = os_vmobj_map(&mach->vm->vm_map, &gpa, args->size, vmobj, off,
+	    false /* !wired */, true /* fixed */, false /* !shared */,
+	    args->prot, PROT_READ | PROT_WRITE | PROT_EXEC);
 
 out:
 	nvmm_machine_put(mach);
@@ -923,32 +860,39 @@ nvmm_gpa_unmap(struct nvmm_owner *owner, struct nvmm_ioc_gpa_unmap *args)
 {
 	struct nvmm_machine *mach;
 	gpaddr_t gpa;
+	gpaddr_t gpa_end;
 	int error;
 
 	error = nvmm_machine_get(owner, args->machid, &mach, false);
 	if (error)
 		return error;
 
-	if ((args->gpa % PAGE_SIZE) != 0 || (args->size % PAGE_SIZE) != 0) {
-		error = EINVAL;
-		goto out;
-	}
-	if (args->gpa < mach->gpa_begin || args->gpa >= mach->gpa_end) {
-		error = EINVAL;
-		goto out;
-	}
-	if (args->gpa + args->size <= args->gpa) {
-		error = EINVAL;
-		goto out;
-	}
-	if (args->gpa + args->size >= mach->gpa_end) {
-		error = EINVAL;
-		goto out;
-	}
+	/*
+	 * Overflow tests MUST be done very carefully to avoid compiler
+	 * optimizations from effectively deleting the test.
+	 */
 	gpa = args->gpa;
+	gpa_end = gpa + args->size;
+	if (gpa_end <= gpa) {
+		error = EINVAL;
+		goto out;
+	}
+
+	if ((gpa % PAGE_SIZE) != 0 || (args->size % PAGE_SIZE) != 0) {
+		error = EINVAL;
+		goto out;
+	}
+	if (gpa < mach->gpa_begin || gpa >= mach->gpa_end) {
+		error = EINVAL;
+		goto out;
+	}
+	if (gpa_end >= mach->gpa_end) {
+		error = EINVAL;
+		goto out;
+	}
 
 	/* Unmap the memory from the machine. */
-	uvm_unmap(&mach->vm->vm_map, gpa, gpa + args->size);
+	os_vmobj_unmap(&mach->vm->vm_map, gpa, gpa + args->size, false);
 
 out:
 	nvmm_machine_put(mach);
@@ -1009,7 +953,7 @@ nvmm_ctl(struct nvmm_owner *owner, struct nvmm_ioc_ctl *args)
 
 /* -------------------------------------------------------------------------- */
 
-static const struct nvmm_impl *
+const struct nvmm_impl *
 nvmm_ident(void)
 {
 	size_t i;
@@ -1022,7 +966,7 @@ nvmm_ident(void)
 	return NULL;
 }
 
-static int
+int
 nvmm_init(void)
 {
 	size_t i, n;
@@ -1033,34 +977,28 @@ nvmm_init(void)
 
 	for (i = 0; i < NVMM_MAX_MACHINES; i++) {
 		machines[i].machid = i;
-		rw_init(&machines[i].lock);
+		os_rwl_init(&machines[i].lock);
 		for (n = 0; n < NVMM_MAX_VCPUS; n++) {
 			machines[i].cpus[n].present = false;
 			machines[i].cpus[n].cpuid = n;
-			mutex_init(&machines[i].cpus[n].lock, MUTEX_DEFAULT,
-			    IPL_NONE);
+			os_mtx_init(&machines[i].cpus[n].lock);
 		}
 	}
-
-	mutex_init(&suspension.lock, MUTEX_DEFAULT, IPL_NONE);
-	cv_init(&suspension.suspendcv, "nvmmsus");
-	cv_init(&suspension.resumecv, "nvmmres");
-	suspension.users = 0;
 
 	(*nvmm_impl->init)();
 
 	return 0;
 }
 
-static void
+void
 nvmm_fini(void)
 {
 	size_t i, n;
 
 	for (i = 0; i < NVMM_MAX_MACHINES; i++) {
-		rw_destroy(&machines[i].lock);
+		os_rwl_destroy(&machines[i].lock);
 		for (n = 0; n < NVMM_MAX_VCPUS; n++) {
-			mutex_destroy(&machines[i].cpus[n].lock);
+			os_mtx_destroy(&machines[i].cpus[n].lock);
 		}
 	}
 
@@ -1070,130 +1008,9 @@ nvmm_fini(void)
 
 /* -------------------------------------------------------------------------- */
 
-static dev_type_open(nvmm_open);
-
-const struct cdevsw nvmm_cdevsw = {
-	.d_open = nvmm_open,
-	.d_close = noclose,
-	.d_read = noread,
-	.d_write = nowrite,
-	.d_ioctl = noioctl,
-	.d_stop = nostop,
-	.d_tty = notty,
-	.d_poll = nopoll,
-	.d_mmap = nommap,
-	.d_kqfilter = nokqfilter,
-	.d_discard = nodiscard,
-	.d_flag = D_OTHER | D_MPSAFE
-};
-
-static int nvmm_ioctl(file_t *, u_long, void *);
-static int nvmm_close(file_t *);
-static int nvmm_mmap(file_t *, off_t *, size_t, int, int *, int *,
-    struct uvm_object **, int *);
-
-static const struct fileops nvmm_fileops = {
-	.fo_read = fbadop_read,
-	.fo_write = fbadop_write,
-	.fo_ioctl = nvmm_ioctl,
-	.fo_fcntl = fnullop_fcntl,
-	.fo_poll = fnullop_poll,
-	.fo_stat = fbadop_stat,
-	.fo_close = nvmm_close,
-	.fo_kqfilter = fnullop_kqfilter,
-	.fo_restart = fnullop_restart,
-	.fo_mmap = nvmm_mmap,
-};
-
-static int
-nvmm_open(dev_t dev, int flags, int type, struct lwp *l)
+int
+nvmm_ioctl(struct nvmm_owner *owner, unsigned long cmd, void *data)
 {
-	struct nvmm_owner *owner;
-	struct file *fp;
-	int error, fd;
-
-	if (__predict_false(nvmm_impl == NULL))
-		return ENXIO;
-	if (minor(dev) != 0)
-		return EXDEV;
-	if (!(flags & O_CLOEXEC))
-		return EINVAL;
-	error = fd_allocfile(&fp, &fd);
-	if (error)
-		return error;
-
-	if (OFLAGS(flags) & O_WRONLY) {
-		owner = &root_owner;
-	} else {
-		owner = kmem_alloc(sizeof(*owner), KM_SLEEP);
-		owner->pid = l->l_proc->p_pid;
-	}
-
-	return fd_clone(fp, fd, flags, &nvmm_fileops, owner);
-}
-
-static int
-nvmm_close(file_t *fp)
-{
-	struct nvmm_owner *owner = fp->f_data;
-
-	KASSERT(owner != NULL);
-
-	nvmm_enter();
-	nvmm_kill_machines(owner);
-	nvmm_exit();
-
-	if (owner != &root_owner) {
-		kmem_free(owner, sizeof(*owner));
-	}
-	fp->f_data = NULL;
-
-	return 0;
-}
-
-static int
-nvmm_mmap(file_t *fp, off_t *offp, size_t size, int prot, int *flagsp,
-    int *advicep, struct uvm_object **uobjp, int *maxprotp)
-{
-	struct nvmm_owner *owner = fp->f_data;
-	struct nvmm_machine *mach;
-	nvmm_machid_t machid;
-	nvmm_cpuid_t cpuid;
-	int error;
-
-	KASSERT(size > 0);
-
-	if (prot & PROT_EXEC)
-		return EACCES;
-	if (size != PAGE_SIZE)
-		return EINVAL;
-
-	cpuid = NVMM_COMM_CPUID(*offp);
-	if (__predict_false(cpuid >= NVMM_MAX_VCPUS))
-		return EINVAL;
-
-	machid = NVMM_COMM_MACHID(*offp);
-	error = nvmm_machine_get(owner, machid, &mach, false);
-	if (error)
-		return error;
-
-	uao_reference(mach->commuobj);
-	*uobjp = mach->commuobj;
-	*offp = cpuid * PAGE_SIZE;
-	*maxprotp = prot;
-	*advicep = UVM_ADV_RANDOM;
-
-	nvmm_machine_put(mach);
-	return 0;
-}
-
-static int
-nvmm_ioctl_internal(file_t *fp, u_long cmd, void *data)
-{
-	struct nvmm_owner *owner = fp->f_data;
-
-	KASSERT(owner != NULL);
-
 	switch (cmd) {
 	case NVMM_IOC_CAPABILITY:
 		return nvmm_capability(owner, data);
@@ -1229,306 +1046,5 @@ nvmm_ioctl_internal(file_t *fp, u_long cmd, void *data)
 		return nvmm_ctl(owner, data);
 	default:
 		return EINVAL;
-	}
-}
-
-static int
-nvmm_ioctl(struct file *fp, u_long cmd, void *data)
-{
-	int error;
-
-	error = nvmm_enter_sig();
-	if (error)
-		return error;
-	error = nvmm_ioctl_internal(fp, cmd, data);
-	nvmm_exit();
-
-	return error;
-}
-
-/* -------------------------------------------------------------------------- */
-
-static int nvmm_match(device_t, cfdata_t, void *);
-static void nvmm_attach(device_t, device_t, void *);
-static int nvmm_detach(device_t, int);
-static bool nvmm_suspend(device_t, const pmf_qual_t *);
-static bool nvmm_resume(device_t, const pmf_qual_t *);
-
-extern struct cfdriver nvmm_cd;
-
-CFATTACH_DECL_NEW(nvmm, 0, nvmm_match, nvmm_attach, nvmm_detach, NULL);
-
-static struct cfdata nvmm_cfdata[] = {
-	{
-		.cf_name = "nvmm",
-		.cf_atname = "nvmm",
-		.cf_unit = 0,
-		.cf_fstate = FSTATE_STAR,
-		.cf_loc = NULL,
-		.cf_flags = 0,
-		.cf_pspec = NULL,
-	},
-	{ NULL, NULL, 0, FSTATE_NOTFOUND, NULL, 0, NULL }
-};
-
-static int
-nvmm_match(device_t self, cfdata_t cfdata, void *arg)
-{
-	return 1;
-}
-
-static void
-nvmm_attach(device_t parent, device_t self, void *aux)
-{
-	int error;
-
-	error = nvmm_init();
-	if (error)
-		panic("%s: impossible", __func__);
-	aprint_normal_dev(self, "attached, using backend %s\n",
-	    nvmm_impl->name);
-	if (nvmm_impl->suspend != NULL && nvmm_impl->resume != NULL)
-		pmf_device_register(self, nvmm_suspend, nvmm_resume);
-}
-
-static int
-nvmm_detach(device_t self, int flags)
-{
-	if (atomic_load_relaxed(&nmachines) > 0)
-		return EBUSY;
-	pmf_device_deregister(self);
-	nvmm_fini();
-	return 0;
-}
-
-static void
-nvmm_suspend_vcpu(struct nvmm_machine *mach, struct nvmm_cpu *vcpu)
-{
-
-	mutex_enter(&vcpu->lock);
-	if (vcpu->present && nvmm_impl->vcpu_suspend)
-		(*nvmm_impl->vcpu_suspend)(mach, vcpu);
-	mutex_exit(&vcpu->lock);
-}
-
-static void
-nvmm_resume_vcpu(struct nvmm_machine *mach, struct nvmm_cpu *vcpu)
-{
-
-	mutex_enter(&vcpu->lock);
-	if (vcpu->present && nvmm_impl->vcpu_resume)
-		(*nvmm_impl->vcpu_resume)(mach, vcpu);
-	mutex_exit(&vcpu->lock);
-}
-
-static void
-nvmm_suspend_machine(struct nvmm_machine *mach)
-{
-
-	rw_enter(&mach->lock, RW_WRITER);
-	if (mach->present) {
-		if (nvmm_impl->vcpu_suspend) {
-			size_t cpuid;
-
-			for (cpuid = 0; cpuid < NVMM_MAX_VCPUS; cpuid++)
-				nvmm_suspend_vcpu(mach, &mach->cpus[cpuid]);
-		}
-		if (nvmm_impl->machine_suspend)
-			(*nvmm_impl->machine_suspend)(mach);
-	}
-	rw_exit(&mach->lock);
-}
-
-static void
-nvmm_resume_machine(struct nvmm_machine *mach)
-{
-
-	rw_enter(&mach->lock, RW_WRITER);
-	if (mach->present) {
-		if (nvmm_impl->vcpu_resume) {
-			size_t cpuid;
-
-			for (cpuid = 0; cpuid < NVMM_MAX_VCPUS; cpuid++)
-				nvmm_resume_vcpu(mach, &mach->cpus[cpuid]);
-		}
-		if (nvmm_impl->machine_resume)
-			(*nvmm_impl->machine_resume)(mach);
-	}
-	rw_exit(&mach->lock);
-}
-
-static bool
-nvmm_suspend(device_t self, const pmf_qual_t *qual)
-{
-	size_t i;
-
-	/*
-	 * Prevent new users (via ioctl) from starting.
-	 */
-	mutex_enter(&suspension.lock);
-	KASSERT(!nvmm_suspending);
-	atomic_store_relaxed(&nvmm_suspending, true);
-	mutex_exit(&suspension.lock);
-
-	/*
-	 * Interrupt any running VMs so they will break out of run
-	 * loops or anything else and not start up again until we've
-	 * resumed.
-	 */
-	if (nvmm_impl->suspend_interrupt)
-		(*nvmm_impl->suspend_interrupt)();
-
-	/*
-	 * Wait for any running VMs or other ioctls to finish running
-	 * or handling any other ioctls.
-	 */
-	mutex_enter(&suspension.lock);
-	while (suspension.users)
-		cv_wait(&suspension.suspendcv, &suspension.lock);
-	mutex_exit(&suspension.lock);
-
-	/*
-	 * Suspend all the machines.
-	 */
-	if (nvmm_impl->machine_suspend || nvmm_impl->vcpu_suspend) {
-		for (i = 0; i < NVMM_MAX_MACHINES; i++)
-			nvmm_suspend_machine(&machines[i]);
-	}
-
-	/*
-	 * Take any systemwide suspend action.
-	 */
-	if (nvmm_impl->suspend)
-		(*nvmm_impl->suspend)();
-
-	return true;
-}
-
-static bool
-nvmm_resume(device_t self, const pmf_qual_t *qual)
-{
-	size_t i;
-
-	KASSERT(atomic_load_relaxed(&nvmm_suspending));
-	KASSERT(suspension.users == 0);
-
-	/*
-	 * Take any systemwide resume action.
-	 */
-	if (nvmm_impl->resume)
-		(*nvmm_impl->resume)();
-
-	/*
-	 * Resume all the machines.
-	 */
-	if (nvmm_impl->machine_resume || nvmm_impl->vcpu_resume) {
-		for (i = 0; i < NVMM_MAX_MACHINES; i++)
-			nvmm_resume_machine(&machines[i]);
-	}
-
-	/*
-	 * Allow new users (via ioctl) to start again.
-	 */
-	mutex_enter(&suspension.lock);
-	atomic_store_relaxed(&nvmm_suspending, false);
-	cv_broadcast(&suspension.resumecv);
-	mutex_exit(&suspension.lock);
-
-	return true;
-}
-
-void
-nvmmattach(int nunits)
-{
-	/* nothing */
-}
-
-MODULE(MODULE_CLASS_MISC, nvmm, NULL);
-
-#if defined(_MODULE)
-CFDRIVER_DECL(nvmm, DV_VIRTUAL, NULL);
-#endif
-
-static int
-nvmm_modcmd(modcmd_t cmd, void *arg)
-{
-#if defined(_MODULE)
-	devmajor_t bmajor = NODEVMAJOR;
-	devmajor_t cmajor = 345;
-#endif
-	int error;
-
-	switch (cmd) {
-	case MODULE_CMD_INIT:
-		if (nvmm_ident() == NULL) {
-			aprint_error("%s: cpu not supported\n",
-			    nvmm_cd.cd_name);
-			return ENOTSUP;
-		}
-#if defined(_MODULE)
-		error = config_cfdriver_attach(&nvmm_cd);
-		if (error)
-			return error;
-#endif
-		error = config_cfattach_attach(nvmm_cd.cd_name, &nvmm_ca);
-		if (error) {
-#if defined(_MODULE)
-			config_cfdriver_detach(&nvmm_cd);
-#endif
-			aprint_error("%s: config_cfattach_attach failed\n",
-			    nvmm_cd.cd_name);
-			return error;
-		}
-
-		error = config_cfdata_attach(nvmm_cfdata, 1);
-		if (error) {
-			config_cfattach_detach(nvmm_cd.cd_name, &nvmm_ca);
-#if defined(_MODULE)
-			config_cfdriver_detach(&nvmm_cd);
-#endif
-			aprint_error("%s: unable to register cfdata\n",
-			    nvmm_cd.cd_name);
-			return error;
-		}
-
-		if (config_attach_pseudo(nvmm_cfdata) == NULL) {
-			aprint_error("%s: config_attach_pseudo failed\n",
-			    nvmm_cd.cd_name);
-			config_cfattach_detach(nvmm_cd.cd_name, &nvmm_ca);
-#if defined(_MODULE)
-			config_cfdriver_detach(&nvmm_cd);
-#endif
-			return ENXIO;
-		}
-
-#if defined(_MODULE)
-		/* mknod /dev/nvmm c 345 0 */
-		error = devsw_attach(nvmm_cd.cd_name, NULL, &bmajor,
-			&nvmm_cdevsw, &cmajor);
-		if (error) {
-			aprint_error("%s: unable to register devsw, err %d\n",
-			    nvmm_cd.cd_name, error);
-			config_cfattach_detach(nvmm_cd.cd_name, &nvmm_ca);
-			config_cfdriver_detach(&nvmm_cd);
-			return error;
-		}
-#endif
-		return 0;
-	case MODULE_CMD_FINI:
-		error = config_cfdata_detach(nvmm_cfdata);
-		if (error)
-			return error;
-		error = config_cfattach_detach(nvmm_cd.cd_name, &nvmm_ca);
-		if (error)
-			return error;
-#if defined(_MODULE)
-		config_cfdriver_detach(&nvmm_cd);
-		devsw_detach(NULL, &nvmm_cdevsw);
-#endif
-		return 0;
-	case MODULE_CMD_AUTOUNLOAD:
-		return EBUSY;
-	default:
-		return ENOTTY;
 	}
 }

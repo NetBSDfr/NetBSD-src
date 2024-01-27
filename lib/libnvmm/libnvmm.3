@@ -1,6 +1,5 @@
-.\"	$NetBSD: libnvmm.3,v 1.28 2021/12/10 11:08:45 msaitoh Exp $
 .\"
-.\" Copyright (c) 2018-2020 Maxime Villard, m00nbsd.net
+.\" Copyright (c) 2018-2021 Maxime Villard, m00nbsd.net
 .\" All rights reserved.
 .\"
 .\" This code is part of the NVMM hypervisor.
@@ -26,12 +25,32 @@
 .\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 .\" SUCH DAMAGE.
 .\"
-.Dd December 10, 2021
+.Dd July 20, 2021
 .Dt LIBNVMM 3
 .Os
 .Sh NAME
-.Nm libnvmm
-.Nd NetBSD Virtualization API
+.Nm libnvmm ,
+.Nm nvmm_init ,
+.Nm nvmm_capability ,
+.Nm nvmm_machine_create ,
+.Nm nvmm_machine_destroy ,
+.Nm nvmm_machine_configure ,
+.Nm nvmm_vcpu_create ,
+.Nm nvmm_vcpu_destroy ,
+.Nm nvmm_vcpu_configure ,
+.Nm nvmm_vcpu_getstate ,
+.Nm nvmm_vcpu_setstate ,
+.Nm nvmm_vcpu_inject ,
+.Nm nvmm_vcpu_run ,
+.Nm nvmm_hva_map ,
+.Nm nvmm_hva_unmap ,
+.Nm nvmm_gpa_map ,
+.Nm nvmm_gpa_unmap ,
+.Nm nvmm_gva_to_gpa ,
+.Nm nvmm_gpa_to_hva ,
+.Nm nvmm_assist_io ,
+.Nm nvmm_assist_mem
+.Nd NVMM Virtualization API
 .Sh LIBRARY
 .Lb libnvmm
 .Sh SYNOPSIS
@@ -91,13 +110,13 @@ provides a library for emulator software to handle hardware-accelerated virtual
 machines in
 .Nx .
 A virtual machine is described by an opaque structure,
-.Cd nvmm_machine .
+.Vt nvmm_machine .
 Emulator software should not attempt to modify this structure directly, and
 should use the API provided by
 .Nm
 to manage virtual machines.
 A virtual CPU is described by a public structure,
-.Cd nvmm_vcpu .
+.Vt nvmm_vcpu .
 .Pp
 .Fn nvmm_init
 initializes NVMM.
@@ -303,13 +322,14 @@ It is to be noted that
 may perform non-re-entrant operations, and should be called only once.
 .Ss NVMM Capability
 The
-.Cd nvmm_capability
+.Vt nvmm_capability
 structure helps emulator software identify the capabilities offered by NVMM on
 the host:
 .Bd -literal
 struct nvmm_capability {
 	uint64_t version;
 	uint64_t state_size;
+	uint64_t comm_size;
 	uint64_t max_machines;
 	uint64_t max_vcpus;
 	uint64_t max_ram;
@@ -320,9 +340,9 @@ struct nvmm_capability {
 .Ed
 .Pp
 For example, the
-.Cd max_machines
+.Fa max_machines
 field indicates the maximum number of virtual machines supported, while
-.Cd max_vcpus
+.Fa max_vcpus
 indicates the maximum number of VCPUs supported per virtual machine.
 .Ss Machine Ownership
 When a process creates a virtual machine via
@@ -345,12 +365,28 @@ Currently, no parameters are implemented.
 Emulator software can configure several parameters of a VCPU by using
 .Fn nvmm_vcpu_configure ,
 which can take the following operations:
-.Bd -literal
-#define NVMM_VCPU_CONF_CALLBACKS	0
-	...
-.Ed
 .Pp
-The higher fields depend on the architecture.
+.Bl -bullet -offset indent -compact
+.It
+.Dv NVMM_VCPU_CONF_CALLBACKS :
+register assist callbacks.
+See
+.Sx Assist Callbacks
+below for details.
+.El
+.Pp
+The other fields depend on the architecture.
+.Pp
+On x86 there are two additional operations available:
+.Pp
+.Bl -bullet -offset indent -compact
+.It
+.Dv NVMM_VCPU_CONF_CPUID :
+configure the information returned to the guest by the CPUID instruction.
+.It
+.Dv NVMM_VCPU_CONF_TPR :
+configure whether to return to the emulator when the guest updates its TPR.
+.El
 .Ss Guest-Host Mappings
 Each virtual machine has an associated guest physical memory.
 Emulator software is allowed to modify this guest physical memory by mapping
@@ -415,7 +451,7 @@ struct nvmm_x64_state {
 	uint64_t drs[NVMM_X64_NDR];
 	uint64_t msrs[NVMM_X64_NMSR];
 	struct nvmm_x64_state_intr intr;
-	struct fxsave fpu;
+	struct nvmm_x64_state_fpu fpu;
 };
 #define nvmm_vcpu_state nvmm_x64_state
 .Ed
@@ -425,8 +461,8 @@ Refer to functional examples to see precisely how to use this structure.
 A VCPU state area is divided in sub-states.
 A
 .Fa flags
-parameter is used to set and get the VCPU state; it acts as a bitmap which
-indicates which sub-states to set or get.
+parameter is used to get and set the VCPU state; it acts as a bitmap which
+indicates which sub-states to get or set.
 .Pp
 During VM exits, a partial VCPU state area is provided in
 .Va exitstate ,
@@ -435,7 +471,7 @@ see
 below for details.
 .Ss VCPU Programming Model
 A VCPU is described by a public structure,
-.Cd nvmm_vcpu :
+.Vt nvmm_vcpu :
 .Bd -literal
 struct nvmm_vcpu {
 	nvmm_cpuid_t cpuid;
@@ -475,7 +511,7 @@ Emulator software should not modify the state of a VCPU with several
 different threads.
 .Ss Exit Reasons
 The
-.Cd nvmm_vcpu_exit
+.Vt nvmm_vcpu_exit
 structure is used to handle VM exits:
 .Bd -literal
 /* Generic. */
@@ -520,7 +556,7 @@ to retrieve certain state values.
 It is possible that a VM exit was caused by a reason internal to the host
 kernel, and that emulator software should not be concerned with.
 In this case, the exit reason is set to
-.Cd NVMM_VCPU_EXIT_NONE .
+.Dv NVMM_VCPU_EXIT_NONE .
 This gives a chance for emulator software to halt the VM in its tracks.
 .Pp
 Refer to functional examples to see precisely how to handle VM exits.
@@ -567,9 +603,9 @@ Emulator software can manage interrupt and NMI window-exiting via the
 .Va intr
 component of the VCPU state.
 When such window-exiting is enabled, NVMM will cause a VM exit with reason
-.Cd NVMM_VCPU_EXIT_INT_READY
+.Dv NVMM_VCPU_EXIT_INT_READY
 or
-.Cd NVMM_VCPU_EXIT_NMI_READY
+.Dv NVMM_VCPU_EXIT_NMI_READY
 to indicate that the guest is now able to handle the corresponding class
 of interrupts.
 .Ss Assist Callbacks
@@ -597,7 +633,7 @@ Emulator software that does not intend to use either of these assists can put
 in the callbacks.
 .Ss I/O Assist
 When a VM exit occurs with reason
-.Cd NVMM_VCPU_EXIT_IO ,
+.Dv NVMM_VCPU_EXIT_IO ,
 it is necessary for emulator software to emulate the associated I/O operation.
 .Nm
 provides an easy way for emulator software to perform that.
@@ -606,7 +642,7 @@ provides an easy way for emulator software to perform that.
 will call the registered
 .Fa io
 callback function and give it a
-.Cd nvmm_io
+.Vt nvmm_io
 structure as argument.
 This structure describes an I/O transaction:
 .Bd -literal
@@ -645,7 +681,7 @@ will indicate if the operation is an input, and
 will indicate the size of the access.
 .Ss Mem Assist
 When a VM exit occurs with reason
-.Cd NVMM_VCPU_EXIT_MEMORY ,
+.Dv NVMM_VCPU_EXIT_MEMORY ,
 it is necessary for emulator software to emulate the associated memory
 operation.
 .Nm
@@ -656,7 +692,7 @@ Assist.
 will call the registered
 .Fa mem
 callback function and give it a
-.Cd nvmm_mem
+.Vt nvmm_mem
 structure as argument.
 This structure describes a Mem transaction:
 .Bd -literal
@@ -700,22 +736,39 @@ variable
 .Va errno
 is set to indicate the error.
 .Sh FILES
-.Bl -tag -width XXXX -compact
-.It Lk https://www.netbsd.org/~maxv/nvmm/nvmm-demo.zip
-Functional example (demonstrator).
-Contains an emulator that uses the
-.Nm
-API, and a small kernel that exercises this emulator.
-.It Pa src/sys/dev/nvmm/
-Source code of the kernel NVMM driver.
+.Bl -tag -width indent
 .It Pa src/lib/libnvmm/
 Source code of the
 .Nm
 library.
+.It Pa src/sys/dev/virtual/nvmm/
+Source code of the kernel
+.Xr nvmm 4
+driver.
+.It Pa src/test/testcases/libnvmm
+Regression test cases for the
+.Nm
+library.
+.It Pa src/test/nvmm/calc-vm.c
+A minimal example that uses the
+.Nm
+API to create a VM and perform a calculation within it.
+.It Pa src/test/nvmm/demo
+Functional demonstrator.
+Contains an emulator that uses the
+.Nm
+API, and a small kernel that exercises this emulator.
+.Pp
+Originally obtained from
+.Lk https://www.netbsd.org/~maxv/nvmm/nvmm-demo.zip
+but has been updated to match the current
+.Nm
+API, cleaned up, and ported to
+.Dx .
 .El
 .Sh ERRORS
 These functions will fail if:
-.Bl -tag -width [ENOBUFS]
+.Bl -tag -width Er
 .It Bq Er EEXIST
 An attempt was made to create a machine or a VCPU that already exists.
 .It Bq Er EFAULT

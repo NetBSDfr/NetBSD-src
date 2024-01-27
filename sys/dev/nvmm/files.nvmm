@@ -3,6 +3,7 @@
 defpseudodev nvmm
 
 file	dev/nvmm/nvmm.c			nvmm
+file	dev/nvmm/nvmm_netbsd.c		nvmm
 
 ifdef amd64
 file	dev/nvmm/x86/nvmm_x86.c		nvmm
