@@ -99,6 +99,7 @@ static struct timestamp {
 } timestamps[TSLOGSIZE];
 
 void tslog(const lwp_t *, int, const char *, const char *);
+void tslog_user(pid_t, pid_t, const char *, const char *);
 static int sysctl_debug_tslog(SYSCTLFN_PROTO);
 
 void

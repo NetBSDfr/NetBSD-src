@@ -42,8 +42,9 @@ __KERNEL_RCSID(0, "$NetBSD: lapic.c,v 1.89 2022/09/07 00:40:19 knakahara Exp $")
 #include "opt_multiprocessor.h"
 #include "opt_ntp.h"
 #include "opt_xen.h"
+#if NPVCLOCK > 0
 #include "pvclock.h"
-
+#endif
 #include <sys/param.h>
 #include <sys/proc.h>
 #include <sys/systm.h>
