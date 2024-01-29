@@ -1468,7 +1468,8 @@ vmx_inkernel_handle_cpuid(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 		break;
 
 	case 0x40000010: /* VMware-style CPU freq */
-		cpudata->gprs[NVMM_X64_GPR_RAX] = curcpu()->ci_data.cpu_cc_freq;
+		cpudata->gprs[NVMM_X64_GPR_RAX] =
+			curcpu()->ci_data.cpu_cc_freq / 1000;
 		cpudata->gprs[NVMM_X64_GPR_RBX] = 0;
 		cpudata->gprs[NVMM_X64_GPR_RCX] = 0;
 		cpudata->gprs[NVMM_X64_GPR_RDX] = 0;
