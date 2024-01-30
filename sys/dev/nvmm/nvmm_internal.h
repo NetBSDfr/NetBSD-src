@@ -1,7 +1,5 @@
-/*	$NetBSD: nvmm_internal.h,v 1.21 2022/09/13 20:10:04 riastradh Exp $	*/
-
 /*
- * Copyright (c) 2018-2020 Maxime Villard, m00nbsd.net
+ * Copyright (c) 2018-2021 Maxime Villard, m00nbsd.net
  * All rights reserved.
  *
  * This code is part of the NVMM hypervisor.
@@ -31,22 +29,26 @@
 #ifndef _NVMM_INTERNAL_H_
 #define _NVMM_INTERNAL_H_
 
-#include <sys/types.h>
+#ifndef _KERNEL
+#error "This file should not be included by userland programs."
+#endif
 
-#include <sys/lwp.h>
-#include <sys/mutex.h>
-#include <sys/rwlock.h>
-#include <sys/sched.h>
-
-#include <dev/nvmm/nvmm.h>
-
-struct uvm_object;
-struct vmspace;
+#include "nvmm_os.h"
 
 #define NVMM_MAX_MACHINES	128
-#define NVMM_MAX_VCPUS		256
+#define NVMM_MAX_VCPUS		128
 #define NVMM_MAX_HMAPPINGS	32
+
+#if defined(__NetBSD__)
 #define NVMM_MAX_RAM		(128ULL * (1 << 30))
+#elif defined(__DragonFly__)
+#define NVMM_MAX_RAM		(127ULL * 1024ULL * (1 << 30))
+#else
+#error "OS dependency for NVMM_MAX_RAM required"
+#endif
+
+#define NVMM_COMM_PAGE_SIZE	\
+	(roundup(sizeof(struct nvmm_comm_page), PAGE_SIZE))
 
 struct nvmm_owner {
 	pid_t pid;
@@ -56,7 +58,7 @@ struct nvmm_cpu {
 	/* Shared. */
 	bool present;
 	nvmm_cpuid_t cpuid;
-	kmutex_t lock;
+	os_mtx_t lock;
 
 	/* Comm page. */
 	struct nvmm_comm_page *comm;
@@ -72,7 +74,7 @@ struct nvmm_hmapping {
 	bool present;
 	uintptr_t hva;
 	size_t size;
-	struct uvm_object *uobj;
+	os_vmobj_t *vmobj;
 };
 
 struct nvmm_machine {
@@ -80,10 +82,10 @@ struct nvmm_machine {
 	nvmm_machid_t machid;
 	time_t time;
 	struct nvmm_owner *owner;
-	krwlock_t lock;
+	os_rwl_t lock;
 
 	/* Comm */
-	struct uvm_object *commuobj;
+	os_vmobj_t *commvmobj;
 
 	/* Kernel */
 	struct vmspace *vm;
@@ -107,9 +109,6 @@ struct nvmm_impl {
 	void (*init)(void);
 	void (*fini)(void);
 	void (*capability)(struct nvmm_capability *);
-	void (*suspend_interrupt)(void);
-	void (*suspend)(void);
-	void (*resume)(void);
 
 	size_t mach_conf_max;
 	const size_t *mach_conf_sizes;
@@ -122,8 +121,6 @@ struct nvmm_impl {
 	void (*machine_create)(struct nvmm_machine *);
 	void (*machine_destroy)(struct nvmm_machine *);
 	int (*machine_configure)(struct nvmm_machine *, uint64_t, void *);
-	void (*machine_suspend)(struct nvmm_machine *);
-	void (*machine_resume)(struct nvmm_machine *);
 
 	int (*vcpu_create)(struct nvmm_machine *, struct nvmm_cpu *);
 	void (*vcpu_destroy)(struct nvmm_machine *, struct nvmm_cpu *);
@@ -133,8 +130,6 @@ struct nvmm_impl {
 	int (*vcpu_inject)(struct nvmm_cpu *);
 	int (*vcpu_run)(struct nvmm_machine *, struct nvmm_cpu *,
 	    struct nvmm_vcpu_exit *);
-	void (*vcpu_suspend)(struct nvmm_machine *, struct nvmm_cpu *);
-	void (*vcpu_resume)(struct nvmm_machine *, struct nvmm_cpu *);
 };
 
 #if defined(__x86_64__)
@@ -142,30 +137,14 @@ extern const struct nvmm_impl nvmm_x86_svm;
 extern const struct nvmm_impl nvmm_x86_vmx;
 #endif
 
-extern volatile bool nvmm_suspending;
+extern struct nvmm_owner nvmm_root_owner;
+extern volatile unsigned int nmachines;
+extern const struct nvmm_impl *nvmm_impl;
 
-static inline bool
-nvmm_return_needed(struct nvmm_cpu *vcpu, struct nvmm_vcpu_exit *exit)
-{
-
-	if (preempt_needed()) {
-		exit->reason = NVMM_VCPU_EXIT_NONE;
-		return true;
-	}
-	if (curlwp->l_flag & LW_USERRET) {
-		exit->reason = NVMM_VCPU_EXIT_NONE;
-		return true;
-	}
-	if (vcpu->comm->stop) {
-		exit->reason = NVMM_VCPU_EXIT_STOPPED;
-		return true;
-	}
-	if (atomic_load_relaxed(&nvmm_suspending)) {
-		exit->reason = NVMM_VCPU_EXIT_NONE;
-		return true;
-	}
-
-	return false;
-}
+const struct nvmm_impl *nvmm_ident(void);
+int	nvmm_init(void);
+void	nvmm_fini(void);
+int	nvmm_ioctl(struct nvmm_owner *, unsigned long, void *);
+void	nvmm_kill_machines(struct nvmm_owner *);
 
 #endif /* _NVMM_INTERNAL_H_ */

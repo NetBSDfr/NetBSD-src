@@ -10,7 +10,7 @@ CPPFLAGS+=
 
 KMOD=	nvmm
 IOCONF=	nvmm.ioconf
-SRCS=	nvmm.c
+SRCS=	nvmm.c nvmm_netbsd.c
 
 .if ${MACHINE_ARCH} == "x86_64"
 SRCS+=	nvmm_x86.c

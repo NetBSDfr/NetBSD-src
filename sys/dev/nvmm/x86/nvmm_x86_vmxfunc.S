@@ -1,7 +1,5 @@
-/*	$NetBSD: nvmm_x86_vmxfunc.S,v 1.6 2020/09/05 07:22:26 maxv Exp $	*/
-
 /*
- * Copyright (c) 2018-2020 Maxime Villard, m00nbsd.net
+ * Copyright (c) 2018-2021 Maxime Villard, m00nbsd.net
  * All rights reserved.
  *
  * This code is part of the NVMM hypervisor.
@@ -28,49 +26,24 @@
  * SUCH DAMAGE.
  */
 
+#if defined(__NetBSD__)
 /* Override user-land alignment before including asm.h */
-#define	ALIGN_DATA	.align	8
+#define ALIGN_DATA	.align	8
 #define ALIGN_TEXT	.align 16,0x90
 #define _ALIGN_TEXT	ALIGN_TEXT
-
 #define _LOCORE
 #include "assym.h"
 #include <machine/asm.h>
-#include <machine/segments.h>
-#include <x86/specialreg.h>
+#elif defined(__DragonFly__)
+#define _C_LABEL(x)	x
+#include <machine/asmacros.h>
+#include "assym.s"
+#endif
 
 #define ASM_NVMM
-#include <dev/nvmm/x86/nvmm_x86.h>
+#include "nvmm_x86.h"
 
 	.text
-
-/*
- * %rdi = *pa
- */
-ENTRY(_vmx_vmxon)
-	vmxon	(%rdi)
-	jz	.Lfail_vmxon
-	jc	.Lfail_vmxon
-	xorq	%rax,%rax
-	retq
-.Lfail_vmxon:
-	movq	$-1,%rax
-	retq
-END(_vmx_vmxon)
-
-/*
- * no arg
- */
-ENTRY(_vmx_vmxoff)
-	vmxoff
-	jz	.Lfail_vmxoff
-	jc	.Lfail_vmxoff
-	xorq	%rax,%rax
-	retq
-.Lfail_vmxoff:
-	movq	$-1,%rax
-	retq
-END(_vmx_vmxoff)
 
 /* redef */
 #define VMCS_HOST_RSP				0x00006C14

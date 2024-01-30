@@ -1,7 +1,5 @@
-/*	$NetBSD: nvmmctl.c,v 1.2 2020/09/05 07:22:26 maxv Exp $	*/
-
 /*
- * Copyright (c) 2019-2020 Maxime Villard, m00nbsd.net
+ * Copyright (c) 2019-2021 Maxime Villard, m00nbsd.net
  * All rights reserved.
  *
  * This code is part of the NVMM hypervisor.
@@ -27,11 +25,6 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-
-#include <sys/cdefs.h>
-#ifndef lint
-__RCSID("$NetBSD: nvmmctl.c,v 1.2 2020/09/05 07:22:26 maxv Exp $");
-#endif /* not lint */
 
 #include <sys/param.h>
 
@@ -111,7 +104,7 @@ usage(void)
 #define VCPU_CONF_FLAGS		"\20" "\1" "CPUID" "\2" "TPR"
 
 static void
-nvmm_identify(char **argv)
+nvmm_identify(char **argv __unused)
 {
 	char buf[256], ram[4+1];
 
@@ -122,6 +115,7 @@ nvmm_identify(char **argv)
 
 	printf("nvmm: Kernel API version %u\n", cap.version);
 	printf("nvmm: State size %u\n", cap.state_size);
+	printf("nvmm: Comm size %u\n", cap.comm_size);
 	printf("nvmm: Max machines %u\n", cap.max_machines);
 	printf("nvmm: Max VCPUs per machine %u\n", cap.max_vcpus);
 
@@ -141,7 +135,7 @@ nvmm_identify(char **argv)
 }
 
 static void
-nvmm_list(char **argv)
+nvmm_list(char **argv __unused)
 {
 	struct nvmm_ctl_mach_info machinfo;
 	char ram[4+1], *ts;

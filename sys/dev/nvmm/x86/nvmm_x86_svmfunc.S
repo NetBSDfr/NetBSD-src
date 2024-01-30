@@ -1,7 +1,5 @@
-/*	$NetBSD: nvmm_x86_svmfunc.S,v 1.6 2020/09/05 07:22:26 maxv Exp $	*/
-
 /*
- * Copyright (c) 2018-2020 Maxime Villard, m00nbsd.net
+ * Copyright (c) 2018-2021 Maxime Villard, m00nbsd.net
  * All rights reserved.
  *
  * This code is part of the NVMM hypervisor.
@@ -28,19 +26,23 @@
  * SUCH DAMAGE.
  */
 
+#if defined(__NetBSD__)
 /* Override user-land alignment before including asm.h */
-#define	ALIGN_DATA	.align	8
+#define ALIGN_DATA	.align	8
 #define ALIGN_TEXT	.align 16,0x90
 #define _ALIGN_TEXT	ALIGN_TEXT
-
 #define _LOCORE
 #include "assym.h"
 #include <machine/asm.h>
+#elif defined(__DragonFly__)
+#include <machine/asmacros.h>
+#include "assym.s"
+#endif
+
 #include <machine/segments.h>
-#include <x86/specialreg.h>
 
 #define ASM_NVMM
-#include <dev/nvmm/x86/nvmm_x86.h>
+#include "nvmm_x86.h"
 
 	.text
 
@@ -76,12 +78,26 @@
 	strw	%ax		;\
 	pushq	%rax
 
+#if defined(__NetBSD__)
 #define HOST_RESTORE_TR				\
 	popq	%rax				;\
 	movzwq	%ax,%rdx			;\
 	movq	CPUVAR(GDT),%rax		;\
+	/* Clear the busy bit for reloading. */	\
 	andq	$~0x0200,4(%rax,%rdx, 1)	;\
 	ltrw	%dx
+#elif defined(__DragonFly__)
+/* In DragonFly, PCPU(tss_gdt) points directly to the gdt[] entry for the
+ * current CPU's TSS descriptor; while NetBSD's CPUVAR(GDT) points to the
+ * gdtstore[] table. */
+#define HOST_RESTORE_TR				\
+	popq	%rax				;\
+	movzwq	%ax,%rdx			;\
+	movq	PCPU(tss_gdt),%rax		;\
+	/* Clear the busy bit for reloading. */	\
+	andq	$~0x0200,4(%rax)		;\
+	ltrw	%dx
+#endif
 
 #define HOST_SAVE_LDT		\
 	sldtw	%ax		;\
@@ -188,6 +204,5 @@ ENTRY(svm_vmrun)
 	/* Restore the Host GPRs. */
 	HOST_RESTORE_GPRS
 
-	xorq	%rax,%rax
 	retq
 END(svm_vmrun)

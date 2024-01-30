@@ -1,7 +1,5 @@
-/*	$NetBSD: libnvmm.c,v 1.20 2021/04/06 08:40:17 reinoud Exp $	*/
-
 /*
- * Copyright (c) 2018-2020 Maxime Villard, m00nbsd.net
+ * Copyright (c) 2018-2021 Maxime Villard, m00nbsd.net
  * All rights reserved.
  *
  * This code is part of the NVMM hypervisor.
@@ -29,6 +27,9 @@
  */
 
 #include <sys/cdefs.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/queue.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,10 +37,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <sys/ioctl.h>
-#include <sys/mman.h>
-#include <sys/queue.h>
-#include <machine/vmparam.h>
 
 #include "nvmm.h"
 
@@ -47,6 +44,10 @@ static struct nvmm_capability __capability;
 
 #ifdef __x86_64__
 #include "libnvmm_x86.c"
+#endif
+
+#ifdef __DragonFly__
+#define LIST_FOREACH_SAFE	LIST_FOREACH_MUTABLE
 #endif
 
 typedef struct __area {
@@ -64,8 +65,7 @@ static int nvmm_fd = -1;
 /* -------------------------------------------------------------------------- */
 
 static bool
-__area_isvalid(struct nvmm_machine *mach, uintptr_t hva, gpaddr_t gpa,
-    size_t size)
+__area_isvalid(struct nvmm_machine *mach, gpaddr_t gpa, size_t size)
 {
 	area_list_t *areas = mach->areas;
 	area_t *ent;
@@ -103,7 +103,7 @@ __area_add(struct nvmm_machine *mach, uintptr_t hva, gpaddr_t gpa, size_t size,
 	if (prot & PROT_EXEC)
 		nprot |= NVMM_PROT_EXEC;
 
-	if (!__area_isvalid(mach, hva, gpa, size)) {
+	if (!__area_isvalid(mach, gpa, size)) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -237,6 +237,7 @@ nvmm_machine_create(struct nvmm_machine *mach)
 	ret = ioctl(nvmm_fd, NVMM_IOC_MACHINE_CREATE, &args);
 	if (ret == -1) {
 		free(areas);
+		free(pages);
 		return -1;
 	}
 
@@ -290,27 +291,21 @@ nvmm_vcpu_create(struct nvmm_machine *mach, nvmm_cpuid_t cpuid,
     struct nvmm_vcpu *vcpu)
 {
 	struct nvmm_ioc_vcpu_create args;
-	struct nvmm_comm_page *comm;
 	int ret;
 
 	args.machid = mach->machid;
 	args.cpuid = cpuid;
+	args.comm = NULL;
 
 	ret = ioctl(nvmm_fd, NVMM_IOC_VCPU_CREATE, &args);
 	if (ret == -1)
 		return -1;
 
-	comm = mmap(NULL, PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FILE,
-	    nvmm_fd, NVMM_COMM_OFF(mach->machid, cpuid));
-	if (comm == MAP_FAILED)
-		return -1;
-
-	mach->pages[cpuid] = comm;
+	mach->pages[cpuid] = args.comm;
 
 	vcpu->cpuid = cpuid;
-	vcpu->state = &comm->state;
-	vcpu->event = &comm->event;
-	vcpu->stop = &comm->stop;
+	vcpu->state = &args.comm->state;
+	vcpu->event = &args.comm->event;
 	vcpu->exit = malloc(sizeof(*vcpu->exit));
 
 	return 0;
@@ -330,8 +325,14 @@ nvmm_vcpu_destroy(struct nvmm_machine *mach, struct nvmm_vcpu *vcpu)
 	if (ret == -1)
 		return -1;
 
+	/*
+	 * Need to unmap the comm page on the user side, because the
+	 * kernel has no guarantee to get the correct address space to
+	 * do the unmapping at the point of closing fd.
+	 */
 	comm = mach->pages[vcpu->cpuid];
-	munmap(comm, PAGE_SIZE);
+	munmap(comm, __capability.comm_size);
+
 	free(vcpu->exit);
 
 	return 0;
@@ -428,6 +429,13 @@ nvmm_vcpu_run(struct nvmm_machine *mach, struct nvmm_vcpu *vcpu)
 	/* No comm support yet, just copy. */
 	memcpy(vcpu->exit, &args.exit, sizeof(args.exit));
 
+	return 0;
+}
+
+/* for compatibility with qemu */
+int
+nvmm_vcpu_stop(struct nvmm_vcpu *vcpu)
+{
 	return 0;
 }
 
@@ -559,15 +567,6 @@ nvmm_ctl(int op, void *data, size_t size)
 	ret = ioctl(nvmm_fd, NVMM_IOC_CTL, &args);
 	if (ret == -1)
 		return -1;
-
-	return 0;
-}
-
-int
-nvmm_vcpu_stop(struct nvmm_vcpu *vcpu)
-{
-
-	*vcpu->stop = 1;
 
 	return 0;
 }

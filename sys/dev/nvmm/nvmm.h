@@ -1,7 +1,5 @@
-/*	$NetBSD: nvmm.h,v 1.16 2021/03/26 15:59:53 reinoud Exp $	*/
-
 /*
- * Copyright (c) 2018-2020 Maxime Villard, m00nbsd.net
+ * Copyright (c) 2018-2021 Maxime Villard, m00nbsd.net
  * All rights reserved.
  *
  * This code is part of the NVMM hypervisor.
@@ -31,6 +29,7 @@
 #ifndef _NVMM_H_
 #define _NVMM_H_
 
+#include <sys/cdefs.h>
 #include <sys/types.h>
 
 #ifndef _KERNEL
@@ -43,20 +42,25 @@ typedef uint64_t	gvaddr_t;
 typedef uint32_t	nvmm_machid_t;
 typedef uint32_t	nvmm_cpuid_t;
 
+#undef CTASSERT
+#define CTASSERT(x)		NVMM_CTASSERT(x, __LINE__)
+#define NVMM_CTASSERT(x, y)	NVMM__CTASSERT(x, y)
+#define NVMM__CTASSERT(x, y)	typedef char __assert ## y[(x) ? 1 : -1] __unused
+
 #if defined(__x86_64__)
+#if defined(__NetBSD__)
 #include <dev/nvmm/x86/nvmm_x86.h>
+#elif defined(__DragonFly__)
+#include <dev/virtual/nvmm/x86/nvmm_x86.h>
 #endif
+#endif /* __x86_64__ */
 
-#define NVMM_KERN_VERSION		2
-
-/*
- * Version 1 - Initial release in NetBSD 9.0.
- * Version 2 - Added nvmm_vcpu::stop.
- */
+#define NVMM_KERN_VERSION		3
 
 struct nvmm_capability {
 	uint32_t version;
 	uint32_t state_size;
+	uint32_t comm_size;
 	uint32_t max_machines;
 	uint32_t max_vcpus;
 	uint64_t max_ram;
@@ -85,27 +89,6 @@ struct nvmm_comm_page {
 	/* Event. */
 	bool event_commit;
 	struct nvmm_vcpu_event event;
-
-	/* Race-free exit from nvmm_vcpu_run() without signals. */
-	volatile int stop;
 };
-
-/*
- * Bits 20:27 -> machid
- * Bits 12:19 -> cpuid
- */
-#define NVMM_COMM_OFF(machid, cpuid)	\
-	((((uint64_t)machid & 0xFFULL) << 20) | (((uint64_t)cpuid & 0xFFULL) << 12))
-
-#define NVMM_COMM_MACHID(off)		\
-	((off >> 20) & 0xFF)
-
-#define NVMM_COMM_CPUID(off)		\
-	((off >> 12) & 0xFF)
-
-#ifdef _KERNEL
-/* At most one page, for the NVMM_COMM_* macros. */
-CTASSERT(sizeof(struct nvmm_comm_page) <= PAGE_SIZE);
-#endif
 
 #endif

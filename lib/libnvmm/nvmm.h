@@ -1,7 +1,5 @@
-/*	$NetBSD: nvmm.h,v 1.19 2021/04/06 08:40:17 reinoud Exp $	*/
-
 /*
- * Copyright (c) 2018-2020 Maxime Villard, m00nbsd.net
+ * Copyright (c) 2018-2021 Maxime Villard, m00nbsd.net
  * All rights reserved.
  *
  * This code is part of the NVMM hypervisor.
@@ -34,15 +32,17 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#if defined(__NetBSD__)
 #include <dev/nvmm/nvmm.h>
 #include <dev/nvmm/nvmm_ioctl.h>
+#elif defined(__DragonFly__)
+#include <dev/virtual/nvmm/nvmm.h>
+#include <dev/virtual/nvmm/nvmm_ioctl.h>
+#else
+#error "Unsupported OS."
+#endif
 
-#define NVMM_USER_VERSION	2
-
-/*
- * Version 1 - Initial release in NetBSD 9.0.
- * Version 2 - Added nvmm_vcpu::stop.
- */
+#define NVMM_USER_VERSION	1
 
 struct nvmm_io;
 struct nvmm_mem;
@@ -64,7 +64,6 @@ struct nvmm_vcpu {
 	struct nvmm_vcpu_state *state;
 	struct nvmm_vcpu_event *event;
 	struct nvmm_vcpu_exit *exit;
-	volatile int *stop;
 };
 
 struct nvmm_io {
@@ -111,6 +110,7 @@ int nvmm_vcpu_setstate(struct nvmm_machine *, struct nvmm_vcpu *, uint64_t);
 int nvmm_vcpu_getstate(struct nvmm_machine *, struct nvmm_vcpu *, uint64_t);
 int nvmm_vcpu_inject(struct nvmm_machine *, struct nvmm_vcpu *);
 int nvmm_vcpu_run(struct nvmm_machine *, struct nvmm_vcpu *);
+int nvmm_vcpu_stop(struct nvmm_vcpu *);
 
 int nvmm_gpa_map(struct nvmm_machine *, uintptr_t, gpaddr_t, size_t, int);
 int nvmm_gpa_unmap(struct nvmm_machine *, uintptr_t, gpaddr_t, size_t);
@@ -128,7 +128,5 @@ int nvmm_assist_mem(struct nvmm_machine *, struct nvmm_vcpu *);
 int nvmm_ctl(int, void *, size_t);
 
 int nvmm_vcpu_dump(struct nvmm_machine *, struct nvmm_vcpu *);
-
-int nvmm_vcpu_stop(struct nvmm_vcpu *);
 
 #endif /* _LIBNVMM_H_ */
