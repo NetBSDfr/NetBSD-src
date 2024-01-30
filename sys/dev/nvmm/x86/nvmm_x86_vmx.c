@@ -3585,6 +3585,7 @@ vmx_init(void)
 	/* Init the L1TF mitigation. */
 	vmx_init_l1tf();
 
+#if defined(_MODULE)
 	/* Init the global host state. */
 	if (vmx_xcr0_mask != 0) {
 		vmx_global_hstate.xcr0 = x86_get_xcr(0);
@@ -3593,6 +3594,7 @@ vmx_init(void)
 	vmx_global_hstate.lstar = rdmsr(MSR_LSTAR);
 	vmx_global_hstate.cstar = rdmsr(MSR_CSTAR);
 	vmx_global_hstate.sfmask = rdmsr(MSR_SFMASK);
+#endif
 
 	memset(vmxoncpu, 0, sizeof(vmxoncpu));
 	revision = vmx_get_revision();

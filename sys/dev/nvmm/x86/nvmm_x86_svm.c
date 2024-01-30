@@ -2621,6 +2621,7 @@ svm_init(void)
 	x86_get_cpuid(0x80000000, &descs);
 	svm_cpuid_max_extended = uimin(descs.eax, SVM_CPUID_MAX_EXTENDED);
 
+#if defined(_MODULE)
 	/* Init the global host state. */
 	if (svm_xcr0_mask != 0) {
 		svm_global_hstate.xcr0 = x86_get_xcr(0);
@@ -2629,6 +2630,7 @@ svm_init(void)
 	svm_global_hstate.lstar = rdmsr(MSR_LSTAR);
 	svm_global_hstate.cstar = rdmsr(MSR_CSTAR);
 	svm_global_hstate.sfmask = rdmsr(MSR_SFMASK);
+#endif
 
 	memset(hsave, 0, sizeof(hsave));
 	OS_CPU_FOREACH(cpu) {
