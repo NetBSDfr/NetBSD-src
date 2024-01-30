@@ -70,9 +70,11 @@ tsc_freq_cpuid_vm(struct cpu_info *ci)
 	if (ci->ci_max_ext_cpuid >= 0x40000010) {
 		x86_cpuid(0x40000010, descs);
 		if (descs[0] > 0) {
+			/* Needed to avoid overflow */
+			uint64_t freq = descs[0];
 			aprint_verbose(
 				"got tsc from vmware compatible cpuid\n");
-			return descs[0] * 1000;
+			return freq * 1000;
 		}
 	}
 
