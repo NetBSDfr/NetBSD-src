@@ -74,9 +74,7 @@ __KERNEL_RCSID(0, "$NetBSD: cpu.c,v 1.209 2023/07/16 19:55:43 riastradh Exp $");
 #include "ioapic.h"
 #include "acpica.h"
 #include "hpet.h"
-#if NPVCLOCK > 0
 #include "pvclock.h"
-#endif
 #include <sys/param.h>
 #include <sys/proc.h>
 #include <sys/systm.h>

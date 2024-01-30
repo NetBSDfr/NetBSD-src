@@ -551,7 +551,6 @@ sysbeep(int pitch, int period)
 void
 i8254_initclocks(void)
 {
-
 	/*
 	 * XXX If you're doing strange things with multiple clocks, you might
 	 * want to keep track of clock handlers.
