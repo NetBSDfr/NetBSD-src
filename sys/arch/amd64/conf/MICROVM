@@ -185,6 +185,7 @@ makeoptions	COPTS="-O2 -fno-omit-frame-pointer"
 file-system FFS
 file-system EXT2FS
 file-system KERNFS
+file-system PROCFS
 file-system MFS
 
 # File system options
