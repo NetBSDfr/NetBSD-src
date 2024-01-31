@@ -95,6 +95,7 @@ __KERNEL_RCSID(0, "$NetBSD: kern_fork.c,v 1.230 2023/02/25 08:22:00 skrll Exp $"
 #include <sys/uidinfo.h>
 #include <sys/sdt.h>
 #include <sys/ptrace.h>
+#include <sys/tslog.h>
 
 /*
  * DTrace SDT provider definitions
@@ -317,6 +318,7 @@ fork1(struct lwp *l1, int flags, int exitsig, void *stack, size_t stacksize,
 		atomic_dec_uint(&nprocs);
 		return EAGAIN;
 	}
+	TSFORK(p2->p_pid, p1->p_pid);
 
 	/*
 	 * We are now committed to the fork.  From here on, we may

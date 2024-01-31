@@ -196,6 +196,7 @@ ld_virtio_alloc_reqs(struct ld_virtio_softc *sc, int qsize)
 	memset(vaddr, 0, allocsize);
 	for (i = 0; i < qsize; i++) {
 		struct virtio_blk_req *vr = &sc->sc_reqs[i];
+		int nsegs;
 		r = bus_dmamap_create(virtio_dmat(sc->sc_virtio),
 				      offsetof(struct virtio_blk_req, vr_bp),
 				      1,
@@ -219,10 +220,18 @@ ld_virtio_alloc_reqs(struct ld_virtio_softc *sc, int qsize)
 					 "error code %d\n", r);
 			goto err_reqs;
 		}
+		/*
+		 * if d->sc_maxnsegs == VIRTIO_BLK_MIN_SEGMENTS + 1, the
+		 * device only supports a single data segment.
+		 */
+		if (ld->sc_maxnsegs == VIRTIO_BLK_MIN_SEGMENTS + 1)
+			nsegs = ld->sc_maxnsegs - VIRTIO_BLK_MIN_SEGMENTS;
+		else
+			nsegs = (ld->sc_maxxfer / NBPG) + VIRTIO_BLK_MIN_SEGMENTS;
+
 		r = bus_dmamap_create(virtio_dmat(sc->sc_virtio),
 				      ld->sc_maxxfer,
-				      (ld->sc_maxxfer / NBPG) +
-				      VIRTIO_BLK_MIN_SEGMENTS,
+				      nsegs,
 				      ld->sc_maxxfer,
 				      0,
 				      BUS_DMA_WAITOK|BUS_DMA_ALLOCNOW,
@@ -264,7 +273,7 @@ ld_virtio_attach(device_t parent, device_t self, void *aux)
 	struct ld_softc *ld = &sc->sc_ld;
 	struct virtio_softc *vsc = device_private(parent);
 	uint64_t features;
-	int qsize, maxxfersize, maxnsegs;
+	int qsize, maxxfersize;
 
 	if (virtio_child(vsc) != NULL) {
 		aprint_normal(": child already attached for %s; "
@@ -317,30 +326,33 @@ ld_virtio_attach(device_t parent, device_t self, void *aux)
 		maxxfersize = MAXPHYS;
 
 	if (features & VIRTIO_BLK_F_SEG_MAX) {
-		maxnsegs = virtio_read_device_config_4(vsc,
+		ld->sc_maxnsegs = virtio_read_device_config_4(vsc,
 		    VIRTIO_BLK_CONFIG_SEG_MAX);
-		if (maxnsegs < VIRTIO_BLK_MIN_SEGMENTS) {
+		if (ld->sc_maxnsegs < VIRTIO_BLK_MIN_SEGMENTS) {
 			aprint_error_dev(sc->sc_dev,
 			    "Too small SEG_MAX %d minimum is %d\n",
-			    maxnsegs, VIRTIO_BLK_MIN_SEGMENTS);
-			maxnsegs = maxxfersize / NBPG;
+			    ld->sc_maxnsegs, VIRTIO_BLK_MIN_SEGMENTS);
+			ld->sc_maxnsegs = maxxfersize / NBPG;
 			// goto err;
 		}
 	} else
-		maxnsegs = maxxfersize / NBPG;
+	/*
+	 * if there is no VIRTIO_BLK_F_SEG_MAX feature advertised, the
+	 * number of segments can be as low as 1 (i.e. Firecracker)
+	 */
+		ld->sc_maxnsegs = 1;
 
 	/* 2 for the minimum size */
-	maxnsegs += VIRTIO_BLK_MIN_SEGMENTS;
+	ld->sc_maxnsegs += VIRTIO_BLK_MIN_SEGMENTS;
 
 	virtio_init_vq_vqdone(vsc, &sc->sc_vq, 0,
 	    ld_virtio_vq_done);
 
-	if (virtio_alloc_vq(vsc, &sc->sc_vq, maxxfersize, maxnsegs,
+	if (virtio_alloc_vq(vsc, &sc->sc_vq, maxxfersize, ld->sc_maxnsegs,
 	    "I/O request") != 0) {
 		goto err;
 	}
 	qsize = sc->sc_vq.vq_num;
-
 	if (virtio_child_attach_finish(vsc, &sc->sc_vq, 1,
 	    NULL, VIRTIO_F_INTR_MSIX) != 0)
 		goto err;

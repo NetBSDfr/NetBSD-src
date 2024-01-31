@@ -62,14 +62,33 @@ __KERNEL_RCSID(0, "$NetBSD: identcpu_subr.c,v 1.9 2021/10/07 13:04:18 msaitoh Ex
 #include "cpuctl_i386.h"
 #endif
 
-uint64_t
-cpu_tsc_freq_cpuid(struct cpu_info *ci)
+static uint64_t
+tsc_freq_cpuid_vm(struct cpu_info *ci)
+{
+	uint32_t descs[4];
+
+	if (ci->ci_max_ext_cpuid >= 0x40000010) {
+		x86_cpuid(0x40000010, descs);
+		if (descs[0] > 0) {
+			/* Needed to avoid overflow */
+			uint64_t freq = descs[0];
+			aprint_verbose(
+				"got tsc from vmware compatible cpuid\n");
+			return freq * 1000;
+		}
+	}
+
+	return 0;
+}
+
+static uint64_t
+tsc_freq_cpuid(struct cpu_info *ci)
 {
 	uint64_t freq = 0, khz;
 	uint32_t descs[4];
 	uint32_t denominator, numerator;
 
-	if (!((ci->ci_max_cpuid >= 0x15) && (cpu_vendor == CPUVENDOR_INTEL)))
+	if (!(ci->ci_max_cpuid >= 0x15))
 		return 0;
 
 	x86_cpuid(0x15, descs);
@@ -130,7 +149,7 @@ cpu_tsc_freq_cpuid(struct cpu_info *ci)
 				    (uint64_t)descs[1] * 1000000);
 			}
 		}
-#if defined(_KERNEL) &&  NLAPIC > 0
+#if defined(_KERNEL) && NLAPIC > 0
 		if ((khz != 0) && (lapic_per_second == 0)) {
 			lapic_per_second = khz * 1000;
 			aprint_debug_dev(ci->ci_dev,
@@ -139,6 +158,149 @@ cpu_tsc_freq_cpuid(struct cpu_info *ci)
 		}
 #endif
 	}
+	return freq;
+}
+
+/* Ported from OpenBSD's sys/arch/amd64/amd64/tsc.c */
+static uint64_t
+tsc_freq_amd_msr(struct cpu_info *ci)
+{
+	uint64_t base, def, divisor, multiplier;
+	uint32_t family = CPUID_TO_FAMILY(ci->ci_signature);
+
+	/*
+	 * All 10h+ CPUs have Core::X86::Msr:HWCR and the TscFreqSel
+	 * bit.  If TscFreqSel hasn't been set, the TSC isn't advancing
+	 * at the core P0 frequency and we need to calibrate by hand.
+	 */
+	if (family < 0x10)
+		return 0;
+	if (!ISSET(rdmsr(MSR_HWCR), HWCR_TSCFREQSEL))
+		return 0;
+
+	/*
+	 * In 10h+ CPUs, Core::X86::Msr::PStateDef defines the voltage
+	 * and frequency for each core P-state.  We want the P0 frequency.
+	 * If the En bit isn't set, the register doesn't define a valid
+	 * P-state.
+	 */
+	def = rdmsr(MSR_PSTATEDEF(0));
+	if (!ISSET(def, PSTATEDEF_EN))
+		return 0;
+
+	switch (family) {
+	case 0x17:
+	case 0x19:
+		/*
+		 * PPR for AMD Family 17h [...]:
+		 * Models 01h,08h B2, Rev 3.03, pp. 33, 139-140
+		 * Model 18h B1, Rev 3.16, pp. 36, 143-144
+		 * Model 60h A1, Rev 3.06, pp. 33, 155-157
+		 * Model 71h B0, Rev 3.06, pp. 28, 150-151
+		 *
+		 * PPR for AMD Family 19h [...]:
+		 * Model 21h B0, Rev 3.05, pp. 33, 166-167
+		 *
+		 * OSRR for AMD Family 17h processors,
+		 * Models 00h-2Fh, Rev 3.03, pp. 130-131
+		 */
+		base = 200000000;			/* 200.0 MHz */
+		divisor = (def >> 8) & 0x3f;
+		if (divisor <= 0x07 || divisor >= 0x2d)
+			return 0;			/* reserved */
+		if (divisor >= 0x1b && divisor % 2 == 1)
+			return 0;			/* reserved */
+		multiplier = def & 0xff;
+		if (multiplier <= 0x0f)
+			return 0;			/* reserved */
+		break;
+	default:
+		return 0;
+	}
+
+	return base * multiplier / divisor;
+}
+
+/* Ported from FreeBSD sys/x86/x86/tsc.c */
+static uint64_t
+tsc_freq_intel_brand(struct cpu_info *ci)
+{
+	char brand[48];
+	u_int regs[4];
+	uint64_t freq;
+	char *p;
+	u_int i;
+
+	/*
+	 * Intel Processor Identification and the CPUID Instruction
+	 * Application Note 485.
+	 * http://www.intel.com/assets/pdf/appnote/241618.pdf
+	 */
+	if (ci->ci_max_ext_cpuid >= 0x80000004) {
+		p = brand;
+		for (i = 0x80000002; i < 0x80000005; i++) {
+			x86_cpuid(i, regs);
+			memcpy(p, regs, sizeof(regs));
+			p += sizeof(regs);
+		}
+		p = NULL;
+		for (i = 0; i < sizeof(brand) - 1; i++)
+			if (brand[i] == 'H' && brand[i + 1] == 'z')
+				p = brand + i;
+		if (p != NULL) {
+			p -= 5;
+			switch (p[4]) {
+			case 'M':
+				i = 1;
+				break;
+			case 'G':
+				i = 1000;
+				break;
+			case 'T':
+				i = 1000000;
+				break;
+			default:
+				return 0;
+			}
+#define	C2D(c)	((c) - '0')
+			if (p[1] == '.') {
+				freq = C2D(p[0]) * 1000;
+				freq += C2D(p[2]) * 100;
+				freq += C2D(p[3]) * 10;
+				freq *= i * 1000;
+			} else {
+				freq = C2D(p[0]) * 1000;
+				freq += C2D(p[1]) * 100;
+				freq += C2D(p[2]) * 10;
+				freq += C2D(p[3]);
+				freq *= i * 1000000;
+			}
+#undef C2D
+			aprint_verbose(
+				"got tsc from cpu brand\n");
+			return freq;
+		}
+	}
+	return 0;
+}
+
+uint64_t
+cpu_tsc_freq_cpuid(struct cpu_info *ci)
+{
+	uint64_t freq = 0;
+
+	if (cpu_vendor == CPUVENDOR_INTEL)
+		freq = tsc_freq_cpuid(ci);
+	/* Try AMD MSR's */
+	if (freq == 0 && cpu_vendor == CPUVENDOR_AMD)
+		freq = tsc_freq_amd_msr(ci);
+	/* VMware compatible tsc query */
+	if (freq == 0 && vm_guest != VM_GUEST_NO)
+		freq = tsc_freq_cpuid_vm(ci);
+	/* Still no luck, get the frequency from brand */
+	if (freq == 0 && cpu_vendor == CPUVENDOR_INTEL)
+		freq = tsc_freq_intel_brand(ci);
+
 	if (freq != 0)
 		aprint_verbose_dev(ci->ci_dev, "TSC freq CPUID %" PRIu64
 		    " Hz\n", freq);

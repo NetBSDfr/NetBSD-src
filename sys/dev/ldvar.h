@@ -56,6 +56,7 @@ struct ld_softc {
 	uint64_t	sc_secperunit;	/* # sectors in total */
 	int		sc_secsize;	/* sector size in bytes */
 	int		sc_maxxfer;	/* max xfer size in bytes */
+	int		sc_maxnsegs;	/* maximum number of segments */
 	int		sc_maxqueuecnt;	/* maximum h/w queue depth */
 	char		*sc_typename;	/* inquiry data */
 

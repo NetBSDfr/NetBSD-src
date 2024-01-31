@@ -540,6 +540,7 @@ com_attach_subr(struct com_softc *sc)
 	prop_dictionary_t dict;
 	bool is_console = true;
 	bool force_console = false;
+	dev_t dev;
 
 	aprint_naive("\n");
 
@@ -550,6 +551,8 @@ com_attach_subr(struct com_softc *sc)
 	callout_init(&sc->sc_poll_callout, 0);
 	callout_setfunc(&sc->sc_poll_callout, com_intr_poll, sc);
 	mutex_init(&sc->sc_lock, MUTEX_DEFAULT, IPL_HIGH);
+
+	dev = device_unit(sc->sc_dev);
 
 #if defined(COM_16650)
 	sc->sc_type = COM_TYPE_16650;
@@ -589,14 +592,16 @@ com_attach_subr(struct com_softc *sc)
 			break;
 		}
 
+		/* Wait for any pending character */
+		com_common_putc(dev, &comcons_info.regs, 0, 0);
 		/* Make sure the console is always "hardwired". */
-		delay(10000);			/* wait for output to finish */
 		if (is_console) {
 			SET(sc->sc_hwflags, COM_HW_CONSOLE);
 		}
 
 		SET(sc->sc_swflags, TIOCFLAG_SOFTCAR);
 	}
+
 
 	/* Probe for FIFO */
 	switch (sc->sc_type) {

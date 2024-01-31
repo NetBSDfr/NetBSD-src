@@ -273,7 +273,7 @@ attach	amdccp at acpinodebus with amdccp_acpi
 file	dev/acpi/amdccp_acpi.c		amdccp_acpi
 
 # QEMU Virtio
-attach	virtio at acpinodebus with virtio_acpi
+attach	virtio at acpinodebus with virtio_acpi: virtio_mmio
 file	dev/acpi/virtio_acpi.c		virtio_acpi
 
 # OHCI-compliant USB controller

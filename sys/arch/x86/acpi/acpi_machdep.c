@@ -158,7 +158,7 @@ out:
 	}
 #else
 #ifdef XEN
-	if (vm_guest == VM_GUEST_XENPVH) {
+	if (vm_guest == VM_GUEST_XENPVH || vm_guest == VM_GUEST_GENPVH) {
 		PhysicalAddress = hvm_start_info->rsdp_paddr;
 		if (PhysicalAddress)
 			return PhysicalAddress;

@@ -1525,8 +1525,10 @@ init_x86_64_ksyms(void)
 	} else {
 		uintptr_t endp = (uintptr_t)(void *)&end;
 
-		ksyms_addsyms_elf(*(long *)endp,
-		    ((long *)endp) + 1, esym);
+		if (vm_guest == VM_GUEST_GENPVH)
+			ksyms_addsyms_elf(0, ((long *)endp) + 1, esym);
+		else
+			ksyms_addsyms_elf(*(long *)endp, ((long *)endp) + 1, esym);
 	}
 #endif
 }
@@ -1710,7 +1712,7 @@ init_x86_64(paddr_t first_avail)
 #endif
 
 #ifdef XEN
-	if (vm_guest == VM_GUEST_XENPVH)
+	if (vm_guest == VM_GUEST_XENPVH || vm_guest == VM_GUEST_GENPVH)
 		xen_parse_cmdline(XEN_PARSE_BOOTFLAGS, NULL);
 #endif
 	init_pte();

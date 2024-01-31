@@ -1,0 +1,63 @@
+# start of kernel configuration
+
+machine amd64 x86 xen
+include         "conf/std"      # MI standard options
+include         "arch/xen/conf/std.xenversion"
+options         CPU_IN_CKSUM
+options         EXEC_ELF64      # exec ELF binaries
+options         EXEC_SCRIPT     # exec #! scripts
+options         MTRR
+options         MULTIPROCESSOR
+options         CHILD_MAX=1024  # 160 is too few
+options         OPEN_MAX=1024   # 128 is too few
+mainbus0 at root
+cpu* at mainbus?
+ioapic* at mainbus? apid ?
+options         INCLUDE_CONFIG_FILE     # embed config file in kernel binary
+maxusers        8               # estimated number of users
+options INSECURE # disable kernel security levels - X needs this options RTC_OFFSET=0 # hardware clock is this many mins. west of GMT
+options         PIPE_SOCKETPAIR # smaller, but slower pipe(2)
+options         XENPVHVM
+options         XEN
+hypervisor*     at mainbus?             # Xen hypervisor
+xenbus*         at hypervisor?          # Xen virtual bus
+xencons*        at hypervisor?          # Xen virtual console
+makeoptions     COPTS="-O2 -fno-omit-frame-pointer"
+
+# Inspired by https://mail-index.netbsd.org/tech-kern/2024/01/23/msg029450.html
+# but with more basic filesystems included
+#include "conf/filesystems.config"
+file-system FFS
+file-system EXT2FS
+file-system KERNFS
+file-system PROCFS
+
+options         FFS_NO_SNAPSHOT # No FFS snapshot support
+options         WAPBL           # File system journaling support
+options         INET            # IP + ICMP + TCP + UDP
+options         INET6           # IPV6
+config          netbsd  root on ? type ?
+
+# some microvms don't have ACPI
+options         MPBIOS          # configure CPUs and APICs using MPBIOS
+options MPTABLE_LINUX_BUG_COMPAT # fix to locate correct ACPI location
+isa0    at mainbus?
+com0    at isa? port 0x3f8 irq 4        # Standard PC serial ports
+
+# new pv bus for MMIO backed devices
+pv* at pvbus?
+# FIXME: not working due to missing <dev/pv/pvreg.h> in sys/dev/pv/pvclock.c
+#pvclock* at pv?     # pvclock uses KVM capabilities
+virtio* at pv?      # virtio attaches to pv with MMIO
+ld*     at virtio?  # Virtio disk device
+vioif*  at virtio?  # Virtio network device
+viornd* at virtio?  # Virtio entropy device
+viocon* at virtio?
+
+pseudo-device   bpfilter
+pseudo-device   loop
+pseudo-device   pty
+
+# for using https://github.com/cperciva/freebsd-boot-profiling
+options         TSLOG    # enable tslog(4) tracing facility
+options         BOOTTIME # prints boot time relative to rdtsc

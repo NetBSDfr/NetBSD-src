@@ -112,6 +112,8 @@ __KERNEL_RCSID(0, "$NetBSD: kern_exec.c,v 1.521 2023/10/08 12:38:58 ad Exp $");
 #include <sys/prot.h>
 #include <sys/cprng.h>
 
+#include <sys/tslog.h>
+
 #include <uvm/uvm_extern.h>
 
 #include <machine/reg.h>
@@ -821,7 +823,6 @@ execve_loadvm(struct lwp *l, bool has_path, const char *path, int fd,
 		epp->ep_xfd = fd;
 	}
 
-
 	/*
 	 * initialize the fields of the exec package.
 	 */
@@ -1480,6 +1481,9 @@ execve1(struct lwp *l, bool has_path, const char *path, int fd,
 	    &data);
 	if (error)
 		return error;
+
+	TSEXEC(l->l_proc->p_pid, data.ed_pathstring);
+
 	error = execve_runproc(l, &data, false, false);
 	return error;
 }

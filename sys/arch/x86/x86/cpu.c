@@ -74,7 +74,9 @@ __KERNEL_RCSID(0, "$NetBSD: cpu.c,v 1.209 2023/07/16 19:55:43 riastradh Exp $");
 #include "ioapic.h"
 #include "acpica.h"
 #include "hpet.h"
-
+#if NPVCLOCK > 0
+#include "pvclock.h"
+#endif
 #include <sys/param.h>
 #include <sys/proc.h>
 #include <sys/systm.h>
@@ -436,7 +438,6 @@ cpu_attach(device_t parent, device_t self, void *aux)
 #ifdef SVS
 	cpu_svs_init(ci);
 #endif
-
 	pmap_reference(pmap_kernel());
 	ci->ci_pmap = pmap_kernel();
 	ci->ci_tlbstate = TLBSTATE_STALE;
@@ -467,13 +468,22 @@ cpu_attach(device_t parent, device_t self, void *aux)
 			/* Enable lapic. */
 			lapic_enable();
 			lapic_set_lvt();
-			if (!vm_guest_is_xenpvh_or_pvhvm())
+			/*
+			 * If the hypervisor is KVM, don't use lapic, instead
+			 * use pvclock(4).
+			 */
+			if (!vm_guest_is_xenpvh_or_pvhvm()
+#if NPVCLOCK > 0
+				&& hv_type != VM_GUEST_KVM
+#endif
+				)
 				lapic_calibrate_timer(false);
 		}
 #endif
 		kcsan_cpu_init(ci);
 		again = true;
 	}
+
 
 	/* further PCB init done later. */
 
@@ -1417,6 +1427,9 @@ cpu_get_tsc_freq(struct cpu_info *ci)
 	uint64_t freq = 0, freq_from_cpuid, t0, t1;
 	int64_t overhead;
 
+	if (ci->ci_data.cpu_cc_freq != 0)
+		return;
+
 	if (CPU_IS_PRIMARY(ci) && cpu_hascounter()) {
 		/*
 		 * If it's the first call of this function, try to get TSC
@@ -1425,8 +1438,8 @@ cpu_get_tsc_freq(struct cpu_info *ci)
 		 * known. This is required for Intel's Comet Lake and newer
 		 * processors to set LAPIC timer correctly.
 		 */
-		if (ci->ci_data.cpu_cc_freq == 0)
-			freq = freq_from_cpuid = cpu_tsc_freq_cpuid(ci);
+		freq = freq_from_cpuid = cpu_tsc_freq_cpuid(ci);
+
 		if (freq != 0)
 			aprint_debug_dev(ci->ci_dev, "TSC freq "
 			    "from CPUID %" PRIu64 " Hz\n", freq);

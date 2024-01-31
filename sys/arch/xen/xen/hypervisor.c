@@ -241,10 +241,25 @@ void
 init_xen_early(void)
 {
 	const char *cmd_line;
+	if (vm_guest != VM_GUEST_XENPVH && vm_guest != VM_GUEST_GENPVH)
+		return;
+
+	hvm_start_info = (void *)((uintptr_t)hvm_start_paddr + KERNBASE);
+
+	if (hvm_start_info->cmdline_paddr != 0) {
+		cmd_line =
+		    (void *)((uintptr_t)hvm_start_info->cmdline_paddr + KERNBASE);
+		strlcpy(xen_start_info.cmd_line, cmd_line,
+		    sizeof(xen_start_info.cmd_line));
+	} else {
+		xen_start_info.cmd_line[0] = '\0';
+	}
+	xen_start_info.flags = hvm_start_info->flags;
+
 	if (vm_guest != VM_GUEST_XENPVH)
 		return;
+
 	xen_init_hypercall_page();
-	hvm_start_info = (void *)((uintptr_t)hvm_start_paddr + KERNBASE);
 
 	HYPERVISOR_shared_info = (void *)((uintptr_t)HYPERVISOR_shared_info_pa + KERNBASE);
 	struct xen_add_to_physmap xmap = {
@@ -262,15 +277,6 @@ init_xen_early(void)
 	}
 	delay_func = x86_delay = xen_delay;
 	x86_initclock_func = xen_initclocks;
-	if (hvm_start_info->cmdline_paddr != 0) {
-		cmd_line =
-		    (void *)((uintptr_t)hvm_start_info->cmdline_paddr + KERNBASE);
-		strlcpy(xen_start_info.cmd_line, cmd_line,
-		    sizeof(xen_start_info.cmd_line));
-	} else {
-		xen_start_info.cmd_line[0] = '\0';
-	}
-	xen_start_info.flags = hvm_start_info->flags;
 }
 
 

@@ -232,6 +232,8 @@ extern void *_binary_splash_image_end;
 
 #include <sys/userconf.h>
 
+#include <sys/tslog.h>
+
 extern time_t rootfstime;
 
 #ifndef curlwp
@@ -252,6 +254,22 @@ static void configure(void);
 static void configure2(void);
 static void configure3(void);
 void main(void);
+#ifdef BOOTTIME
+static void boottime(void);
+
+extern uint32_t boottime_low;
+extern uint32_t boottime_high;
+
+static void
+boottime(void)
+{
+	uint64_t entrytime = (uint64_t)boottime_high << 32 | boottime_low;
+
+	printf_nolog("boot: %lums (entry tsc: %lu)\n",
+			((rdtsc() - entrytime) * 1000) /
+			curcpu()->ci_data.cpu_cc_freq, entrytime);
+}
+#endif
 
 /*
  * System startup; initialize the world, create process 0, mount root
@@ -272,6 +290,7 @@ main(void)
 	CPU_INFO_ITERATOR cii;
 	struct cpu_info *ci;
 
+	TSENTER();
 #ifdef DIAGNOSTIC
 	/*
 	 * Verify that CPU_INFO_FOREACH() knows about the boot CPU
@@ -326,7 +345,6 @@ main(void)
 	kprintf_init();
 
 	percpu_init();
-
 	/* Initialize radix trees (used by numerous subsystems). */
 	radix_tree_init();
 
@@ -747,6 +765,10 @@ main(void)
 	cv_broadcast(&lbolt);
 	mutex_exit(&proc_lock);
 
+	TSEXIT();
+#ifdef BOOTTIME
+	boottime();
+#endif
 	/* The scheduler is an infinite loop. */
 	uvm_scheduler();
 	/* NOTREACHED */

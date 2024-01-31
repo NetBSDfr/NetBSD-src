@@ -1220,7 +1220,7 @@ error:
 }
 
 #define VMX_CPUID_MAX_BASIC		0x16
-#define VMX_CPUID_MAX_HYPERVISOR	0x40000000
+#define VMX_CPUID_MAX_HYPERVISOR	0x40000010
 #define VMX_CPUID_MAX_EXTENDED		0x80000008
 static uint32_t vmx_cpuid_max_basic __read_mostly;
 static uint32_t vmx_cpuid_max_extended __read_mostly;
@@ -1430,6 +1430,13 @@ vmx_inkernel_handle_cpuid(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 		memcpy(&cpudata->gprs[NVMM_X64_GPR_RBX], "___ ", 4);
 		memcpy(&cpudata->gprs[NVMM_X64_GPR_RCX], "NVMM", 4);
 		memcpy(&cpudata->gprs[NVMM_X64_GPR_RDX], " ___", 4);
+		break;
+
+	case 0x40000010: /* VMware-style CPU freq */
+		cpudata->gprs[NVMM_X64_GPR_RAX] = curcpu()->ci_data.cpu_cc_freq;
+		cpudata->gprs[NVMM_X64_GPR_RBX] = 0;
+		cpudata->gprs[NVMM_X64_GPR_RCX] = 0;
+		cpudata->gprs[NVMM_X64_GPR_RDX] = 0;
 		break;
 
 	case 0x80000000:
