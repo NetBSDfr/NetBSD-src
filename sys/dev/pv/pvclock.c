@@ -59,12 +59,14 @@
 #include <sys/module.h>
 #include <sys/systm.h>
 #include <sys/timetc.h>
+#include <sys/atomic.h>
 
 #include <machine/cpu.h>
-#include <machine/atomic.h>
 #include <uvm/uvm_extern.h>
 
 #include <dev/pv/pvreg.h>
+
+#define virtio_membar_consumer()	membar_consumer()
 
 uint pvclock_lastcount;
 
