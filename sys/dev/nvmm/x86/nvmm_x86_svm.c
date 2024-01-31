@@ -1387,9 +1387,11 @@ svm_vcpu_guest_fpu_enter(struct nvmm_cpu *vcpu)
 #endif
 
 	x86_restore_fpu(&cpudata->gxsave, svm_xcr0_mask);
+#if defined(_MODULE)
 	if (svm_xcr0_mask != 0) {
 		x86_set_xcr(0, cpudata->gxcr0);
 	}
+#endif
 }
 
 static void
@@ -1397,9 +1399,12 @@ svm_vcpu_guest_fpu_leave(struct nvmm_cpu *vcpu)
 {
 	struct svm_cpudata *cpudata = vcpu->cpudata;
 
+#if defined(_MODULE)
 	if (svm_xcr0_mask != 0) {
 		x86_set_xcr(0, svm_global_hstate.xcr0);
 	}
+#endif
+
 	x86_save_fpu(&cpudata->gxsave, svm_xcr0_mask);
 
 #if defined(__NetBSD__)
@@ -2621,16 +2626,16 @@ svm_init(void)
 	x86_get_cpuid(0x80000000, &descs);
 	svm_cpuid_max_extended = uimin(descs.eax, SVM_CPUID_MAX_EXTENDED);
 
-#if defined(_MODULE)
 	/* Init the global host state. */
+#if defined(_MODULE)
 	if (svm_xcr0_mask != 0) {
 		svm_global_hstate.xcr0 = x86_get_xcr(0);
 	}
+#endif
 	svm_global_hstate.star = rdmsr(MSR_STAR);
 	svm_global_hstate.lstar = rdmsr(MSR_LSTAR);
 	svm_global_hstate.cstar = rdmsr(MSR_CSTAR);
 	svm_global_hstate.sfmask = rdmsr(MSR_SFMASK);
-#endif
 
 	memset(hsave, 0, sizeof(hsave));
 	OS_CPU_FOREACH(cpu) {
