@@ -64,7 +64,7 @@
 #include <sys/systm.h>
 #include <sys/tslog.h>
 
-#include <machine/atomic.h>
+#include <sys/atomic.h>
 #include <machine/cpu.h>
 
 #ifndef TSLOGSIZE

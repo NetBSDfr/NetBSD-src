@@ -61,11 +61,11 @@
 #include <sys/timetc.h>
 
 #include <machine/cpu.h>
-#include <machine/atomic.h>
+#include <sys/atomic.h>
 #include <uvm/uvm_extern.h>
-
 #include <dev/pv/pvreg.h>
-
+// the above is missing, and this is not enough:
+//#define PVCLOCK_FLAG_TSC_STABLE 0
 uint pvclock_lastcount;
 
 struct pvclock_softc {
