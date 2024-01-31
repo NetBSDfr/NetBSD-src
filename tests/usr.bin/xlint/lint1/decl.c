@@ -1,4 +1,4 @@
-/*	$NetBSD: decl.c,v 1.26 2023/08/01 19:52:15 rillig Exp $	*/
+/*	$NetBSD: decl.c,v 1.28 2024/01/28 08:17:27 rillig Exp $	*/
 # 3 "decl.c"
 
 /*
@@ -169,10 +169,10 @@ __thread int thread_int;
 /* expect+1: error: syntax error 'int' [249] */
 __thread__ int thread_int;
 
-/* expect+4: error: old-style declaration; add 'int' [1] */
-/* expect+2: warning: static function 'cover_func_declarator' unused [236] */
 static
+/* expect+1: warning: static function 'cover_func_declarator' unused [236] */
 cover_func_declarator(void)
+/* expect+1: error: old-style declaration; add 'int' [1] */
 {
 }
 
@@ -224,7 +224,7 @@ symbol_type_in_unnamed_bit_field_member(void)
 	struct s {
 		// Since there is no name in the declarator, the next symbol
 		// after the ':' must not be interpreted as a member name, but
-		// instead as a variable, type or function (FVFT).
+		// instead as a variable, type or function (SK_VCFT).
 		unsigned int :bits;
 		int named_member;
 	};
