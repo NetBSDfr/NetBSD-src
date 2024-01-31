@@ -2550,7 +2550,8 @@ com_common_putc(dev_t dev, struct com_regs *regsp, int c, int with_readahead)
 	while (!ISSET(CSR_READ_1(regsp, COM_REG_LSR), LSR_TXRDY) && --timo)
 		continue;
 
-	CSR_WRITE_1(regsp, COM_REG_TXDATA, c);
+	if (c)
+		CSR_WRITE_1(regsp, COM_REG_TXDATA, c);
 	COM_BARRIER(regsp, BR | BW);
 
 	splx(s);
