@@ -1,4 +1,4 @@
-/*	$NetBSD: resource.h,v 1.5 2013/10/04 21:07:37 christos Exp $	*/
+/*	$NetBSD: resource.h,v 1.7 2024/01/20 08:40:37 kre Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1993
@@ -35,6 +35,7 @@
 #define	_COMPAT_SYS_RESOURCE_H_
 
 #include <sys/featuretest.h>
+#include <sys/resource.h>
 #include <sys/time.h>
 #include <compat/sys/time.h>
 
@@ -57,7 +58,17 @@ struct	rusage50 {
 	long	ru_nivcsw;		/* involuntary " */
 };
 
-void rusage_to_rusage50(const struct rusage *, struct rusage50 *);
+static __inline void
+rusage_to_rusage50(const struct rusage *ru, struct rusage50 *ru50)
+{
+	memset(ru50, 0, sizeof(*ru50));
+	(void)memcpy(&ru50->ru_first, &ru->ru_first,
+	    (char *)&ru50->ru_last - (char *)&ru50->ru_first +
+	    sizeof(ru50->ru_last));
+	ru50->ru_maxrss = ru->ru_maxrss;
+	timeval_to_timeval50(&ru->ru_utime, &ru50->ru_utime);
+	timeval_to_timeval50(&ru->ru_stime, &ru50->ru_stime);
+}
 
 #ifndef _KERNEL
 __BEGIN_DECLS

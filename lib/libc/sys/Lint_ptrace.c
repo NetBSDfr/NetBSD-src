@@ -1,19 +1,17 @@
-/* $NetBSD: Lint_ptrace.c,v 1.2 2000/06/14 06:49:10 cgd Exp $ */
+/* $NetBSD: Lint_ptrace.c,v 1.4 2024/01/21 00:35:57 christos Exp $ */
 
 /*
  * This file placed in the public domain.
  * Chris Demetriou, November 5, 1997.
  */
 
-#include <unistd.h>
+#include <signal.h>	/* XXX: alpha <machine/signal.h> needs sigset_t! */
+#include <sys/types.h>
+#include <sys/ptrace.h>
 
 /*ARGSUSED*/
 int
-ptrace(request, pid, addr, data)
-	int request;
-	pid_t pid;
-	caddr_t addr;
-	int data;
+ptrace(int request, pid_t pid, void *addr, int data)
 {
 	return (0);
 }
