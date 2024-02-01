@@ -396,27 +396,27 @@ static void
 nvmm_suspend_vcpu(struct nvmm_machine *mach, struct nvmm_cpu *vcpu)
 {
 
-	mutex_enter(&vcpu->lock);
+	os_mtx_lock(&vcpu->lock);
 	if (vcpu->present && nvmm_impl->vcpu_suspend)
 		(*nvmm_impl->vcpu_suspend)(mach, vcpu);
-	mutex_exit(&vcpu->lock);
+	os_mtx_unlock(&vcpu->lock);
 }
 
 static void
 nvmm_resume_vcpu(struct nvmm_machine *mach, struct nvmm_cpu *vcpu)
 {
 
-	mutex_enter(&vcpu->lock);
+	os_mtx_lock(&vcpu->lock);
 	if (vcpu->present && nvmm_impl->vcpu_resume)
 		(*nvmm_impl->vcpu_resume)(mach, vcpu);
-	mutex_exit(&vcpu->lock);
+	os_mtx_unlock(&vcpu->lock);
 }
 
 static void
 nvmm_suspend_machine(struct nvmm_machine *mach)
 {
 
-	rw_enter(&mach->lock, RW_WRITER);
+	os_rwl_wlock(&mach->lock);
 	if (mach->present) {
 		if (nvmm_impl->vcpu_suspend) {
 			size_t cpuid;
@@ -427,14 +427,14 @@ nvmm_suspend_machine(struct nvmm_machine *mach)
 		if (nvmm_impl->machine_suspend)
 			(*nvmm_impl->machine_suspend)(mach);
 	}
-	rw_exit(&mach->lock);
+	os_rwl_unlock(&mach->lock);
 }
 
 static void
 nvmm_resume_machine(struct nvmm_machine *mach)
 {
 
-	rw_enter(&mach->lock, RW_WRITER);
+	os_rwl_wlock(&mach->lock);
 	if (mach->present) {
 		if (nvmm_impl->vcpu_resume) {
 			size_t cpuid;
@@ -445,7 +445,7 @@ nvmm_resume_machine(struct nvmm_machine *mach)
 		if (nvmm_impl->machine_resume)
 			(*nvmm_impl->machine_resume)(mach);
 	}
-	rw_exit(&mach->lock);
+	os_rwl_unlock(&mach->lock);
 }
 
 static bool
@@ -456,10 +456,10 @@ nvmm_suspend(device_t self, const pmf_qual_t *qual)
 	/*
 	 * Prevent new users (via ioctl) from starting.
 	 */
-	mutex_enter(&suspension.lock);
-	KASSERT(!nvmm_suspending);
+	os_mtx_lock(&suspension.lock);
+	OS_ASSERT(!nvmm_suspending);
 	atomic_store_relaxed(&nvmm_suspending, true);
-	mutex_exit(&suspension.lock);
+	os_mtx_unlock(&suspension.lock);
 
 	/*
 	 * Interrupt any running VMs so they will break out of run
@@ -473,10 +473,10 @@ nvmm_suspend(device_t self, const pmf_qual_t *qual)
 	 * Wait for any running VMs or other ioctls to finish running
 	 * or handling any other ioctls.
 	 */
-	mutex_enter(&suspension.lock);
+	os_mtx_lock(&suspension.lock);
 	while (suspension.users)
 		cv_wait(&suspension.suspendcv, &suspension.lock);
-	mutex_exit(&suspension.lock);
+	os_mtx_unlock(&suspension.lock);
 
 	/*
 	 * Suspend all the machines.
@@ -500,8 +500,8 @@ nvmm_resume(device_t self, const pmf_qual_t *qual)
 {
 	size_t i;
 
-	KASSERT(atomic_load_relaxed(&nvmm_suspending));
-	KASSERT(suspension.users == 0);
+	OS_ASSERT(atomic_load_relaxed(&nvmm_suspending));
+	OS_ASSERT(suspension.users == 0);
 
 	/*
 	 * Take any systemwide resume action.
@@ -520,10 +520,10 @@ nvmm_resume(device_t self, const pmf_qual_t *qual)
 	/*
 	 * Allow new users (via ioctl) to start again.
 	 */
-	mutex_enter(&suspension.lock);
+	os_mtx_lock(&suspension.lock);
 	atomic_store_relaxed(&nvmm_suspending, false);
 	cv_broadcast(&suspension.resumecv);
-	mutex_exit(&suspension.lock);
+	os_mtx_unlock(&suspension.lock);
 
 	return true;
 }
