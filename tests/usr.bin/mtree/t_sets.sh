@@ -1,4 +1,4 @@
-#	$NetBSD: t_sets.sh,v 1.2 2024/01/26 00:32:46 riastradh Exp $
+#	$NetBSD: t_sets.sh,v 1.4 2024/01/30 16:57:32 martin Exp $
 #
 # Copyright (c) 2024 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -28,10 +28,6 @@
 check_mtree()
 {
 	local set=$1
-
-	if [ "$set" = base ]; then
-		atf_expect_fail "PR misc/57877"
-	fi
 
 	cd /
 	atf_check -o empty -s eq:0 \
@@ -80,6 +76,13 @@ atf_init_test_cases()
 		case $set in
 		base)	# Handled above already.
 			continue
+			;;
+		dtb)
+			# contents of this set go to the boot partition,
+			# which may not be mounted during normal operation
+			if [ ! -d /boot/dtb ]; then
+				continue;
+			fi
 			;;
 		etc|xetc)
 			# etc and xetc have files that may be modified
