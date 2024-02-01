@@ -240,6 +240,17 @@ os_contigpa_free(paddr_t pa, vaddr_t va, size_t npages)
 
 #include "ioconf.h"
 
+#if defined(__NetBSD__)
+static struct {
+	kmutex_t	lock;
+	kcondvar_t	suspendcv;
+	kcondvar_t	resumecv;
+	unsigned	users;
+} suspension;
+
+volatile bool nvmm_suspending;
+#endif
+
 static dev_type_open(nbsd_nvmm_open);
 static int nbsd_nvmm_ioctl(file_t *, u_long, void *);
 static int nbsd_nvmm_close(file_t *);
@@ -329,6 +340,8 @@ nbsd_nvmm_close(file_t *fp)
 static int nvmm_match(device_t, cfdata_t, void *);
 static void nvmm_attach(device_t, device_t, void *);
 static int nvmm_detach(device_t, int);
+static bool nvmm_suspend(device_t, const pmf_qual_t *);
+static bool nvmm_resume(device_t, const pmf_qual_t *);
 
 extern struct cfdriver nvmm_cd;
 
@@ -363,6 +376,10 @@ nvmm_attach(device_t parent, device_t self, void *aux)
 		panic("%s: impossible", __func__);
 	aprint_normal_dev(self, "attached, using backend %s\n",
 	    nvmm_impl->name);
+#if defined(__NetBSD__)
+	if (nvmm_impl->suspend != NULL && nvmm_impl->resume != NULL)
+		pmf_device_register(self, nvmm_suspend, nvmm_resume);
+#endif
 }
 
 static int
@@ -374,13 +391,151 @@ nvmm_detach(device_t self, int flags)
 	return 0;
 }
 
+#if defined(__NetBSD__)
+static void
+nvmm_suspend_vcpu(struct nvmm_machine *mach, struct nvmm_cpu *vcpu)
+{
+
+	mutex_enter(&vcpu->lock);
+	if (vcpu->present && nvmm_impl->vcpu_suspend)
+		(*nvmm_impl->vcpu_suspend)(mach, vcpu);
+	mutex_exit(&vcpu->lock);
+}
+
+static void
+nvmm_resume_vcpu(struct nvmm_machine *mach, struct nvmm_cpu *vcpu)
+{
+
+	mutex_enter(&vcpu->lock);
+	if (vcpu->present && nvmm_impl->vcpu_resume)
+		(*nvmm_impl->vcpu_resume)(mach, vcpu);
+	mutex_exit(&vcpu->lock);
+}
+
+static void
+nvmm_suspend_machine(struct nvmm_machine *mach)
+{
+
+	rw_enter(&mach->lock, RW_WRITER);
+	if (mach->present) {
+		if (nvmm_impl->vcpu_suspend) {
+			size_t cpuid;
+
+			for (cpuid = 0; cpuid < NVMM_MAX_VCPUS; cpuid++)
+				nvmm_suspend_vcpu(mach, &mach->cpus[cpuid]);
+		}
+		if (nvmm_impl->machine_suspend)
+			(*nvmm_impl->machine_suspend)(mach);
+	}
+	rw_exit(&mach->lock);
+}
+
+static void
+nvmm_resume_machine(struct nvmm_machine *mach)
+{
+
+	rw_enter(&mach->lock, RW_WRITER);
+	if (mach->present) {
+		if (nvmm_impl->vcpu_resume) {
+			size_t cpuid;
+
+			for (cpuid = 0; cpuid < NVMM_MAX_VCPUS; cpuid++)
+				nvmm_resume_vcpu(mach, &mach->cpus[cpuid]);
+		}
+		if (nvmm_impl->machine_resume)
+			(*nvmm_impl->machine_resume)(mach);
+	}
+	rw_exit(&mach->lock);
+}
+
+static bool
+nvmm_suspend(device_t self, const pmf_qual_t *qual)
+{
+	size_t i;
+
+	/*
+	 * Prevent new users (via ioctl) from starting.
+	 */
+	mutex_enter(&suspension.lock);
+	KASSERT(!nvmm_suspending);
+	atomic_store_relaxed(&nvmm_suspending, true);
+	mutex_exit(&suspension.lock);
+
+	/*
+	 * Interrupt any running VMs so they will break out of run
+	 * loops or anything else and not start up again until we've
+	 * resumed.
+	 */
+	if (nvmm_impl->suspend_interrupt)
+		(*nvmm_impl->suspend_interrupt)();
+
+	/*
+	 * Wait for any running VMs or other ioctls to finish running
+	 * or handling any other ioctls.
+	 */
+	mutex_enter(&suspension.lock);
+	while (suspension.users)
+		cv_wait(&suspension.suspendcv, &suspension.lock);
+	mutex_exit(&suspension.lock);
+
+	/*
+	 * Suspend all the machines.
+	 */
+	if (nvmm_impl->machine_suspend || nvmm_impl->vcpu_suspend) {
+		for (i = 0; i < NVMM_MAX_MACHINES; i++)
+			nvmm_suspend_machine(&machines[i]);
+	}
+
+	/*
+	 * Take any systemwide suspend action.
+	 */
+	if (nvmm_impl->suspend)
+		(*nvmm_impl->suspend)();
+
+	return true;
+}
+
+static bool
+nvmm_resume(device_t self, const pmf_qual_t *qual)
+{
+	size_t i;
+
+	KASSERT(atomic_load_relaxed(&nvmm_suspending));
+	KASSERT(suspension.users == 0);
+
+	/*
+	 * Take any systemwide resume action.
+	 */
+	if (nvmm_impl->resume)
+		(*nvmm_impl->resume)();
+
+	/*
+	 * Resume all the machines.
+	 */
+	if (nvmm_impl->machine_resume || nvmm_impl->vcpu_resume) {
+		for (i = 0; i < NVMM_MAX_MACHINES; i++)
+			nvmm_resume_machine(&machines[i]);
+	}
+
+	/*
+	 * Allow new users (via ioctl) to start again.
+	 */
+	mutex_enter(&suspension.lock);
+	atomic_store_relaxed(&nvmm_suspending, false);
+	cv_broadcast(&suspension.resumecv);
+	mutex_exit(&suspension.lock);
+
+	return true;
+}
+#endif
+
 void
 nvmmattach(int nunits)
 {
 	/* nothing */
 }
 
-MODULE(MODULE_CLASS_DRIVER, nvmm, NULL);
+MODULE(MODULE_CLASS_MISC, nvmm, NULL);
 
 #if defined(_MODULE)
 CFDRIVER_DECL(nvmm, DV_VIRTUAL, NULL);
@@ -428,7 +583,9 @@ nvmm_modcmd(modcmd_t cmd, void *arg)
 			aprint_error("%s: config_attach_pseudo failed\n",
 			    nvmm_cd.cd_name);
 			config_cfattach_detach(nvmm_cd.cd_name, &nvmm_ca);
+#if defined(_MODULE)
 			config_cfdriver_detach(&nvmm_cd);
+#endif
 			return ENXIO;
 		}
 

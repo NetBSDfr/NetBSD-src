@@ -36,7 +36,7 @@
 #include "nvmm_internal.h"
 #include "nvmm_ioctl.h"
 
-static struct nvmm_machine machines[NVMM_MAX_MACHINES];
+struct nvmm_machine machines[NVMM_MAX_MACHINES];
 volatile unsigned int nmachines __cacheline_aligned;
 
 static const struct nvmm_impl *nvmm_impl_list[] = {

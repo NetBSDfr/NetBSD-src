@@ -109,6 +109,11 @@ struct nvmm_impl {
 	void (*init)(void);
 	void (*fini)(void);
 	void (*capability)(struct nvmm_capability *);
+#if defined(__NetBSD__)
+	void (*suspend_interrupt)(void);
+	void (*suspend)(void);
+	void (*resume)(void);
+#endif
 
 	size_t mach_conf_max;
 	const size_t *mach_conf_sizes;
@@ -121,6 +126,10 @@ struct nvmm_impl {
 	void (*machine_create)(struct nvmm_machine *);
 	void (*machine_destroy)(struct nvmm_machine *);
 	int (*machine_configure)(struct nvmm_machine *, uint64_t, void *);
+#if defined(__NetBSD__)
+	void (*machine_suspend)(struct nvmm_machine *);
+	void (*machine_resume)(struct nvmm_machine *);
+#endif
 
 	int (*vcpu_create)(struct nvmm_machine *, struct nvmm_cpu *);
 	void (*vcpu_destroy)(struct nvmm_machine *, struct nvmm_cpu *);
@@ -130,6 +139,11 @@ struct nvmm_impl {
 	int (*vcpu_inject)(struct nvmm_cpu *);
 	int (*vcpu_run)(struct nvmm_machine *, struct nvmm_cpu *,
 	    struct nvmm_vcpu_exit *);
+#if defined(__NetBSD__)
+	void (*vcpu_suspend)(struct nvmm_machine *,
+	    struct nvmm_cpu *);
+	void (*vcpu_resume)(struct nvmm_machine *, struct nvmm_cpu *);
+#endif
 };
 
 #if defined(__x86_64__)
@@ -139,6 +153,7 @@ extern const struct nvmm_impl nvmm_x86_vmx;
 
 extern struct nvmm_owner nvmm_root_owner;
 extern volatile unsigned int nmachines;
+extern struct nvmm_machine machines[];
 extern const struct nvmm_impl *nvmm_impl;
 
 const struct nvmm_impl *nvmm_ident(void);
