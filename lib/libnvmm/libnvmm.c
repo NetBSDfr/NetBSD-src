@@ -168,7 +168,8 @@ nvmm_init(void)
 		nvmm_fd = -1;
 		return -1;
 	}
-	if (__capability.version != NVMM_KERN_VERSION) {
+	/* Allow backward compatibility */
+	if (__capability.version < NVMM_KERN_VERSION) {
 		close(nvmm_fd);
 		nvmm_fd = -1;
 		errno = EPROGMISMATCH;
@@ -191,7 +192,7 @@ nvmm_root_init(void)
 		nvmm_fd = -1;
 		return -1;
 	}
-	if (__capability.version != NVMM_KERN_VERSION) {
+	if (__capability.version < NVMM_KERN_VERSION) {
 		close(nvmm_fd);
 		nvmm_fd = -1;
 		errno = EPROGMISMATCH;
@@ -436,6 +437,9 @@ nvmm_vcpu_run(struct nvmm_machine *mach, struct nvmm_vcpu *vcpu)
 int
 nvmm_vcpu_stop(struct nvmm_vcpu *vcpu)
 {
+	if (NVMM_KERN_VERSION == 1)
+		*vcpu->stop = 1;
+
 	return 0;
 }
 
