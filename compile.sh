@@ -23,12 +23,13 @@ TOOLCHAIN="${HOME}/obj"
 
 # Get the sources
 #git clone https://github.com/NetBSDfr/NetBSD-src
+git clone https://github.com/csdvrx/NetBSD-fr-src
 
 # Show the branches available
-#git branch -a
+git branch -a
 
 # Change to result-replication, based on the perf branch
-git branch| grep result-replication || exit 2
+git branch| grep result-replication2  || git checkout result-replication2 || exit 2
 
 #cf https://www.netbsd.org/docs/guide/en/chap-build.html#chap-boot-cross-compiling-kernel
 echo "# Building the cross compilation toolchain into ${TOOLCHAIN}":
