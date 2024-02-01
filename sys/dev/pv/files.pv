@@ -9,4 +9,4 @@ file	dev/virtio/virtio_mmio_cmdline.c	mmio_cmdline
 
 device	pvclock
 attach	pvclock at pv
-file	dev/pv/pvclock.c			pvclock
+file	dev/pv/pvclock.c			pvclock	needs-flag
