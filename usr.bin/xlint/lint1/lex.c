@@ -1,4 +1,4 @@
-/* $NetBSD: lex.c,v 1.197 2024/01/07 18:42:37 rillig Exp $ */
+/* $NetBSD: lex.c,v 1.204 2024/01/29 21:30:25 rillig Exp $ */
 
 /*
  * Copyright (c) 1996 Christopher G. Demetriou.  All Rights Reserved.
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: lex.c,v 1.197 2024/01/07 18:42:37 rillig Exp $");
+__RCSID("$NetBSD: lex.c,v 1.204 2024/01/29 21:30:25 rillig Exp $");
 #endif
 
 #include <ctype.h>
@@ -205,7 +205,7 @@ static sym_t *symtab[503];
  * The kind of the next expected symbol, to distinguish the namespaces of
  * members, labels, type tags and other identifiers.
  */
-symt_t symtyp;
+symbol_kind sym_kind;
 
 
 static unsigned int
@@ -243,7 +243,7 @@ symtab_search(const char *name)
 		if (strcmp(sym->s_name, name) != 0)
 			continue;
 		if (sym->s_keyword != NULL ||
-		    sym->s_kind == symtyp ||
+		    sym->s_kind == sym_kind ||
 		    in_gcc_attribute)
 			return sym;
 	}
@@ -459,7 +459,7 @@ lex_keyword(sym_t *sym)
 
 /*
  * Look up the definition of a name in the symbol table. This symbol must
- * either be a keyword or a symbol of the type required by symtyp (label,
+ * either be a keyword or a symbol of the type required by sym_kind (label,
  * member, tag, ...).
  */
 extern int
@@ -485,6 +485,120 @@ lex_name(const char *yytext, size_t yyleng)
 	(void)memcpy(name, yytext, yyleng + 1);
 	sb->sb_name = name;
 	return T_NAME;
+}
+
+// Determines whether the constant is signed in traditional C but unsigned in
+// C90 and later.
+static bool
+is_unsigned_since_c90(tspec_t typ, uint64_t ui, int base)
+{
+	if (!(allow_trad && allow_c90))
+		return false;
+	if (typ == INT) {
+		if (ui > TARG_INT_MAX && ui <= TARG_UINT_MAX && base != 10)
+			return true;
+		return ui > TARG_LONG_MAX;
+	}
+	return typ == LONG && ui > TARG_LONG_MAX;
+}
+
+static tspec_t
+integer_constant_type(tspec_t t, uint64_t ui, int base, bool warned)
+{
+	switch (t) {
+	case INT:
+		if (ui <= TARG_INT_MAX)
+			return INT;
+		if (ui <= TARG_UINT_MAX && base != 10 && allow_c90)
+			return UINT;
+		if (ui <= TARG_LONG_MAX)
+			return LONG;
+		if (ui <= TARG_ULONG_MAX && base != 10 && allow_c90)
+			return ULONG;
+		if (ui <= TARG_ULONG_MAX && !allow_c90)
+			return LONG;
+		if (!allow_c99) {
+			if (!warned)
+				/* integer constant out of range */
+				warning(252);
+			return allow_c90 ? ULONG : LONG;
+		}
+		if (ui <= TARG_LLONG_MAX)
+			return LLONG;
+		if (ui <= TARG_ULLONG_MAX && base != 10)
+			return ULLONG;
+		if (!warned)
+			/* integer constant out of range */
+			warning(252);
+		return ULLONG;
+	case UINT:
+		if (ui <= TARG_UINT_MAX)
+			return UINT;
+		if (ui <= TARG_ULONG_MAX)
+			return ULONG;
+		if (!allow_c99) {
+			if (!warned)
+				/* integer constant out of range */
+				warning(252);
+			return ULONG;
+		}
+		if (ui <= TARG_ULLONG_MAX)
+			return ULLONG;
+		if (!warned)
+			/* integer constant out of range */
+			warning(252);
+		return ULLONG;
+	case LONG:
+		if (ui <= TARG_LONG_MAX)
+			return LONG;
+		if (ui <= TARG_ULONG_MAX && base != 10)
+			return allow_c90 ? ULONG : LONG;
+		if (!allow_c99) {
+			if (!warned)
+				/* integer constant out of range */
+				warning(252);
+			return allow_c90 ? ULONG : LONG;
+		}
+		if (ui <= TARG_LLONG_MAX)
+			return LLONG;
+		if (ui <= TARG_ULLONG_MAX && base != 10)
+			return ULLONG;
+		if (!warned)
+			/* integer constant out of range */
+			warning(252);
+		return ULLONG;
+	case ULONG:
+		if (ui <= TARG_ULONG_MAX)
+			return ULONG;
+		if (!allow_c99) {
+			if (!warned)
+				/* integer constant out of range */
+				warning(252);
+			return ULONG;
+		}
+		if (ui <= TARG_ULLONG_MAX)
+			return ULLONG;
+		if (!warned)
+			/* integer constant out of range */
+			warning(252);
+		return ULLONG;
+	case LLONG:
+		if (ui <= TARG_LLONG_MAX)
+			return LLONG;
+		if (ui <= TARG_ULLONG_MAX && base != 10)
+			return allow_c90 ? ULLONG : LLONG;
+		if (!warned)
+			/* integer constant out of range */
+			warning(252);
+		return allow_c90 ? ULLONG : LLONG;
+	default:
+		if (ui <= TARG_ULLONG_MAX)
+			return ULLONG;
+		if (!warned)
+			/* integer constant out of range */
+			warning(252);
+		return ULLONG;
+	}
 }
 
 int
@@ -528,7 +642,7 @@ lex_integer_constant(const char *yytext, size_t yyleng, int base)
 		/* suffix 'U' is illegal in traditional C */
 		warning(97);
 	}
-	tspec_t typ = suffix_type[u_suffix][l_suffix];
+	tspec_t ct = suffix_type[u_suffix][l_suffix];
 
 	bool warned = false;
 	errno = 0;
@@ -546,82 +660,13 @@ lex_integer_constant(const char *yytext, size_t yyleng, int base)
 		query_message(8, (int)len, cp);
 	}
 
-	/*
-	 * If the value is too big for the current type, we must choose another
-	 * type.
-	 */
-	bool ansiu = false;
-	switch (typ) {
-	case INT:
-		if (ui <= TARG_INT_MAX) {
-			/* ok */
-		} else if (ui <= TARG_UINT_MAX && base != 10) {
-			typ = UINT;
-		} else if (ui <= TARG_LONG_MAX) {
-			typ = LONG;
-		} else {
-			typ = ULONG;
-			if (ui > TARG_ULONG_MAX && !warned) {
-				/* integer constant out of range */
-				warning(252);
-			}
-		}
-		if (typ == UINT || typ == ULONG) {
-			if (!allow_c90) {
-				typ = LONG;
-			} else if (allow_trad) {
-				/*
-				 * Remember that the constant is unsigned only
-				 * in C90.
-				 */
-				ansiu = true;
-			}
-		}
-		break;
-	case UINT:
-		if (ui > TARG_UINT_MAX) {
-			typ = ULONG;
-			if (ui > TARG_ULONG_MAX && !warned) {
-				/* integer constant out of range */
-				warning(252);
-			}
-		}
-		break;
-	case LONG:
-		if (ui > TARG_LONG_MAX && allow_c90) {
-			typ = ULONG;
-			if (allow_trad)
-				ansiu = true;
-			if (ui > TARG_ULONG_MAX && !warned) {
-				/* integer constant out of range */
-				warning(252);
-			}
-		}
-		break;
-	case ULONG:
-		if (ui > TARG_ULONG_MAX && !warned) {
-			/* integer constant out of range */
-			warning(252);
-		}
-		break;
-	case LLONG:
-		if (ui > TARG_LLONG_MAX && allow_c90)
-			typ = ULLONG;
-		break;
-	case ULLONG:
-		if (ui > TARG_ULLONG_MAX && !warned) {
-			/* integer constant out of range */
-			warning(252);
-		}
-		break;
-	default:
-		break;
-	}
+	bool ansiu = is_unsigned_since_c90(ct, ui, base);
 
-	ui = (uint64_t)convert_integer((int64_t)ui, typ, 0);
+	tspec_t t = integer_constant_type(ct, ui, base, warned);
+	ui = (uint64_t)convert_integer((int64_t)ui, t, 0);
 
 	yylval.y_val = xcalloc(1, sizeof(*yylval.y_val));
-	yylval.y_val->v_tspec = typ;
+	yylval.y_val->v_tspec = t;
 	yylval.y_val->v_unsigned_since_c90 = ansiu;
 	yylval.y_val->u.integer = (int64_t)ui;
 
@@ -791,6 +836,12 @@ read_escaped_backslash(int delim)
 		return '\a';
 	case 'b':
 		return '\b';
+	case 'e':
+		if (!allow_gcc)
+			break;
+		/* Not in the C standard yet, compilers recognize it */
+		/* LINTED 79 */
+		return '\e';
 	case 'f':
 		return '\f';
 	case 'n':
@@ -818,15 +869,15 @@ read_escaped_backslash(int delim)
 	case EOF:
 		return -2;
 	default:
-		if (isprint(c)) {
-			/* dubious escape \%c */
-			warning(79, c);
-		} else {
-			/* dubious escape \%o */
-			warning(80, c);
-		}
-		return c;
+		break;
 	}
+	if (isprint(c))
+		/* dubious escape \%c */
+		warning(79, c);
+	else
+		/* dubious escape \%o */
+		warning(80, c);
+	return c;
 }
 
 /*
@@ -1208,28 +1259,26 @@ clear_warn_flags(void)
 int
 lex_string(void)
 {
-	unsigned char *s;
+	size_t s_len = 0;
+	size_t s_cap = 64;
+	char *s = xmalloc(s_cap);
+
 	int c;
-	size_t len, max;
-
-	s = xmalloc(max = 64);
-
-	len = 0;
 	while ((c = get_escaped_char('"')) >= 0) {
 		/* +1 to reserve space for a trailing NUL character */
-		if (len + 1 == max)
-			s = xrealloc(s, max *= 2);
-		s[len++] = (char)c;
+		if (s_len + 1 == s_cap)
+			s = xrealloc(s, s_cap *= 2);
+		s[s_len++] = (char)c;
 	}
-	s[len] = '\0';
+	s[s_len] = '\0';
 	if (c == -2)
 		/* unterminated string constant */
 		error(258);
 
 	strg_t *strg = xcalloc(1, sizeof(*strg));
 	strg->st_char = true;
-	strg->st_len = len;
-	strg->st_mem = s;
+	strg->st_len = s_len;
+	strg->st_chars = s;
 
 	yylval.y_string = strg;
 	return T_STRING;
@@ -1266,7 +1315,7 @@ lex_wide_string(void)
 			n = 1;
 	}
 
-	wchar_t *ws = xmalloc((wlen + 1) * sizeof(*ws));
+	wchar_t *ws = xcalloc(wlen + 1, sizeof(*ws));
 	size_t wi = 0;
 	/* convert from multibyte to wide char */
 	(void)mbtowc(NULL, NULL, 0);
@@ -1276,13 +1325,12 @@ lex_wide_string(void)
 		if (n == 0)
 			n = 1;
 	}
-	ws[wi] = 0;
 	free(s);
+	free(ws);
 
 	strg_t *strg = xcalloc(1, sizeof(*strg));
 	strg->st_char = false;
 	strg->st_len = wlen;
-	strg->st_mem = ws;
 
 	yylval.y_string = strg;
 	return T_STRING;
@@ -1329,18 +1377,18 @@ getsym(sbuf_t *sb)
 
 	/*
 	 * During member declaration it is possible that name() looked for
-	 * symbols of type FVFT, although it should have looked for symbols of
-	 * type FTAG. Same can happen for labels. Both cases are compensated
-	 * here.
+	 * symbols of type SK_VCFT, although it should have looked for symbols
+	 * of type SK_TAG. Same can happen for labels. Both cases are
+	 * compensated here.
 	 */
-	if (symtyp == FMEMBER || symtyp == FLABEL) {
-		if (sym == NULL || sym->s_kind == FVFT)
+	if (sym_kind == SK_MEMBER || sym_kind == SK_LABEL) {
+		if (sym == NULL || sym->s_kind == SK_VCFT)
 			sym = symtab_search(sb->sb_name);
 	}
 
 	if (sym != NULL) {
-		lint_assert(sym->s_kind == symtyp);
-		set_symtyp(FVFT);
+		lint_assert(sym->s_kind == sym_kind);
+		set_sym_kind(SK_VCFT);
 		free(sb);
 		return sym;
 	}
@@ -1349,7 +1397,7 @@ getsym(sbuf_t *sb)
 
 	/* labels must always be allocated at level 1 (outermost block) */
 	decl_level *dl;
-	if (symtyp == FLABEL) {
+	if (sym_kind == SK_LABEL) {
 		sym = level_zero_alloc(1, sizeof(*sym), "sym");
 		char *s = level_zero_alloc(1, sb->sb_len + 1, "string");
 		(void)memcpy(s, sb->sb_name, sb->sb_len + 1);
@@ -1368,10 +1416,10 @@ getsym(sbuf_t *sb)
 	}
 
 	sym->s_def_pos = unique_curr_pos();
-	if ((sym->s_kind = symtyp) != FLABEL)
+	if ((sym->s_kind = sym_kind) != SK_LABEL)
 		sym->s_type = gettyp(INT);
 
-	set_symtyp(FVFT);
+	set_sym_kind(SK_VCFT);
 
 	if (!in_gcc_attribute) {
 		debug_printf("%s: symtab_add ", __func__);
@@ -1408,7 +1456,7 @@ mktempsym(type_t *tp)
 	sym->s_type = tp;
 	sym->s_block_level = block_level;
 	sym->s_scl = scl;
-	sym->s_kind = FVFT;
+	sym->s_kind = SK_VCFT;
 	sym->s_used = true;
 	sym->s_set = true;
 
@@ -1426,7 +1474,8 @@ rmsym(sym_t *sym)
 {
 
 	debug_step("rmsym '%s' %s '%s'",
-	    sym->s_name, symt_name(sym->s_kind), type_name(sym->s_type));
+	    sym->s_name, symbol_kind_name(sym->s_kind),
+	    type_name(sym->s_type));
 	symtab_remove(sym);
 
 	/* avoid that the symbol will later be put back to the symbol table */
@@ -1448,9 +1497,8 @@ symtab_remove_level(sym_t *syms)
 	for (sym_t *sym = syms; sym != NULL; sym = sym->s_level_next) {
 		if (sym->s_block_level != -1) {
 			debug_step("%s '%s' %s '%s' %d", __func__,
-			    sym->s_name, symt_name(sym->s_kind),
-			    type_name(sym->s_type),
-			    sym->s_block_level);
+			    sym->s_name, symbol_kind_name(sym->s_kind),
+			    type_name(sym->s_type), sym->s_block_level);
 			symtab_remove(sym);
 			sym->s_symtab_ref = NULL;
 		}
@@ -1463,8 +1511,8 @@ inssym(int level, sym_t *sym)
 {
 
 	debug_step("%s '%s' %s '%s' %d", __func__,
-	    sym->s_name, symt_name(sym->s_kind), type_name(sym->s_type),
-	    level);
+	    sym->s_name, symbol_kind_name(sym->s_kind),
+	    type_name(sym->s_type), level);
 	sym->s_block_level = level;
 	symtab_add(sym);
 
@@ -1496,7 +1544,8 @@ pushdown(const sym_t *sym)
 	sym_t *nsym;
 
 	debug_step("pushdown '%s' %s '%s'",
-	    sym->s_name, symt_name(sym->s_kind), type_name(sym->s_type));
+	    sym->s_name, symbol_kind_name(sym->s_kind),
+	    type_name(sym->s_type));
 	nsym = block_zero_alloc(sizeof(*nsym), "sym");
 	lint_assert(sym->s_block_level <= block_level);
 	nsym->s_name = sym->s_name;
@@ -1528,7 +1577,7 @@ freeyyv(void *sp, int tok)
 		free(val);
 	} else if (tok == T_STRING) {
 		strg_t *strg = *(strg_t **)sp;
-		free(strg->st_mem);
+		free(strg->st_chars);
 		free(strg);
 	}
 }

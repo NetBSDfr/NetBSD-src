@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.inc,v 1.95 2019/03/04 17:30:33 christos Exp $
+#	$NetBSD: Makefile.inc,v 1.98 2024/01/27 17:58:36 christos Exp $
 #	from: @(#)Makefile.inc	8.3 (Berkeley) 2/4/95
 
 # stdlib sources
@@ -62,6 +62,12 @@ MAN+=	a64l.3 abort.3 abs.3 alloca.3 atexit.3 atof.3 atoi.3 atol.3 atoll.3 \
 	tsearch.3 \
 	unlockpt.3
 
+strtou.3: strtoi.3
+	${_MKTARGET_CREATE}
+	${TOOL_SED} -e s/strtoi/strtou/g -e s/STRTOI/STRTOU/g \
+	    -e s/intmax_t/uintmax_t/g -e s/%jd/%ju/g ${.ALLSRC} > ${.TARGET}
+CLEANFILES += strtou.3
+
 MLINKS+=a64l.3 l64a.3
 MLINKS+=a64l.3 l64a_r.3
 MLINKS+=abs.3 labs.3 \
@@ -99,3 +105,37 @@ MLINKS+=strtoul.3 strtoull.3
 MLINKS+=strtoul.3 strtoumax.3
 MLINKS+=strtoul.3 strtouq.3
 MLINKS+=tsearch.3 tfind.3 tsearch.3 twalk.3 tsearch.3 tdelete.3
+
+# jemalloc
+LINTFLAGS.arena.c += -X 86,117,161,191,193,207,217,226
+LINTFLAGS.background_thread.c += -X 86,117,132,161,191,193,207,217,226
+LINTFLAGS.base.c += -X 86,117,161,191,193,207,217,226
+LINTFLAGS.bin.c += -X 86,117,161,191,193,207,217,226
+LINTFLAGS.bitmap.c += -X 86,117,161,191,193,207,217,226
+LINTFLAGS.chk.c += -X 191,193,217,226,239
+LINTFLAGS.ckh.c += -X 86,117,161,191,193,207,217,226,239,284
+LINTFLAGS.ctl.c += -X 86,117,135,161,193,191,207,217,226
+LINTFLAGS.divide.c += -X 226
+LINTFLAGS.extent.c += -X 86,161,117,191,193,207,217,226
+LINTFLAGS.extent_dss.c += -X 86,117,161,191,193,207,217,226
+LINTFLAGS.extent_mmap.c += -X 86,117,161,191,193,207,217,226
+LINTFLAGS.jemalloc.c += -X 86,117,161,191,193,207,217,226,236,307
+LINTFLAGS.jemalloc.c += -X 141 # i386
+LINTFLAGS.hooks.c += -X 226
+LINTFLAGS.large.c += -X 86,161,117,191,193,207,217,226
+LINTFLAGS.log.c += -X 86,117,161,191,193,207,217,226
+LINTFLAGS.malloc_io.c += -X 86,117,161,191,193,207,217,226,284
+LINTFLAGS.malloc_io.c += -X 132 # i386
+LINTFLAGS.mutex.c += -X 86,117,161,191,193,207,217,226
+LINTFLAGS.mutex_pool.c += -X 86,117,161,191,193,207,217,226
+LINTFLAGS.nstime.c += -X 86,117,161,191,193,207,217,226
+LINTFLAGS.pages.c += -X 86,117,161,191,193,207,217,226,298
+LINTFLAGS.prng.c += -X 86,117,161,191,193,207,217,226
+LINTFLAGS.prof.c += -X 86,117,161,181,191,193,207,217,226,236
+LINTFLAGS.rtree.c += -X 86,117,161,191,193,207,217,226,239
+LINTFLAGS.sz.c += -X 86,226
+LINTFLAGS.stats.c += -X 42,86,117,135,161,191,193,207,217,226,247,351
+LINTFLAGS.tcache.c += -X 86,117,161,191,193,207,217,226,239,309
+LINTFLAGS.ticker.c += -X 86,117,161,191,193,207,217,226
+LINTFLAGS.tsd.c += -X 86,117,161,191,193,207,217,226,346,351
+LINTFLAGS.witness.c += -X 86,117,161,191,193,207,217,226

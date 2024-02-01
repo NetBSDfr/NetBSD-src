@@ -1,4 +1,4 @@
-/*	$NetBSD: cond.c,v 1.359 2023/12/29 12:59:43 rillig Exp $	*/
+/*	$NetBSD: cond.c,v 1.361 2024/01/21 16:32:41 rillig Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990 The Regents of the University of California.
@@ -91,7 +91,7 @@
 #include "dir.h"
 
 /*	"@(#)cond.c	8.2 (Berkeley) 1/2/94"	*/
-MAKE_RCSID("$NetBSD: cond.c,v 1.359 2023/12/29 12:59:43 rillig Exp $");
+MAKE_RCSID("$NetBSD: cond.c,v 1.361 2024/01/21 16:32:41 rillig Exp $");
 
 /*
  * Conditional expressions conform to this grammar:
@@ -867,12 +867,13 @@ CondParser_Term(CondParser *par, bool doEval)
 {
 	CondResult res;
 	Token t;
+	bool neg = false;
 
-	t = CondParser_Token(par, doEval);
-	if (t == TOK_TRUE)
-		return CR_TRUE;
-	if (t == TOK_FALSE)
-		return CR_FALSE;
+	while ((t = CondParser_Token(par, doEval)) == TOK_NOT)
+		neg = !neg;
+
+	if (t == TOK_TRUE || t == TOK_FALSE)
+		return neg == (t == TOK_FALSE) ? CR_TRUE : CR_FALSE;
 
 	if (t == TOK_LPAREN) {
 		res = CondParser_Or(par, doEval);
@@ -880,16 +881,7 @@ CondParser_Term(CondParser *par, bool doEval)
 			return CR_ERROR;
 		if (CondParser_Token(par, doEval) != TOK_RPAREN)
 			return CR_ERROR;
-		return res;
-	}
-
-	if (t == TOK_NOT) {
-		res = CondParser_Term(par, doEval);
-		if (res == CR_TRUE)
-			res = CR_FALSE;
-		else if (res == CR_FALSE)
-			res = CR_TRUE;
-		return res;
+		return neg == (res == CR_FALSE) ? CR_TRUE : CR_FALSE;
 	}
 
 	return CR_ERROR;
@@ -937,20 +929,6 @@ CondParser_Or(CondParser *par, bool doEval)
 	return res;
 }
 
-static CondResult
-CondParser_Eval(CondParser *par)
-{
-	CondResult res;
-
-	DEBUG1(COND, "CondParser_Eval: %s\n", par->p);
-
-	res = CondParser_Or(par, true);
-	if (res != CR_ERROR && CondParser_Token(par, false) != TOK_EOF)
-		return CR_ERROR;
-
-	return res;
-}
-
 /*
  * Evaluate the condition, including any side effects from the
  * expressions in the condition. The condition consists of &&, ||, !,
@@ -974,7 +952,10 @@ CondEvalExpression(const char *cond, bool plain,
 	par.curr = TOK_NONE;
 	par.printedError = false;
 
-	rval = CondParser_Eval(&par);
+	DEBUG1(COND, "CondParser_Eval: %s\n", par.p);
+	rval = CondParser_Or(&par, true);
+	if (par.curr != TOK_EOF)
+		rval = CR_ERROR;
 
 	if (rval == CR_ERROR && eprint && !par.printedError)
 		Parse_Error(PARSE_FATAL, "Malformed conditional (%s)", cond);
