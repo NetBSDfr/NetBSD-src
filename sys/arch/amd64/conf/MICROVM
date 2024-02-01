@@ -1214,7 +1214,7 @@ pseudo-device	pty			# pseudo-terminals
 #pseudo-device	lockstat		# lock profiling
 #pseudo-device	bcsp			# BlueCore Serial Protocol
 #pseudo-device	btuart			# Bluetooth HCI UART (H4)
-#pseudo-device	nvmm			# NetBSD Virtual Machine Monitor
+pseudo-device	nvmm			# NetBSD Virtual Machine Monitor
 #pseudo-device 	swwdog			# software watchdog timer -- swwdog(4)
 #
 ## wscons pseudo-devices

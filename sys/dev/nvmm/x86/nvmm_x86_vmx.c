@@ -2067,11 +2067,9 @@ vmx_vcpu_guest_fpu_enter(struct nvmm_cpu *vcpu)
 #endif
 
 	x86_restore_fpu(&cpudata->gxsave, vmx_xcr0_mask);
-#if defined(_MODULE)
 	if (vmx_xcr0_mask != 0) {
 		x86_set_xcr(0, cpudata->gxcr0);
 	}
-#endif
 }
 
 static void
@@ -2079,11 +2077,9 @@ vmx_vcpu_guest_fpu_leave(struct nvmm_cpu *vcpu)
 {
 	struct vmx_cpudata *cpudata = vcpu->cpudata;
 
-#if defined(_MODULE)
 	if (vmx_xcr0_mask != 0) {
 		x86_set_xcr(0, vmx_global_hstate.xcr0);
 	}
-#endif
 	x86_save_fpu(&cpudata->gxsave, vmx_xcr0_mask);
 
 #if defined(__NetBSD__)
@@ -3590,11 +3586,9 @@ vmx_init(void)
 	vmx_init_l1tf();
 
 	/* Init the global host state. */
-#if defined(_MODULE)
 	if (vmx_xcr0_mask != 0) {
 		vmx_global_hstate.xcr0 = x86_get_xcr(0);
 	}
-#endif
 	vmx_global_hstate.star = rdmsr(MSR_STAR);
 	vmx_global_hstate.lstar = rdmsr(MSR_LSTAR);
 	vmx_global_hstate.cstar = rdmsr(MSR_CSTAR);
