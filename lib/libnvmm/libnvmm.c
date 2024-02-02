@@ -242,7 +242,7 @@ nvmm_capability(struct nvmm_capability *cap)
 		args.cap.max_machines = args_v2.cap.max_machines;
 		args.cap.max_vcpus = args_v2.cap.max_vcpus;
 		args.cap.max_ram = args_v2.cap.max_ram;
-		args.cap.comm_size = 0; /* Not available in v1 */
+		args.cap.comm_size = PAGE_SIZE; /* Not available in v2 */
 	}
 
 	memcpy(cap, &args.cap, sizeof(args.cap));
@@ -482,7 +482,7 @@ nvmm_vcpu_run(struct nvmm_machine *mach, struct nvmm_vcpu *vcpu)
 int
 nvmm_vcpu_stop(struct nvmm_vcpu *vcpu)
 {
-	if (NVMM_KERN_VERSION < 3)
+	if (NVMM_USER_VERSION < 3)
 		*vcpu->stop = 1;
 
 	return 0;

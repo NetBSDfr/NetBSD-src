@@ -64,7 +64,7 @@ struct nvmm_vcpu {
 	struct nvmm_vcpu_state *state;
 	struct nvmm_vcpu_event *event;
 	struct nvmm_vcpu_exit *exit;
-	volatile int *stop; /* v1 compatibility */
+	volatile int *stop; /* v2 compatibility */
 };
 
 struct nvmm_io {
