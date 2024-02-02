@@ -42,7 +42,7 @@
 #error "Unsupported OS."
 #endif
 
-#define NVMM_USER_VERSION	1
+#define NVMM_USER_VERSION	3
 
 struct nvmm_io;
 struct nvmm_mem;
@@ -64,6 +64,7 @@ struct nvmm_vcpu {
 	struct nvmm_vcpu_state *state;
 	struct nvmm_vcpu_event *event;
 	struct nvmm_vcpu_exit *exit;
+	volatile int *stop; /* v1 compatibility */
 };
 
 struct nvmm_io {

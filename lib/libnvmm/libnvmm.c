@@ -40,7 +40,32 @@
 
 #include "nvmm.h"
 
+struct nvmm_capability_v2 {
+	uint32_t version;
+	uint32_t state_size;
+	uint32_t max_machines;
+	uint32_t max_vcpus;
+	uint64_t max_ram;
+	struct nvmm_cap_md arch;
+};
+
+struct nvmm_ioc_capability_v2 {
+	struct nvmm_capability_v2 cap;
+};
+
+struct nvmm_ioc_vcpu_create_v2 {
+	nvmm_machid_t machid;
+	nvmm_cpuid_t cpuid;
+};
+
 static struct nvmm_capability __capability;
+
+#define NVMM_IOC_CAPABILITY_V1 _IOR ('N',  0, struct nvmm_ioc_capability_v2)
+#define NVMM_IOC_VCPU_CREATE_V1 _IOW ('N',  4, struct nvmm_ioc_vcpu_create_v2)
+
+#define NVMM_COMM_OFF(machid, cpuid)		\
+	((((uint64_t)machid & 0xFFULL) << 20) |	\
+	 (((uint64_t)cpuid & 0xFFULL) << 12))
 
 #ifdef __x86_64__
 #include "libnvmm_x86.c"
@@ -168,7 +193,8 @@ nvmm_init(void)
 		nvmm_fd = -1;
 		return -1;
 	}
-	if (__capability.version != NVMM_KERN_VERSION) {
+	/* Allow backward compatibility */
+	if (NVMM_USER_VERSION < __capability.version) {
 		close(nvmm_fd);
 		nvmm_fd = -1;
 		errno = EPROGMISMATCH;
@@ -191,7 +217,7 @@ nvmm_root_init(void)
 		nvmm_fd = -1;
 		return -1;
 	}
-	if (__capability.version != NVMM_KERN_VERSION) {
+	if (NVMM_USER_VERSION < __capability.version) {
 		close(nvmm_fd);
 		nvmm_fd = -1;
 		errno = EPROGMISMATCH;
@@ -205,11 +231,19 @@ int
 nvmm_capability(struct nvmm_capability *cap)
 {
 	struct nvmm_ioc_capability args;
-	int ret;
+	struct nvmm_ioc_capability_v2 args_v2;
 
-	ret = ioctl(nvmm_fd, NVMM_IOC_CAPABILITY, &args);
-	if (ret == -1)
-		return -1;
+	if (ioctl(nvmm_fd, NVMM_IOC_CAPABILITY, &args) == -1) {
+		/* Try v1 */
+		if (ioctl(nvmm_fd, NVMM_IOC_CAPABILITY_V1, &args_v2) == -1)
+			return -1;
+		args.cap.version = args_v2.cap.version;
+		args.cap.state_size = args_v2.cap.state_size;
+		args.cap.max_machines = args_v2.cap.max_machines;
+		args.cap.max_vcpus = args_v2.cap.max_vcpus;
+		args.cap.max_ram = args_v2.cap.max_ram;
+		args.cap.comm_size = 0; /* Not available in v1 */
+	}
 
 	memcpy(cap, &args.cap, sizeof(args.cap));
 
@@ -291,16 +325,28 @@ nvmm_vcpu_create(struct nvmm_machine *mach, nvmm_cpuid_t cpuid,
     struct nvmm_vcpu *vcpu)
 {
 	struct nvmm_ioc_vcpu_create args;
+	struct nvmm_comm_page *comm;
 	int ret;
 
 	args.machid = mach->machid;
 	args.cpuid = cpuid;
 	args.comm = NULL;
 
-	ret = ioctl(nvmm_fd, NVMM_IOC_VCPU_CREATE, &args);
+	if (__capability.version < 3)
+		ret = ioctl(nvmm_fd, NVMM_IOC_VCPU_CREATE_V1, &args);
+	else
+		ret = ioctl(nvmm_fd, NVMM_IOC_VCPU_CREATE, &args);
 	if (ret == -1)
 		return -1;
 
+	if (__capability.version < 3) {
+		comm = mmap(NULL, PAGE_SIZE, PROT_READ|PROT_WRITE,
+			MAP_SHARED|MAP_FILE, nvmm_fd,
+			NVMM_COMM_OFF(mach->machid, cpuid));
+		if (comm == MAP_FAILED)
+			return -1;
+		args.comm = comm;
+	}
 	mach->pages[cpuid] = args.comm;
 
 	vcpu->cpuid = cpuid;
@@ -436,6 +482,9 @@ nvmm_vcpu_run(struct nvmm_machine *mach, struct nvmm_vcpu *vcpu)
 int
 nvmm_vcpu_stop(struct nvmm_vcpu *vcpu)
 {
+	if (NVMM_KERN_VERSION < 3)
+		*vcpu->stop = 1;
+
 	return 0;
 }
 
