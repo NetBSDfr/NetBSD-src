@@ -1,4 +1,4 @@
-/* $NetBSD: emit1.c,v 1.81 2023/12/03 18:17:41 rillig Exp $ */
+/* $NetBSD: emit1.c,v 1.83 2024/02/01 18:37:06 rillig Exp $ */
 
 /*
  * Copyright (c) 1996 Christopher G. Demetriou.  All Rights Reserved.
@@ -38,13 +38,13 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: emit1.c,v 1.81 2023/12/03 18:17:41 rillig Exp $");
+__RCSID("$NetBSD: emit1.c,v 1.83 2024/02/01 18:37:06 rillig Exp $");
 #endif
 
 #include "lint1.h"
 
 static void outtt(sym_t *, sym_t *);
-static void outfstrg(strg_t *);
+static void outfstrg(const char *);
 
 /*
  * Write type into the output file, encoded as follows:
@@ -367,11 +367,11 @@ outcall(const tnode_t *tn, bool retval_used, bool retval_discarded)
 			}
 		} else if (arg->tn_op == ADDR &&
 		    arg->tn_left->tn_op == STRING &&
-		    arg->tn_left->tn_string->st_char) {
+		    arg->tn_left->tn_string->data != NULL) {
 			/* constant string, write all format specifiers */
 			outchar('s');
 			outint(n);
-			outfstrg(arg->tn_left->tn_string);
+			outfstrg(arg->tn_left->tn_string->data);
 		}
 	}
 	outchar((char)(retval_discarded ? 'd' : retval_used ? 'u' : 'i'));
@@ -448,19 +448,12 @@ outqchar(char c)
  * writes them, enclosed in "" and quoted if necessary, to the output file
  */
 static void
-outfstrg(strg_t *strg)
+outfstrg(const char *cp)
 {
-	char c, oc;
-	bool first;
-	const char *cp;
-
-	lint_assert(strg->st_char);
-	cp = strg->st_mem;
 
 	outchar('"');
 
-	c = *cp++;
-
+	char c = *cp++;
 	while (c != '\0') {
 
 		if (c != '%') {
@@ -511,7 +504,7 @@ outfstrg(strg_t *strg)
 		 */
 		if (c != '\0') {
 			outqchar(c);
-			oc = c;
+			char oc = c;
 			c = *cp++;
 			/*
 			 * handle [ for scanf. [-] means that a minus sign was
@@ -522,7 +515,7 @@ outfstrg(strg_t *strg)
 					c = *cp++;
 				if (c == ']')
 					c = *cp++;
-				first = true;
+				bool first = true;
 				while (c != '\0' && c != ']') {
 					if (c == '-') {
 						if (!first && *cp != ']')
