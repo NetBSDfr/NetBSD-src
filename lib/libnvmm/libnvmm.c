@@ -60,8 +60,8 @@ struct nvmm_ioc_vcpu_create_v2 {
 
 static struct nvmm_capability __capability;
 
-#define NVMM_IOC_CAPABILITY_V1 _IOR ('N',  0, struct nvmm_ioc_capability_v2)
-#define NVMM_IOC_VCPU_CREATE_V1 _IOW ('N',  4, struct nvmm_ioc_vcpu_create_v2)
+#define NVMM_IOC_CAPABILITY_V2 _IOR ('N',  0, struct nvmm_ioc_capability_v2)
+#define NVMM_IOC_VCPU_CREATE_V2 _IOW ('N',  4, struct nvmm_ioc_vcpu_create_v2)
 
 #define NVMM_COMM_OFF(machid, cpuid)		\
 	((((uint64_t)machid & 0xFFULL) << 20) |	\
@@ -235,7 +235,7 @@ nvmm_capability(struct nvmm_capability *cap)
 
 	if (ioctl(nvmm_fd, NVMM_IOC_CAPABILITY, &args) == -1) {
 		/* Try v1 */
-		if (ioctl(nvmm_fd, NVMM_IOC_CAPABILITY_V1, &args_v2) == -1)
+		if (ioctl(nvmm_fd, NVMM_IOC_CAPABILITY_V2, &args_v2) == -1)
 			return -1;
 		args.cap.version = args_v2.cap.version;
 		args.cap.state_size = args_v2.cap.state_size;
@@ -333,7 +333,7 @@ nvmm_vcpu_create(struct nvmm_machine *mach, nvmm_cpuid_t cpuid,
 	args.comm = NULL;
 
 	if (__capability.version < 3)
-		ret = ioctl(nvmm_fd, NVMM_IOC_VCPU_CREATE_V1, &args);
+		ret = ioctl(nvmm_fd, NVMM_IOC_VCPU_CREATE_V2, &args);
 	else
 		ret = ioctl(nvmm_fd, NVMM_IOC_VCPU_CREATE, &args);
 	if (ret == -1)
