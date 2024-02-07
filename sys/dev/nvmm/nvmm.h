@@ -79,8 +79,8 @@ struct nvmm_capability {
 #define NVMM_VCPU_CONF_MD_BEGIN		200
 #define NVMM_VCPU_CONF_MD(op)		(op - NVMM_VCPU_CONF_MD_BEGIN)
 
-#define NVMM_VCPU_STOP			__BIT(1)
-#define NVMM_VCPU_RUNNING		__BIT(2)
+#define NVMM_VCPU_STOP			__BIT(0)
+#define NVMM_VCPU_RUNNING		__BIT(1)
 
 struct nvmm_comm_page {
 	/* State. */
