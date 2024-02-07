@@ -66,6 +66,9 @@ struct nvmm_cpu {
 	/* Last host CPU on which the VCPU ran. */
 	int hcpu_last;
 
+	/* Pointer to os_curcpu() to identify a running VCPU */
+	struct cpu_info *hcpu;
+
 	/* Implementation-specific. */
 	void *cpudata;
 };

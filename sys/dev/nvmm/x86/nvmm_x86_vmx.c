@@ -2297,6 +2297,9 @@ vmx_vcpu_run(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 	vmx_vcpu_guest_dbregs_enter(vcpu);
 	vmx_vcpu_guest_misc_enter(vcpu);
 
+	vcpu->hcpu = os_curcpu();
+	vcpu->comm->stop |= NVMM_VCPU_RUNNING;
+
 	while (1) {
 		if (cpudata->gtlb_want_flush) {
 			vpid_desc.vpid = cpudata->asid;
@@ -2450,6 +2453,9 @@ vmx_vcpu_run(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			break;
 		}
 	}
+
+	vcpu->comm->stop = vcpu->comm->stop & ~NVMM_VCPU_RUNNING;
+	vcpu->hcpu = NULL;
 
 	cpudata->vmcs_launched = launched;
 

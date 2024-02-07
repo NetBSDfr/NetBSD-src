@@ -29,6 +29,7 @@
 #include <sys/cdefs.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/param.h>
 #include <sys/queue.h>
 
 #include <stdio.h>
@@ -59,6 +60,9 @@ struct nvmm_ioc_vcpu_create_v2 {
 };
 
 static struct nvmm_capability __capability;
+
+#define NVMM_COMM_PAGE_SIZE	\
+	(roundup(sizeof(struct nvmm_comm_page), PAGE_SIZE))
 
 #define NVMM_IOC_CAPABILITY_V2 _IOR ('N',  0, struct nvmm_ioc_capability_v2)
 #define NVMM_IOC_VCPU_CREATE_V2 _IOW ('N',  4, struct nvmm_ioc_vcpu_create_v2)
@@ -242,7 +246,8 @@ nvmm_capability(struct nvmm_capability *cap)
 		args.cap.max_machines = args_v2.cap.max_machines;
 		args.cap.max_vcpus = args_v2.cap.max_vcpus;
 		args.cap.max_ram = args_v2.cap.max_ram;
-		args.cap.comm_size = PAGE_SIZE; /* Not available in v2 */
+		/* Not available in v2 */
+		args.cap.comm_size = NVMM_COMM_PAGE_SIZE;
 	}
 
 	memcpy(cap, &args.cap, sizeof(args.cap));
@@ -340,18 +345,23 @@ nvmm_vcpu_create(struct nvmm_machine *mach, nvmm_cpuid_t cpuid,
 		return -1;
 
 	if (__capability.version < 3) {
-		comm = mmap(NULL, PAGE_SIZE, PROT_READ|PROT_WRITE,
+		comm = mmap(NULL, NVMM_COMM_PAGE_SIZE, PROT_READ|PROT_WRITE,
 			MAP_SHARED|MAP_FILE, nvmm_fd,
 			NVMM_COMM_OFF(mach->machid, cpuid));
 		if (comm == MAP_FAILED)
 			return -1;
 		args.comm = comm;
+
 	}
 	mach->pages[cpuid] = args.comm;
 
 	vcpu->cpuid = cpuid;
+
 	vcpu->state = &args.comm->state;
 	vcpu->event = &args.comm->event;
+
+	vcpu->stop = &args.comm->stop;
+
 	vcpu->exit = malloc(sizeof(*vcpu->exit));
 
 	return 0;
@@ -478,14 +488,19 @@ nvmm_vcpu_run(struct nvmm_machine *mach, struct nvmm_vcpu *vcpu)
 	return 0;
 }
 
-/* for compatibility with qemu */
 int
 nvmm_vcpu_stop(struct nvmm_vcpu *vcpu)
 {
-	if (NVMM_USER_VERSION < 3)
-		*vcpu->stop = 1;
+	struct nvmm_ioc_vcpu_stop args;
+	int err = 0;
 
-	return 0;
+	*vcpu->stop |= NVMM_VCPU_STOP;
+
+	/* Only for nvmm v3 */
+	if (__capability.version > 2 && (*vcpu->stop & NVMM_VCPU_RUNNING))
+		err = ioctl(nvmm_fd, NVMM_IOC_VCPU_STOP, &args);
+
+	return err;
 }
 
 int
@@ -505,7 +520,10 @@ nvmm_gpa_map(struct nvmm_machine *mach, uintptr_t hva, gpaddr_t gpa,
 	args.size = size;
 	args.prot = prot;
 
-	ret = ioctl(nvmm_fd, NVMM_IOC_GPA_MAP, &args);
+	if (__capability.version < 3)
+		ret = ioctl(nvmm_fd, NVMM_IOC_GPA_MAP_V2, &args);
+	else
+		ret = ioctl(nvmm_fd, NVMM_IOC_GPA_MAP, &args);
 	if (ret == -1) {
 		/* Can't recover. */
 		abort();
@@ -529,7 +547,10 @@ nvmm_gpa_unmap(struct nvmm_machine *mach, uintptr_t hva, gpaddr_t gpa,
 	args.gpa = gpa;
 	args.size = size;
 
-	ret = ioctl(nvmm_fd, NVMM_IOC_GPA_UNMAP, &args);
+	if (__capability.version < 3)
+		ret = ioctl(nvmm_fd, NVMM_IOC_GPA_UNMAP_V2, &args);
+	else
+		ret = ioctl(nvmm_fd, NVMM_IOC_GPA_UNMAP, &args);
 	if (ret == -1) {
 		/* Can't recover. */
 		abort();
@@ -548,7 +569,10 @@ nvmm_hva_map(struct nvmm_machine *mach, uintptr_t hva, size_t size)
 	args.hva = hva;
 	args.size = size;
 
-	ret = ioctl(nvmm_fd, NVMM_IOC_HVA_MAP, &args);
+	if (__capability.version < 3)
+		ret = ioctl(nvmm_fd, NVMM_IOC_HVA_MAP_V2, &args);
+	else
+		ret = ioctl(nvmm_fd, NVMM_IOC_HVA_MAP, &args);
 	if (ret == -1)
 		return -1;
 
@@ -565,7 +589,10 @@ nvmm_hva_unmap(struct nvmm_machine *mach, uintptr_t hva, size_t size)
 	args.hva = hva;
 	args.size = size;
 
-	ret = ioctl(nvmm_fd, NVMM_IOC_HVA_UNMAP, &args);
+	if (__capability.version < 3)
+		ret = ioctl(nvmm_fd, NVMM_IOC_HVA_UNMAP_V2, &args);
+	else	
+		ret = ioctl(nvmm_fd, NVMM_IOC_HVA_UNMAP, &args);
 	if (ret == -1)
 		return -1;
 

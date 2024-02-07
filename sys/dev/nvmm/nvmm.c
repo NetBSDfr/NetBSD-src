@@ -576,6 +576,10 @@ nvmm_do_vcpu_run(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			exit->reason = NVMM_VCPU_EXIT_NONE;
 			return 0;
 		}
+		if (vcpu->comm->stop & NVMM_VCPU_STOP) {
+			exit->reason = NVMM_VCPU_EXIT_STOPPED;
+			break;
+		}
 
 		/* Run the VCPU. */
 		ret = (*nvmm_impl->vcpu_run)(mach, vcpu, exit);
@@ -594,6 +598,7 @@ nvmm_do_vcpu_run(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			break;
 		}
 	}
+	vcpu->comm->stop = vcpu->comm->stop & ~NVMM_VCPU_STOP;
 
 	return 0;
 }
@@ -615,6 +620,44 @@ nvmm_vcpu_run(struct nvmm_owner *owner, struct nvmm_ioc_vcpu_run *args)
 
 	error = nvmm_do_vcpu_run(mach, vcpu, &args->exit);
 	nvmm_vcpu_put(vcpu);
+
+out:
+	nvmm_machine_put(mach);
+	return error;
+}
+
+static int
+nvmm_vcpu_stop(struct nvmm_owner *owner, struct nvmm_ioc_vcpu_stop *args)
+{
+	struct nvmm_machine *mach;
+	struct nvmm_cpu *vcpu;
+	struct cpu_info *hcpu;
+	int error;
+
+	error = nvmm_machine_get(owner, args->machid, &mach, false);
+	if (error)
+		return error;
+
+	error = nvmm_vcpu_get(mach, args->cpuid, &vcpu);
+	if (error)
+		goto out;
+
+	hcpu = atomic_load_relaxed(&vcpu->hcpu);
+	/*
+	 * It is possible that the hCPU pointer is gone, if the hCPU stopped
+	 * executing the vCPU while we were coming here. In that case, there
+	 * is nothing to do: the kernel already has, or will soon, evaluate
+	 * vcpu->stop and return to userland.
+	 */
+	if (__predict_false(hcpu == NULL))
+		return 0;
+
+	/*
+	 * Kick the hCPU. This sends an IPI to it, which will cause a VMEXIT.
+	 * Upon VMEXIT the kernel will see that vcpu->stop is true, and will
+	 * return to userland.
+	 */
+	os_ipi_kickall();
 
 out:
 	nvmm_machine_put(mach);
@@ -1034,6 +1077,8 @@ nvmm_ioctl(struct nvmm_owner *owner, unsigned long cmd, void *data)
 		return nvmm_vcpu_inject(owner, data);
 	case NVMM_IOC_VCPU_RUN:
 		return nvmm_vcpu_run(owner, data);
+	case NVMM_IOC_VCPU_STOP:
+		return nvmm_vcpu_stop(owner, data);
 	case NVMM_IOC_GPA_MAP:
 		return nvmm_gpa_map(owner, data);
 	case NVMM_IOC_GPA_UNMAP:

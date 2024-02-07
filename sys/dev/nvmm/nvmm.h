@@ -79,6 +79,9 @@ struct nvmm_capability {
 #define NVMM_VCPU_CONF_MD_BEGIN		200
 #define NVMM_VCPU_CONF_MD(op)		(op - NVMM_VCPU_CONF_MD_BEGIN)
 
+#define NVMM_VCPU_STOP			__BIT(1)
+#define NVMM_VCPU_RUNNING		__BIT(2)
+
 struct nvmm_comm_page {
 	/* State. */
 	uint64_t state_wanted;
@@ -89,6 +92,8 @@ struct nvmm_comm_page {
 	/* Event. */
 	bool event_commit;
 	struct nvmm_vcpu_event event;
+
+	volatile int stop;
 };
 
 #endif

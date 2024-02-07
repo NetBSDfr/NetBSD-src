@@ -61,10 +61,12 @@ struct nvmm_machine {
 struct nvmm_vcpu {
 	nvmm_cpuid_t cpuid;
 	struct nvmm_assist_callbacks cbs;
+
 	struct nvmm_vcpu_state *state;
 	struct nvmm_vcpu_event *event;
 	struct nvmm_vcpu_exit *exit;
-	volatile int *stop; /* v2 compatibility */
+
+	volatile int *stop;
 };
 
 struct nvmm_io {

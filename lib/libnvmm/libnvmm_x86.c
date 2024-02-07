@@ -36,7 +36,6 @@
 
 #include <machine/psl.h>
 
-#define MIN(X, Y)		(((X) < (Y)) ? (X) : (Y))
 #define __cacheline_aligned	__attribute__((__aligned__(64)))
 
 /* -------------------------------------------------------------------------- */

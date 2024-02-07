@@ -1572,6 +1572,9 @@ svm_vcpu_run(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 	svm_vcpu_guest_dbregs_enter(vcpu);
 	svm_vcpu_guest_misc_enter(vcpu);
 
+	vcpu->hcpu = os_curcpu();
+	vcpu->comm->stop |= NVMM_VCPU_RUNNING;
+
 	while (1) {
 		if (__predict_false(cpudata->gtlb_want_flush ||
 				    cpudata->htlb_want_flush))
@@ -1713,6 +1716,9 @@ svm_vcpu_run(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			break;
 		}
 	}
+
+	vcpu->comm->stop = vcpu->comm->stop & ~NVMM_VCPU_RUNNING;
+	vcpu->hcpu = NULL;
 
 	svm_vcpu_guest_misc_leave(vcpu);
 	svm_vcpu_guest_dbregs_leave(vcpu);
