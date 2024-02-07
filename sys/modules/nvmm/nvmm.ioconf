@@ -3,6 +3,5 @@
 ioconf		nvmm
 
 include		"conf/files"
-include		"dev/nvmm/files.nvmm"
 
 pseudo-device   nvmm
