@@ -161,18 +161,12 @@ struct nvmm_ioc_ctl {
 #define NVMM_IOC_VCPU_GETSTATE		_IOW ('N',  8, struct nvmm_ioc_vcpu_getstate)
 #define NVMM_IOC_VCPU_INJECT		_IOW ('N',  9, struct nvmm_ioc_vcpu_inject)
 #define NVMM_IOC_VCPU_RUN		_IOWR('N', 10, struct nvmm_ioc_vcpu_run)
-/* nvmm v3 */
-#define NVMM_IOC_VCPU_STOP		_IOWR('N', 11, struct nvmm_ioc_vcpu_stop)
-#define NVMM_IOC_GPA_MAP		_IOW ('N', 12, struct nvmm_ioc_gpa_map)
-#define NVMM_IOC_GPA_UNMAP		_IOW ('N', 13, struct nvmm_ioc_gpa_unmap)
-#define NVMM_IOC_HVA_MAP		_IOW ('N', 14, struct nvmm_ioc_hva_map)
-#define NVMM_IOC_HVA_UNMAP		_IOW ('N', 15, struct nvmm_ioc_hva_unmap)
+#define NVMM_IOC_GPA_MAP		_IOW ('N', 11, struct nvmm_ioc_gpa_map)
+#define NVMM_IOC_GPA_UNMAP		_IOW ('N', 12, struct nvmm_ioc_gpa_unmap)
+#define NVMM_IOC_HVA_MAP		_IOW ('N', 13, struct nvmm_ioc_hva_map)
+#define NVMM_IOC_HVA_UNMAP		_IOW ('N', 14, struct nvmm_ioc_hva_unmap)
 #define NVMM_IOC_CTL			_IOW ('N', 20, struct nvmm_ioc_ctl)
-
-/* nvmm v2 compatibility */
-#define NVMM_IOC_GPA_MAP_V2		_IOW ('N', 11, struct nvmm_ioc_gpa_map)
-#define NVMM_IOC_GPA_UNMAP_V2		_IOW ('N', 12, struct nvmm_ioc_gpa_unmap)
-#define NVMM_IOC_HVA_MAP_V2		_IOW ('N', 13, struct nvmm_ioc_hva_map)
-#define NVMM_IOC_HVA_UNMAP_V2		_IOW ('N', 14, struct nvmm_ioc_hva_unmap)
+/* Only in nvmm v3 */
+#define NVMM_IOC_VCPU_STOP		_IOWR('N', 15, struct nvmm_ioc_vcpu_stop)
 
 #endif /* _NVMM_IOCTL_H_ */

@@ -341,6 +341,7 @@ nvmm_vcpu_create(struct nvmm_machine *mach, nvmm_cpuid_t cpuid,
 		ret = ioctl(nvmm_fd, NVMM_IOC_VCPU_CREATE_V2, &args);
 	else
 		ret = ioctl(nvmm_fd, NVMM_IOC_VCPU_CREATE, &args);
+
 	if (ret == -1)
 		return -1;
 
@@ -520,11 +521,7 @@ nvmm_gpa_map(struct nvmm_machine *mach, uintptr_t hva, gpaddr_t gpa,
 	args.size = size;
 	args.prot = prot;
 
-	if (__capability.version < 3)
-		ret = ioctl(nvmm_fd, NVMM_IOC_GPA_MAP_V2, &args);
-	else
-		ret = ioctl(nvmm_fd, NVMM_IOC_GPA_MAP, &args);
-	if (ret == -1) {
+	if (ioctl(nvmm_fd, NVMM_IOC_GPA_MAP, &args) == -1) {
 		/* Can't recover. */
 		abort();
 	}
@@ -547,11 +544,7 @@ nvmm_gpa_unmap(struct nvmm_machine *mach, uintptr_t hva, gpaddr_t gpa,
 	args.gpa = gpa;
 	args.size = size;
 
-	if (__capability.version < 3)
-		ret = ioctl(nvmm_fd, NVMM_IOC_GPA_UNMAP_V2, &args);
-	else
-		ret = ioctl(nvmm_fd, NVMM_IOC_GPA_UNMAP, &args);
-	if (ret == -1) {
+	if (ioctl(nvmm_fd, NVMM_IOC_GPA_UNMAP, &args) == -1) {
 		/* Can't recover. */
 		abort();
 	}
@@ -563,17 +556,12 @@ int
 nvmm_hva_map(struct nvmm_machine *mach, uintptr_t hva, size_t size)
 {
 	struct nvmm_ioc_hva_map args;
-	int ret;
 
 	args.machid = mach->machid;
 	args.hva = hva;
 	args.size = size;
 
-	if (__capability.version < 3)
-		ret = ioctl(nvmm_fd, NVMM_IOC_HVA_MAP_V2, &args);
-	else
-		ret = ioctl(nvmm_fd, NVMM_IOC_HVA_MAP, &args);
-	if (ret == -1)
+	if (ioctl(nvmm_fd, NVMM_IOC_HVA_MAP, &args) == -1)
 		return -1;
 
 	return 0;
@@ -583,17 +571,12 @@ int
 nvmm_hva_unmap(struct nvmm_machine *mach, uintptr_t hva, size_t size)
 {
 	struct nvmm_ioc_hva_unmap args;
-	int ret;
 
 	args.machid = mach->machid;
 	args.hva = hva;
 	args.size = size;
 
-	if (__capability.version < 3)
-		ret = ioctl(nvmm_fd, NVMM_IOC_HVA_UNMAP_V2, &args);
-	else	
-		ret = ioctl(nvmm_fd, NVMM_IOC_HVA_UNMAP, &args);
-	if (ret == -1)
+	if (ioctl(nvmm_fd, NVMM_IOC_HVA_UNMAP, &args) == -1)
 		return -1;
 
 	return 0;
@@ -634,14 +617,12 @@ int
 nvmm_ctl(int op, void *data, size_t size)
 {
 	struct nvmm_ioc_ctl args;
-	int ret;
 
 	args.op = op;
 	args.data = data;
 	args.size = size;
 
-	ret = ioctl(nvmm_fd, NVMM_IOC_CTL, &args);
-	if (ret == -1)
+	if (ioctl(nvmm_fd, NVMM_IOC_CTL, &args) == -1)
 		return -1;
 
 	return 0;
