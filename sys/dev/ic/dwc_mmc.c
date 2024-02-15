@@ -1,4 +1,4 @@
-/* $NetBSD: dwc_mmc.c,v 1.29 2022/01/09 15:03:43 jmcneill Exp $ */
+/* $NetBSD: dwc_mmc.c,v 1.31 2024/02/09 17:16:42 skrll Exp $ */
 
 /*-
  * Copyright (c) 2014-2017 Jared McNeill <jmcneill@invisible.ca>
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: dwc_mmc.c,v 1.29 2022/01/09 15:03:43 jmcneill Exp $");
+__KERNEL_RCSID(0, "$NetBSD: dwc_mmc.c,v 1.31 2024/02/09 17:16:42 skrll Exp $");
 
 #include <sys/param.h>
 #include <sys/bus.h>
@@ -477,7 +477,7 @@ dwc_mmc_dma_prepare(struct dwc_mmc_softc *sc, struct sdmmc_command *cmd)
 	uint32_t val;
 
 	/*
-	 * If the command includs a dma map use it, otherwise we need to
+	 * If the command includes a dma map use it, otherwise we need to
 	 * bounce. This can happen for SDIO IO_RW_EXTENDED (CMD53) commands.
 	 */
 	if (cmd->c_dmamap) {
@@ -836,6 +836,16 @@ dwc_mmc_init(struct dwc_mmc_softc *sc)
 
 	val = MMC_READ(sc, DWC_MMC_VERID);
 	sc->sc_verid = __SHIFTOUT(val, DWC_MMC_VERID_ID);
+
+	if (sizeof(bus_addr_t) > 4) {
+		int error = bus_dmatag_subregion(sc->sc_dmat, 0, __MASK(32),
+		    &sc->sc_dmat, BUS_DMA_WAITOK);
+		if (error != 0) {
+			aprint_error_dev(sc->sc_dev,
+			    "failed to create DMA subregion\n");
+			return ENOMEM;
+		}
+	}
 
 	if (sc->sc_fifo_reg == 0) {
 		if (sc->sc_verid < DWC_MMC_VERID_240A)

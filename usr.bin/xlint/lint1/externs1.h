@@ -1,4 +1,4 @@
-/*	$NetBSD: externs1.h,v 1.213 2024/02/01 18:37:06 rillig Exp $	*/
+/*	$NetBSD: externs1.h,v 1.216 2024/02/05 23:11:22 rillig Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -83,7 +83,7 @@ extern bool in_system_header;
 extern symbol_kind sym_kind;
 extern FILE *yyin;
 
-void initscan(void);
+void init_lex(void);
 int64_t convert_integer(int64_t, tspec_t, unsigned int);
 void clear_warn_flags(void);
 sym_t *getsym(sbuf_t *);
@@ -205,7 +205,7 @@ extern decl_level *dcs;
 extern const char unnamed[];
 extern int enumval;
 
-void initdecl(void);
+void init_decl(void);
 type_t *gettyp(tspec_t);
 type_t *block_dup_type(const type_t *);
 type_t *expr_dup_type(const type_t *);
@@ -292,8 +292,8 @@ tnode_t *build_sizeof(const type_t *);
 tnode_t *build_offsetof(const type_t *, designation);
 tnode_t *build_alignof(const type_t *);
 tnode_t *cast(tnode_t *, bool, type_t *);
-tnode_t *build_function_argument(tnode_t *, tnode_t *);
-tnode_t *build_function_call(tnode_t *, bool, tnode_t *);
+void add_function_argument(function_call *, tnode_t *);
+tnode_t *build_function_call(tnode_t *, bool, function_call *);
 val_t *integer_constant(tnode_t *, bool);
 void expr(tnode_t *, bool, bool, bool, bool);
 void check_expr_misc(const tnode_t *, bool, bool, bool, bool, bool, bool);
@@ -396,6 +396,7 @@ void lex_comment(void);
 void lex_slash_slash_comment(void);
 void lex_unknown_character(int);
 int lex_input(void);
+bool quoted_next(const buffer *, quoted_iterator *);
 
 /*
  * ckbool.c
@@ -407,7 +408,7 @@ bool fallback_symbol_strict_bool(sym_t *);
 /*
  * ckctype.c
  */
-void check_ctype_function_call(const tnode_t *, const tnode_t *);
+void check_ctype_function_call(const function_call *);
 void check_ctype_macro_invocation(const tnode_t *, const tnode_t *);
 
 /*
