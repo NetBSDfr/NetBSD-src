@@ -1,4 +1,4 @@
-/*	$NetBSD: touch.c,v 1.33 2015/03/02 03:17:24 enami Exp $	*/
+/*	$NetBSD: touch.c,v 1.40 2024/02/10 00:19:30 kre Exp $	*/
 
 /*
  * Copyright (c) 1993
@@ -39,16 +39,19 @@ __COPYRIGHT("@(#) Copyright (c) 1993\
 #if 0
 static char sccsid[] = "@(#)touch.c	8.2 (Berkeley) 4/28/95";
 #endif
-__RCSID("$NetBSD: touch.c,v 1.33 2015/03/02 03:17:24 enami Exp $");
+__RCSID("$NetBSD: touch.c,v 1.40 2024/02/10 00:19:30 kre Exp $");
 #endif /* not lint */
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 
+#include <ctype.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -59,10 +62,13 @@ __RCSID("$NetBSD: touch.c,v 1.33 2015/03/02 03:17:24 enami Exp $");
 #include <util.h>
 #include <getopt.h>
 
-static void	stime_arg0(char *, struct timespec *);
+static void	stime_arg0(const char *, struct timespec *);
 static void	stime_arg1(char *, struct timespec *);
-static void	stime_arg2(char *, int, struct timespec *);
-static void	stime_file(char *, struct timespec *);
+static void	stime_arg2(const char *, int, struct timespec *);
+static void	stime_file(const char *, struct timespec *,
+		   int (const char *, struct stat *));
+static int	stime_posix(const char *, struct timespec *);
+static int	difftm(const struct tm *, const struct tm *);
 __dead static void	usage(void);
 
 struct option touch_longopts[] = {
@@ -74,34 +80,44 @@ struct option touch_longopts[] = {
 						0 },
 };
 
+#define	YEAR_BOUNDARY		69
+#define	LOW_YEAR_CENTURY	2000	/* for 2 digit years < YEAR_BOUNDARY */
+#define	HIGH_YEAR_CENTURY	1900	/* for 2 digit years >=  "  */
+
+#define	NO_TIME		((time_t)-1)	/* time_t might be unsigned */
+
 int
 main(int argc, char *argv[])
 {
 	struct stat sb;
 	struct timespec ts[2];
-	int aflag, cflag, hflag, mflag, ch, fd, len, rval, timeset;
+	int aflag, cflag, Dflag, hflag, mflag, ch, fd, len, rval, timeset;
 	char *p;
 	int (*change_file_times)(const char *, const struct timespec *);
 	int (*get_file_status)(const char *, struct stat *);
 
 	setlocale(LC_ALL, "");
 
-	aflag = cflag = hflag = mflag = timeset = 0;
+	aflag = cflag = Dflag = hflag = mflag = timeset = 0;
 	if (clock_gettime(CLOCK_REALTIME, &ts[0]))
 		err(1, "clock_gettime");
 
-	while ((ch = getopt_long(argc, argv, "acd:fhmr:t:", touch_longopts,
+	while ((ch = getopt_long(argc, argv, "acDd:fhmR:r:t:", touch_longopts,
 	    NULL)) != -1)
-		switch(ch) {
+		switch (ch) {
 		case 'a':
 			aflag = 1;
 			break;
 		case 'c':
 			cflag = 1;
 			break;
+		case 'D':
+			Dflag = 1;
+			break;
 		case 'd':
 			timeset = 1;
-			stime_arg0(optarg, ts);
+			if (!stime_posix(optarg, ts))
+				stime_arg0(optarg, ts);
 			break;
 		case 'f':
 			break;
@@ -111,9 +127,13 @@ main(int argc, char *argv[])
 		case 'm':
 			mflag = 1;
 			break;
+		case 'R':
+			timeset = 1;
+			stime_file(optarg, ts, lstat);
+			break;
 		case 'r':
 			timeset = 1;
-			stime_file(optarg, ts);
+			stime_file(optarg, ts, stat);
 			break;
 		case 't':
 			timeset = 1;
@@ -183,6 +203,11 @@ main(int argc, char *argv[])
 		if (!mflag)
 			ts[1] = sb.st_mtimespec;
 
+		if (Dflag &&
+		    timespeccmp(&ts[0], &sb.st_atimespec, ==) &&
+		    timespeccmp(&ts[1], &sb.st_mtimespec, ==))
+			continue;
+
 		/* Try utimes(2). */
 		if (!(*change_file_times)(*argv, ts))
 			continue;
@@ -211,10 +236,10 @@ main(int argc, char *argv[])
 #define	ATOI2(s)	((s) += 2, ((s)[-2] - '0') * 10 + ((s)[-1] - '0'))
 
 static void
-stime_arg0(char *arg, struct timespec *tsp)
+stime_arg0(const char *arg, struct timespec *tsp)
 {
 	tsp[1].tv_sec = tsp[0].tv_sec = parsedate(arg, NULL, NULL);
-	if (tsp[0].tv_sec == -1)
+	if (tsp[0].tv_sec == NO_TIME)
 		errx(EXIT_FAILURE, "Could not parse `%s'", arg);
 	tsp[0].tv_nsec = tsp[1].tv_nsec = 0;
 }
@@ -222,15 +247,17 @@ stime_arg0(char *arg, struct timespec *tsp)
 static void
 stime_arg1(char *arg, struct timespec *tsp)
 {
-	struct tm *t;
+	struct tm *t, tm;
 	time_t tmptime;
 	int yearset;
 	char *p;
+	char *initarg = arg;
+
 					/* Start with the current time. */
 	tmptime = tsp[0].tv_sec;
 	if ((t = localtime(&tmptime)) == NULL)
 		err(EXIT_FAILURE, "localtime");
-					/* [[CC]YY]MMDDhhmm[.SS] */
+					/* [[CC]YY]MMDDhhmm[.ss] */
 	if ((p = strchr(arg, '.')) == NULL)
 		t->tm_sec = 0;		/* Seconds defaults to 0. */
 	else {
@@ -251,10 +278,12 @@ stime_arg1(char *arg, struct timespec *tsp)
 			t->tm_year += ATOI2(arg);
 		} else {
 			yearset = ATOI2(arg);
-			if (yearset < 69)
-				t->tm_year = yearset + 2000 - TM_YEAR_BASE;
+			if (yearset < YEAR_BOUNDARY)
+				t->tm_year = yearset +
+				    LOW_YEAR_CENTURY - TM_YEAR_BASE;
 			else
-				t->tm_year = yearset + 1900 - TM_YEAR_BASE;
+				t->tm_year = yearset +
+				    HIGH_YEAR_CENTURY - TM_YEAR_BASE;
 		}
 		/* FALLTHROUGH */
 	case 8:				/* MMDDhhmm */
@@ -275,18 +304,19 @@ stime_arg1(char *arg, struct timespec *tsp)
 	}
 
 	t->tm_isdst = -1;		/* Figure out DST. */
+	tm = *t;
 	tsp[0].tv_sec = tsp[1].tv_sec = mktime(t);
-	if (tsp[0].tv_sec == -1)
-terr:		errx(EXIT_FAILURE,
-	"out of range or illegal time specification: [[CC]YY]MMDDhhmm[.SS]");
+	if (tsp[0].tv_sec == NO_TIME || difftm(t, &tm))
+ terr:		errx(EXIT_FAILURE, "out of range or bad time specification:\n"
+		    "\t'%s' should be [[CC]YY]MMDDhhmm[.ss]", initarg);
 
 	tsp[0].tv_nsec = tsp[1].tv_nsec = 0;
 }
 
 static void
-stime_arg2(char *arg, int year, struct timespec *tsp)
+stime_arg2(const char *arg, int year, struct timespec *tsp)
 {
-	struct tm *t;
+	struct tm *t, tm;
 	time_t tmptime;
 					/* Start with the current time. */
 	tmptime = tsp[0].tv_sec;
@@ -300,38 +330,212 @@ stime_arg2(char *arg, int year, struct timespec *tsp)
 	t->tm_min = ATOI2(arg);
 	if (year) {
 		year = ATOI2(arg);
-		if (year < 69)
-			t->tm_year = year + 2000 - TM_YEAR_BASE;
+		if (year < YEAR_BOUNDARY)
+			t->tm_year = year + LOW_YEAR_CENTURY - TM_YEAR_BASE;
 		else
-			t->tm_year = year + 1900 - TM_YEAR_BASE;
+			t->tm_year = year + HIGH_YEAR_CENTURY - TM_YEAR_BASE;
 	}
 	t->tm_sec = 0;
 
 	t->tm_isdst = -1;		/* Figure out DST. */
+	tm = *t;
 	tsp[0].tv_sec = tsp[1].tv_sec = mktime(t);
-	if (tsp[0].tv_sec == -1)
+	if (tsp[0].tv_sec == NO_TIME || difftm(t, &tm))
 		errx(EXIT_FAILURE,
-	"out of range or illegal time specification: MMDDhhmm[yy]");
+		    "out of range or bad time specification: MMDDhhmm[YY]");
 
 	tsp[0].tv_nsec = tsp[1].tv_nsec = 0;
 }
 
 static void
-stime_file(char *fname, struct timespec *tsp)
+stime_file(const char *fname, struct timespec *tsp,
+    int statfunc(const char *, struct stat *))
 {
 	struct stat sb;
 
-	if (stat(fname, &sb))
+	if (statfunc(fname, &sb))
 		err(1, "%s", fname);
 	tsp[0] = sb.st_atimespec;
 	tsp[1] = sb.st_mtimespec;
+}
+
+static int
+stime_posix(const char *arg, struct timespec *tsp)
+{
+	struct tm tm, tms;
+	const char *p;
+	char *ep;
+	int utc = 0;
+	long val;
+
+#define	isdigch(c)	(isdigit((int)((unsigned char)(c))))
+
+	if ((p = strchr(arg, '-')) == NULL)
+		return 0;
+	if (p - arg < 4)	/* at least 4 year digits required */
+		return 0;
+
+	if (!isdigch(arg[0]))	/* and the first must be a digit! */
+		return 0;
+
+	(void)memset(&tm, 0, sizeof tm);
+
+	errno = 0;
+	val = strtol(arg, &ep, 10);		/* YYYY */
+	if (val < 0 || val > INT_MAX)
+		return 0;
+	if (*ep != '-')
+		return 0;
+	tm.tm_year = (int)val - 1900;
+
+	p = ep + 1;
+
+	if (!isdigch(*p))
+		return 0;
+	val = strtol(p, &ep, 10);		/* MM */
+	if (val < 1 || val > 12)
+		return 0;
+	if (*ep != '-' || ep != p + 2)
+		return 0;
+	tm.tm_mon = (int)val - 1;
+
+	p = ep + 1;
+
+	if (!isdigch(*p))
+		return 0;
+	val = strtol(p, &ep, 10);		/* DD */
+	if (val < 1 || val > 31)
+		return 0;
+	if ((*ep != 'T' && *ep != ' ') || ep != p + 2)
+		return 0;
+	tm.tm_mday = (int)val;
+
+	p = ep + 1;
+
+	if (!isdigch(*p))
+		return 0;
+	val = strtol(p, &ep, 10);		/* hh */
+	if (val < 0 || val > 23)
+		return 0;
+	if (*ep != ':' || ep != p + 2)
+		return 0;
+	tm.tm_hour = (int)val;
+
+	p = ep + 1;
+
+	if (!isdigch(*p))
+		return 0;
+	val = strtol(p, &ep, 10);		/* mm */
+	if (val < 0 || val > 59)
+		return 0;
+	if (*ep != ':' || ep != p + 2)
+		return 0;
+	tm.tm_min = (int)val;
+
+	p = ep + 1;
+
+	if (!isdigch(*p))
+		return 0;
+	val = strtol(p, &ep, 10);		/* ss (or in POSIX, SS) */
+	if (val < 0 || val > 60)
+		return 0;
+	if ((*ep != '.' && *ep != ',' && *ep != 'Z' && *ep != '\0') ||
+	      ep != p + 2)
+		return 0;
+	tm.tm_sec = (int)val;
+
+	if (*ep == ',' || *ep == '.') {
+		double frac;
+		ptrdiff_t fdigs;
+
+		p = ep + 1;
+		if (!isdigch(*p))
+			return 0;
+		val = strtol(p, &ep, 10);
+		if (val < 0)
+			return 0;
+		if (ep == p)	/* at least 1 digit required */
+			return 0;
+		if (*ep != 'Z' && *ep != '\0')
+			return 0;
+
+		if (errno != 0)
+			return 0;
+
+		fdigs = ep - p;
+		if (fdigs > 15) {
+			/* avoid being absurd */
+			/* don't want to risk 10^fdigs being INF */
+			if (val == 0)
+				fdigs = 1;
+			else while (fdigs > 15) {
+				val = (val + 5) / 10;
+				fdigs--;
+			}
+		}
+
+		frac = pow(10.0, (double)fdigs);
+
+		tsp[0].tv_nsec = tsp[1].tv_nsec =
+			(long)round(((double)val / frac) * 1000000000.0);
+	} else
+		tsp[0].tv_nsec = tsp[1].tv_nsec = 0;
+
+	if (*ep == 'Z') {
+		if (ep[1] != '\0')
+			return 0;
+		utc = 1;
+	}
+
+	if (errno != 0)
+		return 0;
+
+	tm.tm_isdst = -1;
+	tms = tm;
+	if (utc)
+		tsp[0].tv_sec = tsp[1].tv_sec = timegm(&tm);
+	else
+		tsp[0].tv_sec = tsp[1].tv_sec = mktime(&tm);
+
+	if ((errno != 0 && tsp[1].tv_sec == NO_TIME) || difftm(&tm, &tms))
+		return 0;
+
+	return 1;
+}
+
+/*
+ * Determine whether 2 struct tn's are different
+ * return true (1) if theu are, false (0) otherwise.
+ *
+ * Note that we only consider the fields that are set
+ * for mktime() to use - if mktime() returns them
+ * differently than was set, then there was a problem
+ * with the setting.
+ */
+static int
+difftm(const struct tm *t1, const struct tm *t2)
+{
+#define CHK(fld) do {						\
+			if (t1->tm_##fld != t2->tm_##fld) {	\
+				return  1;			\
+			}					\
+		} while(/*CONSTCOND*/0)
+
+	CHK(year);
+	CHK(mon);
+	CHK(mday);
+	CHK(hour);
+	CHK(min);
+	CHK(sec);
+
+	return 0;
 }
 
 static void
 usage(void)
 {
 	(void)fprintf(stderr,
-	    "Usage: %s [-acfhm] [-d|--date datetime] [-r|--reference file] [-t time] file ...\n",
-	    getprogname());
+	    "Usage: %s [-acDfhm] [-d|--date datetime] [-R|-r|--reference file]"
+	    " [-t time] file ...\n", getprogname());
 	exit(EXIT_FAILURE);
 }

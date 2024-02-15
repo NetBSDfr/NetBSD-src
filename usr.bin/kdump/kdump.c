@@ -1,4 +1,4 @@
-/*	$NetBSD: kdump.c,v 1.140 2021/06/20 00:25:29 chs Exp $	*/
+/*	$NetBSD: kdump.c,v 1.142 2024/02/11 01:08:57 kre Exp $	*/
 
 /*-
  * Copyright (c) 1988, 1993
@@ -39,7 +39,7 @@ __COPYRIGHT("@(#) Copyright (c) 1988, 1993\
 #if 0
 static char sccsid[] = "@(#)kdump.c	8.4 (Berkeley) 4/28/95";
 #else
-__RCSID("$NetBSD: kdump.c,v 1.140 2021/06/20 00:25:29 chs Exp $");
+__RCSID("$NetBSD: kdump.c,v 1.142 2024/02/11 01:08:57 kre Exp $");
 #endif
 #endif /* not lint */
 
@@ -579,6 +579,11 @@ ioctldecode(u_long cmd)
 {
 	char dirbuf[4], *dir = dirbuf;
 	int c;
+
+	if (~0xffffffffULL & cmd) {
+		output_long(cmd, 1);
+		return;
+	}
 
 	if (cmd & IOC_IN)
 		*dir++ = 'W';

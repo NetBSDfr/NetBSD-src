@@ -1,4 +1,4 @@
-/*	$NetBSD: dp8390var.h,v 1.36 2021/08/09 20:49:10 andvar Exp $	*/
+/*	$NetBSD: dp8390var.h,v 1.38 2024/02/05 21:46:06 andvar Exp $	*/
 
 /*
  * Device driver for National Semiconductor DS8390/WD83C690 based ethernet
@@ -110,9 +110,9 @@ struct dp8390_softc {
  * Compile-time config flags
  */
 /*
- * This sets the default for enabling/disabling the tranceiver.
+ * This sets the default for enabling/disabling the transceiver.
  */
-#define DP8390_DISABLE_TRANCEIVER	0x0001
+#define DP8390_DISABLE_TRANSCEIVER	0x0001
 
 /*
  * This forces the board to be used in 8/16-bit mode even if it autoconfigs
@@ -140,7 +140,7 @@ struct dp8390_softc {
 #define DP8390_ATTACHED			0x0040	/* attach has succeeded */
 
 /*
- * ASIX AX88796 doesn't have remote DMA conmplete bit in ISR, so don't
+ * ASIX AX88796 doesn't have remote DMA complete bit in ISR, so don't
  * check ISR.RDC
  */
 #define DP8390_NO_REMOTE_DMA_COMPLETE	0x0080

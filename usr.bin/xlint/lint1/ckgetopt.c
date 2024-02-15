@@ -1,4 +1,4 @@
-/* $NetBSD: ckgetopt.c,v 1.20 2024/02/01 18:37:06 rillig Exp $ */
+/* $NetBSD: ckgetopt.c,v 1.23 2024/02/05 23:11:22 rillig Exp $ */
 
 /*-
  * Copyright (c) 2021 The NetBSD Foundation, Inc.
@@ -35,7 +35,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: ckgetopt.c,v 1.20 2024/02/01 18:37:06 rillig Exp $");
+__RCSID("$NetBSD: ckgetopt.c,v 1.23 2024/02/05 23:11:22 rillig Exp $");
 #endif
 
 #include <stdbool.h>
@@ -79,28 +79,36 @@ static struct {
 static bool
 is_getopt_condition(const tnode_t *tn, char **out_options)
 {
-	const tnode_t *call, *last_arg;
+	const function_call *call;
+	const tnode_t *last_arg;
 	const buffer *str;
 
 	if (tn != NULL
 	    && tn->tn_op == NE
-	    && tn->tn_left->tn_op == ASSIGN
+
 	    && tn->tn_right->tn_op == CON
 	    && tn->tn_right->tn_u._tn_val.v_tspec == INT
 	    && tn->tn_right->tn_u._tn_val.u.integer == -1
 
-	    && (call = tn->tn_left->tn_right)->tn_op == CALL
-	    && call->tn_left->tn_op == ADDR
-	    && call->tn_left->tn_left->tn_op == NAME
-	    && strcmp(call->tn_left->tn_left->tn_sym->s_name, "getopt") == 0
+	    && tn->tn_left->tn_op == ASSIGN
+	    && tn->tn_left->tn_right->tn_op == CALL
+	    && (call = tn->tn_left->tn_right->tn_call)->func->tn_op == ADDR
+	    && call->func->tn_left->tn_op == NAME
+	    && strcmp(call->func->tn_left->tn_sym->s_name, "getopt") == 0
+	    && call->args_len == 3
+	    && call->args != NULL
 
-	    && call->tn_right->tn_op == PUSH
-
-	    && (last_arg = call->tn_right->tn_left)->tn_op == CVT
+	    && (last_arg = call->args[2]) != NULL
+	    && last_arg->tn_op == CVT
 	    && last_arg->tn_left->tn_op == ADDR
 	    && last_arg->tn_left->tn_left->tn_op == STRING
 	    && (str = last_arg->tn_left->tn_left->tn_string)->data != NULL) {
-		*out_options = xstrdup(str->data);
+		buffer buf;
+		buf_init(&buf);
+		quoted_iterator it = { .start = 0 };
+		while (quoted_next(str, &it))
+			buf_add_char(&buf, (char)it.value);
+		*out_options = buf.data;
 		return true;
 	}
 	return false;
@@ -109,31 +117,22 @@ is_getopt_condition(const tnode_t *tn, char **out_options)
 static void
 check_unlisted_option(char opt)
 {
-	char *optptr;
-
-	lint_assert(ck.options != NULL);
-
 	if (opt == ':' && ck.options[0] != ':')
 		goto warn;
 
-	optptr = strchr(ck.options, opt);
+	char *optptr = strchr(ck.options, opt);
 	if (optptr != NULL)
 		*optptr = ' ';
-	else if (opt != '?') {
+	else if (opt != '?')
 	warn:
 		/* option '%c' should be listed in the options string */
 		warning(339, opt);
-	}
 }
 
 static void
 check_unhandled_option(void)
 {
-	const char *opt;
-
-	lint_assert(ck.options != NULL);
-
-	for (opt = ck.options; *opt != '\0'; opt++) {
+	for (const char *opt = ck.options; *opt != '\0'; opt++) {
 		if (*opt == ' ' || *opt == ':')
 			continue;
 

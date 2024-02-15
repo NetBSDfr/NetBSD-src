@@ -1,4 +1,4 @@
-/*	$NetBSD: ehci.c,v 1.319 2023/10/28 21:18:31 riastradh Exp $ */
+/*	$NetBSD: ehci.c,v 1.324 2024/02/10 09:21:53 andvar Exp $ */
 
 /*
  * Copyright (c) 2004-2012,2016,2020 The NetBSD Foundation, Inc.
@@ -7,7 +7,7 @@
  * This code is derived from software contributed to The NetBSD Foundation
  * by Lennart Augustsson (lennart@augustsson.net), Charles M. Hannum,
  * Jeremy Morse (jeremy.morse@gmail.com), Jared D. McNeill
- * (jmcneill@invisible.ca). Matthew R. Green (mrg@eterna.com.au), and
+ * (jmcneill@invisible.ca). Matthew R. Green (mrg@eterna23.net), and
  * Nick Hudson .
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,7 +54,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ehci.c,v 1.319 2023/10/28 21:18:31 riastradh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ehci.c,v 1.324 2024/02/10 09:21:53 andvar Exp $");
 
 #include "ohci.h"
 #include "uhci.h"
@@ -294,6 +294,7 @@ void			ehci_dump(void);
 Static void		ehci_dump_regs(ehci_softc_t *);
 Static void		ehci_dump_sqtds(ehci_soft_qtd_t *);
 Static void		ehci_dump_sqtd(ehci_soft_qtd_t *);
+Static void		ehci_dump_qh_qtd(struct ehci_qh_qtd_t *);
 Static void		ehci_dump_qtd(ehci_qtd_t *);
 Static void		ehci_dump_sqh(ehci_soft_qh_t *);
 Static void		ehci_dump_sitd(struct ehci_soft_itd *);
@@ -1755,6 +1756,24 @@ ehci_dump_sqtd(ehci_soft_qtd_t *sqtd)
 }
 
 Static void
+ehci_dump_qh_qtd(struct ehci_qh_qtd_t *qh_qtd)
+{
+	ehci_qtd_t qtd = {
+		.qtd_next = qh_qtd->qtd_next,
+		.qtd_altnext = qh_qtd->qtd_altnext,
+		.qtd_status = qh_qtd->qtd_status,
+	};
+
+	/* Manually memcpy(), because of volatile. */
+	for (unsigned i = 0; i < EHCI_QTD_NBUFFERS; i++) {
+		qtd.qtd_buffer[i] = qh_qtd->qtd_buffer[i];
+		qtd.qtd_buffer_hi[i] = qh_qtd->qtd_buffer_hi[i];
+	}
+
+	ehci_dump_qtd(&qtd);
+}
+
+Static void
 ehci_dump_qtd(ehci_qtd_t *qtd)
 {
 	EHCIHIST_FUNC();	EHCIHIST_CALLED();
@@ -1830,7 +1849,7 @@ ehci_dump_sqh(ehci_soft_qh_t *sqh)
 	link = le32toh(qh->qh_curqtd);
 	ehci_dump_link(link, false);
 	DPRINTFN(10, "Overlay qTD:", 0, 0, 0, 0);
-	ehci_dump_qtd(&qh->qh_qtd);
+	ehci_dump_qh_qtd(&qh->qh_qtd);
 
 	usb_syncmem(&sqh->dma, sqh->offs, sizeof(sqh->qh),
 	    BUS_DMASYNC_PREREAD);
@@ -3065,7 +3084,7 @@ ehci_append_sqtd(ehci_soft_qtd_t *sqtd, ehci_soft_qtd_t *prev)
 		prev->qtd.qtd_next = htole32(sqtd->physaddr);
 		prev->qtd.qtd_altnext = prev->qtd.qtd_next;
 		usb_syncmem(&prev->dma, prev->offs, sizeof(prev->qtd),
-		    BUS_DMASYNC_POSTWRITE | BUS_DMASYNC_POSTREAD);
+		    BUS_DMASYNC_PREWRITE | BUS_DMASYNC_PREREAD);
 	}
 }
 
@@ -3302,7 +3321,7 @@ ehci_alloc_sitd(ehci_softc_t *sc)
 /****************/
 
 /*
- * Close a reqular pipe.
+ * Close a regular pipe.
  * Assumes that there are no pending transactions.
  */
 Static void
@@ -4193,7 +4212,7 @@ ehci_device_intr_abort(struct usbd_xfer *xfer)
 
 	/*
 	 * XXX - abort_xfer uses ehci_sync_hc, which syncs via the advance
-	 *       async doorbell. That's dependent on the async list, wheras
+	 *       async doorbell. That's dependent on the async list, whereas
 	 *       intr xfers are periodic, should not use this?
 	 */
 	usbd_xfer_abort(xfer);
