@@ -1,4 +1,4 @@
-/*	$NetBSD: tyname.c,v 1.58 2024/01/20 10:25:57 rillig Exp $	*/
+/*	$NetBSD: tyname.c,v 1.61 2024/02/02 16:25:58 rillig Exp $	*/
 
 /*-
  * Copyright (c) 2005 The NetBSD Foundation, Inc.
@@ -35,7 +35,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: tyname.c,v 1.58 2024/01/20 10:25:57 rillig Exp $");
+__RCSID("$NetBSD: tyname.c,v 1.61 2024/02/02 16:25:58 rillig Exp $");
 #endif
 
 #include <assert.h>
@@ -55,13 +55,6 @@ typedef struct name_tree_node {
 	struct name_tree_node *ntn_less;
 	struct name_tree_node *ntn_greater;
 } name_tree_node;
-
-/* A growable string buffer. */
-typedef struct buffer {
-	size_t	len;
-	size_t	cap;
-	char *	data;
-} buffer;
 
 static name_tree_node *type_names;
 
@@ -101,7 +94,11 @@ intern(const char *name)
 	return n->ntn_name;
 }
 
+#if IS_LINT1
+void
+#else
 static void
+#endif
 buf_init(buffer *buf)
 {
 	buf->len = 0;
@@ -117,17 +114,30 @@ buf_done(buffer *buf)
 }
 
 static void
-buf_add(buffer *buf, const char *s)
+buf_add_mem(buffer *buf, const char *s, size_t n)
 {
-	size_t len = strlen(s);
-
-	while (buf->len + len + 1 >= buf->cap) {
-		buf->data = xrealloc(buf->data, 2 * buf->cap);
-		buf->cap = 2 * buf->cap;
+	while (buf->len + n + 1 >= buf->cap) {
+		buf->cap *= 2;
+		buf->data = xrealloc(buf->data, buf->cap);
 	}
 
-	memcpy(buf->data + buf->len, s, len + 1);
-	buf->len += len;
+	memcpy(buf->data + buf->len, s, n);
+	buf->len += n;
+	buf->data[buf->len] = '\0';
+}
+
+#if IS_LINT1
+void
+buf_add_char(buffer *buf, char c)
+{
+	buf_add_mem(buf, &c, 1);
+}
+#endif
+
+static void
+buf_add(buffer *buf, const char *s)
+{
+	buf_add_mem(buf, s, strlen(s));
 }
 
 static void

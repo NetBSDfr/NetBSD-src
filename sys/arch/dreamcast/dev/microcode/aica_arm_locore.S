@@ -1,7 +1,7 @@
-/*	$NetBSD: aica_arm_locore.S,v 1.5 2022/09/25 21:26:22 ryo Exp $	*/
+/*	$NetBSD: aica_arm_locore.S,v 1.7 2024/02/09 22:08:32 andvar Exp $	*/
 
 /*
- * Copyright (c) 2003 Ryo Shimizu <ryo@nerv.org>
+ * Copyright (c) 2003 Ryo Shimizu
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,7 +44,7 @@ exp_reset:
 
 	mrs	r0,CPSR		/* disable interrupt */
 	bic	r0,r0,#0x80	/* disable IRQ */
-	bic	r0,r0,#0x40	/* disbale FIQ */
+	bic	r0,r0,#0x40	/* disable FIQ */
 	msr	CPSR_all,r0
 
 	mrc	p15,0,r0,c1,c0,0	/* read control register */

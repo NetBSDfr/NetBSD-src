@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.1302 2024/01/27 15:10:56 rillig Exp $
+# $NetBSD: mi,v 1.1305 2024/02/03 20:10:10 rillig Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -6735,6 +6735,7 @@
 ./usr/tests/usr.bin/xlint/lint1/lex_integer_ilp32.exp		tests-obsolete		obsolete,atf
 ./usr/tests/usr.bin/xlint/lint1/lex_string.c			tests-usr.bin-tests	compattestfile,atf
 ./usr/tests/usr.bin/xlint/lint1/lex_string.exp			tests-obsolete		obsolete,atf
+./usr/tests/usr.bin/xlint/lint1/lex_utf8.c			tests-usr.bin-tests	compattestfile,atf
 ./usr/tests/usr.bin/xlint/lint1/lex_whitespace.c		tests-usr.bin-tests	compattestfile,atf
 ./usr/tests/usr.bin/xlint/lint1/lex_whitespace.exp		tests-obsolete		obsolete,atf
 ./usr/tests/usr.bin/xlint/lint1/lex_wide_char.c			tests-usr.bin-tests	compattestfile,atf
@@ -6905,6 +6906,7 @@
 ./usr/tests/usr.bin/xlint/lint1/msg_078.exp			tests-obsolete		obsolete,atf
 ./usr/tests/usr.bin/xlint/lint1/msg_079.c			tests-usr.bin-tests	compattestfile,atf
 ./usr/tests/usr.bin/xlint/lint1/msg_079.exp			tests-obsolete		obsolete,atf
+./usr/tests/usr.bin/xlint/lint1/msg_079_nongcc.c		tests-usr.bin-tests	compattestfile,atf
 ./usr/tests/usr.bin/xlint/lint1/msg_080.c			tests-usr.bin-tests	compattestfile,atf
 ./usr/tests/usr.bin/xlint/lint1/msg_080.exp			tests-obsolete		obsolete,atf
 ./usr/tests/usr.bin/xlint/lint1/msg_081.c			tests-usr.bin-tests	compattestfile,atf
@@ -7467,6 +7469,7 @@
 ./usr/tests/usr.bin/xlint/lint1/msg_353.c			tests-usr.bin-tests	compattestfile,atf
 ./usr/tests/usr.bin/xlint/lint1/msg_354.c			tests-usr.bin-tests	compattestfile,atf
 ./usr/tests/usr.bin/xlint/lint1/msg_355.c			tests-usr.bin-tests	compattestfile,atf
+./usr/tests/usr.bin/xlint/lint1/msg_356.c			tests-usr.bin-tests	compattestfile,atf
 ./usr/tests/usr.bin/xlint/lint1/op_colon.c			tests-usr.bin-tests	compattestfile,atf
 ./usr/tests/usr.bin/xlint/lint1/op_colon.exp			tests-obsolete		obsolete,atf
 ./usr/tests/usr.bin/xlint/lint1/op_shl_lp64.c			tests-usr.bin-tests	compattestfile,atf

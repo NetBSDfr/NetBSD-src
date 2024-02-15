@@ -1,4 +1,4 @@
-/*	$NetBSD: cd9660_vfsops.c,v 1.97 2022/05/03 07:33:07 hannken Exp $	*/
+/*	$NetBSD: cd9660_vfsops.c,v 1.103 2024/02/03 22:39:27 christos Exp $	*/
 
 /*-
  * Copyright (c) 1994
@@ -37,7 +37,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: cd9660_vfsops.c,v 1.97 2022/05/03 07:33:07 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: cd9660_vfsops.c,v 1.103 2024/02/03 22:39:27 christos Exp $");
 
 #if defined(_KERNEL_OPT)
 #include "opt_compat_netbsd.h"
@@ -174,6 +174,44 @@ cd9660_modcmd(modcmd_t cmd, void *arg)
 	return (error);
 }
 
+/* Compat with pre uid/gid/fsize/dsize mount call */
+#define OSIZE sizeof(struct { \
+	const char *fspec; \
+	struct export_args30 _pad1; \
+	int flags; \
+})
+
+static int
+iso_checkupdate(const struct vnode *devvp, const struct iso_mnt *imp,
+    const struct iso_args *args)
+{
+
+	if (devvp != imp->im_devvp && devvp->v_rdev != imp->im_devvp->v_rdev)
+		return EINVAL;
+
+	if (((imp->im_flags & ISOFSMNT_UID) && args->uid != imp->im_uid) ||
+	    ((imp->im_flags & ISOFSMNT_GID) && args->gid != imp->im_gid) ||
+	    args->fmask != imp->im_fmask || args->dmask != imp->im_dmask)
+		return EPERM;
+
+	return 0;
+}
+
+static void
+iso_copyidmask(struct iso_args *args, const struct iso_mnt *imp)
+{
+
+	if (imp == NULL) {
+		args->uid = args->gid = 0;
+		args->fmask = args->dmask = S_IRWXU|S_IRWXG|S_IRWXO;
+		return;
+	}
+	args->uid = imp->im_uid;
+	args->gid = imp->im_gid;
+	args->fmask = imp->im_fmask;
+	args->dmask = imp->im_dmask;
+}
+
 int
 cd9660_mountroot(void)
 {
@@ -192,6 +230,7 @@ cd9660_mountroot(void)
 	}
 
 	args.flags = ISOFSMNT_ROOT;
+	iso_copyidmask(&args, NULL);
 	if ((error = iso_mountfs(rootvp, mp, l, &args)) != 0) {
 		vfs_unbusy(mp);
 		vfs_rele(mp);
@@ -203,36 +242,50 @@ cd9660_mountroot(void)
 	return (0);
 }
 
+    
 /*
  * VFS Operations.
  *
  * mount system call
  */
+
 int
 cd9660_mount(struct mount *mp, const char *path, void *data, size_t *data_len)
 {
 	struct lwp *l = curlwp;
 	struct vnode *devvp;
-	struct iso_args *args = data;
+	struct iso_args aa, *args = data;
 	int error;
 	struct iso_mnt *imp = VFSTOISOFS(mp);
 
 	if (args == NULL)
 		return EINVAL;
-	if (*data_len < sizeof *args)
+
+	if (*data_len != OSIZE && *data_len < sizeof(*args))
 		return EINVAL;
 
 	if (mp->mnt_flag & MNT_GETARGS) {
 		if (imp == NULL)
 			return EIO;
+
 		args->fspec = NULL;
 		args->flags = imp->im_flags;
-		*data_len = sizeof (*args);
+		if (*data_len == OSIZE)
+			return 0;
+
+		iso_copyidmask(args, imp);
+		*data_len = sizeof(*args);
 		return 0;
 	}
 
+	if (*data_len == OSIZE) {
+		memcpy(&aa, args, OSIZE);
+		args = &aa;
+		iso_copyidmask(args, (mp->mnt_flag & MNT_UPDATE) ? imp : NULL);
+	}
+
 	if ((mp->mnt_flag & MNT_RDONLY) == 0)
-		return (EROFS);
+		return EROFS;
 
 	if ((mp->mnt_flag & MNT_UPDATE) && args->fspec == NULL)
 		return EINVAL;
@@ -242,9 +295,9 @@ cd9660_mount(struct mount *mp, const char *path, void *data, size_t *data_len)
 	 * and verify that it refers to a sensible block device.
 	 */
 	error = namei_simple_user(args->fspec,
-				NSM_FOLLOW_NOEMULROOT, &devvp);
+	    NSM_FOLLOW_NOEMULROOT, &devvp);
 	if (error != 0)
-		return (error);
+		return error;
 
 	if (devvp->v_type != VBLK) {
 		vrele(devvp);
@@ -278,11 +331,8 @@ cd9660_mount(struct mount *mp, const char *path, void *data, size_t *data_len)
 		VOP_UNLOCK(devvp);
 		/* reference to devvp is donated through iso_mountfs */
 	} else {
-		if (devvp != imp->im_devvp &&
-		    devvp->v_rdev != imp->im_devvp->v_rdev) {
-			error = EINVAL;		/* needs translation */
+		if ((error = iso_checkupdate(devvp, imp, args)) != 0)
 			goto fail;
-		}
 		VOP_UNLOCK(devvp);
 		vrele(devvp);
 	}
@@ -292,7 +342,7 @@ cd9660_mount(struct mount *mp, const char *path, void *data, size_t *data_len)
 fail:
 	VOP_UNLOCK(devvp);
 	vrele(devvp);
-	return (error);
+	return error;
 }
 
 /*
@@ -456,6 +506,13 @@ iso_mountfs(struct vnode *devvp, struct mount *mp, struct lwp *l,
 	isomp->im_dev = dev;
 	isomp->im_devvp = devvp;
 
+	if (argp->flags & ISOFSMNT_UID)
+		isomp->im_uid = argp->uid;
+	if (argp->flags & ISOFSMNT_GID)
+		isomp->im_gid = argp->gid;
+	isomp->im_fmask = argp->fmask & ACCESSPERMS;
+	isomp->im_dmask = argp->dmask & ACCESSPERMS;
+
 	/* Check the Rock Ridge Extension support */
 	if (!(argp->flags & ISOFSMNT_NORRIP)) {
 		struct iso_directory_record *rootp;
@@ -483,7 +540,8 @@ iso_mountfs(struct vnode *devvp, struct mount *mp, struct lwp *l,
 		bp = NULL;
 	}
 	isomp->im_flags = argp->flags & (ISOFSMNT_NORRIP | ISOFSMNT_GENS |
-		 ISOFSMNT_EXTATT | ISOFSMNT_NOJOLIET | ISOFSMNT_RRCASEINS);
+		 ISOFSMNT_EXTATT | ISOFSMNT_NOJOLIET | ISOFSMNT_RRCASEINS |
+		 ISOFSMNT_UID | ISOFSMNT_GID);
 
 	if (isomp->im_flags & ISOFSMNT_GENS)
 		isomp->iso_ftype = ISO_FTYPE_9660;

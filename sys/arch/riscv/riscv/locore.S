@@ -1,4 +1,4 @@
-/* $NetBSD: locore.S,v 1.43 2023/09/03 08:48:20 skrll Exp $ */
+/* $NetBSD: locore.S,v 1.45 2024/02/09 22:08:33 andvar Exp $ */
 
 /*-
  * Copyright (c) 2014, 2022 The NetBSD Foundation, Inc.
@@ -122,7 +122,7 @@ ENTRY_NP(start)
 	 * Our load address is not fixed, but our VA is.  We need to construct
 	 * an initial PDETAB.
 	 *
-	 * The space for the inital page table is included in the kernel
+	 * The space for the initial page table is included in the kernel
 	 * .bss size calculation so we know the space exists.
 	 */
 
@@ -504,7 +504,7 @@ END(cpu_mpstart)
 
 
 toomanyharts:
-	PRINTS("too many harts, or hart id doens't exist in cpu_hart[]\n")
+	PRINTS("too many harts, or hart id doesn't exist in cpu_hart[]\n")
 1:	wfi
 	j	1b
 

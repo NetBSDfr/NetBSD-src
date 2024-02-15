@@ -1,4 +1,4 @@
-/* $NetBSD: lint1.h,v 1.209 2024/01/23 19:44:28 rillig Exp $ */
+/* $NetBSD: lint1.h,v 1.214 2024/02/05 23:11:22 rillig Exp $ */
 
 /*
  * Copyright (c) 1996 Christopher G. Demetriou.  All Rights Reserved.
@@ -70,19 +70,6 @@ typedef struct {
 	int	p_line;
 	int	p_uniq;			/* uniquifier */
 } pos_t;
-
-/*
- * Strings cannot be referenced simply by a pointer to their first
- * char. This is because strings can contain NUL characters other than the
- * trailing NUL.
- *
- * Strings are stored with a trailing NUL.
- */
-typedef struct strg {
-	bool	st_char;	/* string doesn't have an 'L' prefix */
-	size_t	st_len;		/* length without trailing NUL */
-	void	*st_mem;	/* char[] for st_char, or wchar_t[] */
-} strg_t;
 
 // TODO: Use bit-fields instead of plain bool, but keep an eye on arm and
 // powerpc, on which NetBSD's GCC 10.5.0 (but not the upstream GCC) generates
@@ -193,8 +180,6 @@ struct lint1_type {
 #define	t_params	t_u._t_params
 
 
-
-
 typedef enum {
 	SK_VCFT,		/* variable, constant, function, type */
 	SK_MEMBER,		/* member of a struct or union */
@@ -303,6 +288,13 @@ typedef struct sbuf {
 } sbuf_t;
 
 
+typedef struct {
+	struct tnode *func;
+	struct tnode **args;
+	size_t args_len;
+	size_t args_cap;
+} function_call;
+
 /*
  * tree node
  */
@@ -324,7 +316,15 @@ typedef struct tnode {
 		} tn_s;
 		sym_t	*_tn_sym;	/* symbol if op == NAME */
 		val_t	_tn_val;	/* value if op == CON */
-		strg_t	*_tn_string;	/* string if op == STRING */
+		buffer	*_tn_string;	/* string if op == STRING; for
+					 * character strings, 'data' points to
+					 * the concatenated string literals in
+					 * source form, and 'len' is the
+					 * length of the concatenation; for
+					 * wide strings, 'data' is NULL and
+					 * 'len' is the number of resulting
+					 * characters */
+		function_call *_tn_call;
 	} tn_u;
 } tnode_t;
 
@@ -333,6 +333,7 @@ typedef struct tnode {
 #define tn_sym		tn_u._tn_sym
 #define	tn_val		tn_u._tn_val
 #define	tn_string	tn_u._tn_string
+#define tn_call		tn_u._tn_call
 
 struct generic_association {
 	type_t *ga_arg;		/* NULL means default or error */
@@ -528,6 +529,22 @@ typedef enum {
 	LC_SCANFLIKE,
 	LC_VARARGS,
 } lint_comment;
+
+typedef struct {
+	size_t start;
+	size_t i;
+	uint64_t value;
+	bool escaped;		/* \n, \003, \x24 */
+	bool named_escape;	/* \a, \n, etc. */
+	bool literal_escape;	/* \?, \\, etc. */
+	uint8_t octal_digits;	/* 1 to 3; 0 means not applicable */
+	uint8_t hex_digits;	/* 1 to 3; 0 means not applicable */
+	bool next_literal;	/* when a new string literal begins */
+	bool invalid_escape;	/* single-character escape, recoverable */
+	bool overflow;		/* for octal and hex escapes */
+	bool missing_hex_digits;
+	bool unescaped_newline;	/* stops iterating */
+} quoted_iterator;
 
 #include "externs1.h"
 

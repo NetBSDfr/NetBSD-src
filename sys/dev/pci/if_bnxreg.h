@@ -1,4 +1,4 @@
-/*	$NetBSD: if_bnxreg.h,v 1.28 2021/12/12 13:05:14 andvar Exp $	*/
+/*	$NetBSD: if_bnxreg.h,v 1.30 2024/02/09 22:08:35 andvar Exp $	*/
 /*	$OpenBSD: if_bnxreg.h,v 1.33 2009/09/05 16:02:28 claudio Exp $  */
 
 /*-
@@ -318,7 +318,7 @@ struct flash_spec {
 
 /****************************************************************************/
 /* Shared Memory layout							    */
-/* The BNX bootcode will initialize this data area with port configurtion   */
+/* The BNX bootcode will initialize this data area with port configuration  */
 /* information which can be accessed by the driver.			    */
 /****************************************************************************/
 
@@ -3892,7 +3892,7 @@ struct l2_fhdr {
 #define BNX_TXP_CPU_STATE_FIO_ABORT_HALTED	 (1L<<8)
 #define BNX_TXP_CPU_STATE_SOFT_HALTED		 (1L<<10)
 #define BNX_TXP_CPU_STATE_SPAD_UNDERFLOW	 (1L<<11)
-#define BNX_TXP_CPU_STATE_INTERRRUPT		 (1L<<12)
+#define BNX_TXP_CPU_STATE_INTERRUPT		 (1L<<12)
 #define BNX_TXP_CPU_STATE_DATA_ACCESS_STALL	 (1L<<14)
 #define BNX_TXP_CPU_STATE_INST_FETCH_STALL	 (1L<<15)
 #define BNX_TXP_CPU_STATE_BLOCKED_READ		 (1L<<31)

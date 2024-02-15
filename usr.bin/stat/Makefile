@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.13 2023/06/03 21:30:24 lukem Exp $
+#	$NetBSD: Makefile,v 1.15 2024/01/29 22:01:58 christos Exp $
 
 PROG=	stat
 
@@ -13,5 +13,10 @@ MAN=	stat.1 readlink.1
 COPTS.stat.c+=	${CC_WNO_IMPLICIT_FALLTHROUGH}
 
 COPTS.stat.c += -Wno-format-nonliteral
+
+.if !defined(HOSTPROG)
+LDADD+=	-lutil
+DPADD+=	${LIBUTIL}
+.endif
 
 .include <bsd.prog.mk>
