@@ -238,7 +238,7 @@ nvmm_capability(struct nvmm_capability *cap)
 	struct nvmm_ioc_capability_v2 args_v2;
 
 	if (ioctl(nvmm_fd, NVMM_IOC_CAPABILITY, &args) == -1) {
-		/* Try v1 */
+		/* Try v2 */
 		if (ioctl(nvmm_fd, NVMM_IOC_CAPABILITY_V2, &args_v2) == -1)
 			return -1;
 		args.cap.version = args_v2.cap.version;
