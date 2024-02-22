@@ -1,4 +1,4 @@
-/*	$NetBSD: ftp_var.h,v 1.86 2021/09/10 21:52:17 rillig Exp $	*/
+/*	$NetBSD: ftp_var.h,v 1.88 2024/02/18 22:33:15 wiz Exp $	*/
 
 /*-
  * Copyright (c) 1996-2009 The NetBSD Foundation, Inc.
@@ -169,7 +169,7 @@ enum {
 /*
  * Global defines
  */
-#define	FTPBUFLEN	(4 * MAXPATHLEN)
+#define	FTPBUFLEN	(16 * 1024)
 #define	MAX_IN_PORT_T	0xffffU
 
 #define	HASHBYTES	1024	/* default mark for `hash' command */
@@ -323,6 +323,7 @@ GLOBAL	int	 data;
 extern	struct cmd	cmdtab[];
 extern	struct option	optiontab[];
 
+extern	size_t ftp_buflen;
 
 #define	EMPTYSTRING(x)	((x) == NULL || (*(x) == '\0'))
 #define	FREEPTR(x)	if ((x) != NULL) { free(x); (x) = NULL; }
