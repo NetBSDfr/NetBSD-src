@@ -888,9 +888,9 @@ nvmm_gpa_map(struct nvmm_owner *owner, struct nvmm_ioc_gpa_map *args)
 		goto out;
 	}
 
-	/* Map the vmobj into the machine address space, as pageable. */
+	/* Map the vmobj into the machine address space. */
 	error = os_vmobj_map(&mach->vm->vm_map, &gpa, args->size, vmobj, off,
-	    false /* !wired */, true /* fixed */, false /* !shared */,
+	    args->wired, true /* fixed */, false /* !shared */,
 	    args->prot, PROT_READ | PROT_WRITE | PROT_EXEC);
 
 out:

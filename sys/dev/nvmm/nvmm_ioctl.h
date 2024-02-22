@@ -122,6 +122,9 @@ struct nvmm_ioc_gpa_map {
 	nvmm_machid_t machid;
 	uintptr_t hva;
 	gpaddr_t gpa;
+#if NVMM_KERN_VERSION > 2
+	bool wired;
+#endif
 	size_t size;
 	int prot;
 };

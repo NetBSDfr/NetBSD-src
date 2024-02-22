@@ -510,6 +510,9 @@ nvmm_gpa_map(struct nvmm_machine *mach, uintptr_t hva, gpaddr_t gpa,
 {
 	struct nvmm_ioc_gpa_map args;
 	int ret;
+#if NVMM_KERN_VERSION > 2
+	const char *gpa_wired = getenv("NVMM_GPA_WIRED");
+#endif
 
 	ret = __area_add(mach, hva, gpa, size, prot);
 	if (ret == -1)
@@ -520,6 +523,12 @@ nvmm_gpa_map(struct nvmm_machine *mach, uintptr_t hva, gpaddr_t gpa,
 	args.gpa = gpa;
 	args.size = size;
 	args.prot = prot;
+#if NVMM_KERN_VERSION > 2
+	if (gpa_wired)
+		args.wired = true;
+	else
+		args.wired = false;
+#endif
 
 	if (ioctl(nvmm_fd, NVMM_IOC_GPA_MAP, &args) == -1) {
 		/* Can't recover. */
