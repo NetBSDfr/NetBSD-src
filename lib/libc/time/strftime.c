@@ -1,4 +1,4 @@
-/*	$NetBSD: strftime.c,v 1.53 2024/01/20 14:52:49 christos Exp $	*/
+/*	$NetBSD: strftime.c,v 1.55 2024/02/18 12:47:08 kre Exp $	*/
 
 /* Convert a broken-down timestamp to a string.  */
 
@@ -35,7 +35,7 @@
 static char	elsieid[] = "@(#)strftime.c	7.64";
 static char	elsieid[] = "@(#)strftime.c	8.3";
 #else
-__RCSID("$NetBSD: strftime.c,v 1.53 2024/01/20 14:52:49 christos Exp $");
+__RCSID("$NetBSD: strftime.c,v 1.55 2024/02/18 12:47:08 kre Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 

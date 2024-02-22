@@ -1,4 +1,4 @@
-/*	$NetBSD: if_igc.c,v 1.11 2024/02/08 09:59:35 msaitoh Exp $	*/
+/*	$NetBSD: if_igc.c,v 1.13 2024/02/21 12:39:39 msaitoh Exp $	*/
 /*	$OpenBSD: if_igc.c,v 1.13 2023/04/28 10:18:57 bluhm Exp $	*/
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_igc.c,v 1.11 2024/02/08 09:59:35 msaitoh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_igc.c,v 1.13 2024/02/21 12:39:39 msaitoh Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_if_igc.h"
@@ -3850,7 +3850,7 @@ igc_print_devinfo(struct igc_softc *sc)
 	struct igc_hw *hw = &sc->hw;
 	struct igc_phy_info *phy = &hw->phy;
 	u_int oui, model, rev;
-	uint16_t id1, id2, nvm_ver, phy_ver;
+	uint16_t id1, id2, nvm_ver, phy_ver, etk_lo, etk_hi;
 	char descr[MII_MAX_DESCR_LEN];
 
 	/* Print PHY Info */
@@ -3862,23 +3862,26 @@ igc_print_devinfo(struct igc_softc *sc)
 	rev = MII_REV(id2);
 	mii_get_descr(descr, sizeof(descr), oui, model);
 	if (descr[0])
-		aprint_normal_dev(dev, "PHY: %s, rev. %d\n",
+		aprint_normal_dev(dev, "PHY: %s, rev. %d",
 		    descr, rev);
 	else
 		aprint_normal_dev(dev,
-		    "PHY OUI 0x%06x, model 0x%04x, rev. %d\n",
+		    "PHY OUI 0x%06x, model 0x%04x, rev. %d",
 		    oui, model, rev);
 
-	/* Get NVM version */
+	/* PHY FW version */
+	phy->ops.read_reg(hw, 0x1e, &phy_ver);
+	aprint_normal(", PHY FW version 0x%04hx\n", phy_ver);
+
+	/* NVM version */
 	hw->nvm.ops.read(hw, NVM_VERSION, 1, &nvm_ver);
 
-	/* Get PHY FW version */
-	phy->ops.read_reg(hw, 0x1e, &phy_ver);
+	/* EtrackID */
+	hw->nvm.ops.read(hw, NVM_ETKID_LO, 1, &etk_lo);
+	hw->nvm.ops.read(hw, NVM_ETKID_HI, 1, &etk_hi);
 
-	aprint_normal_dev(dev, "ROM image version %x.%02x",
+	aprint_normal_dev(dev,
+	    "NVM image version %x.%02x, EtrackID %04hx%04hx\n",
 	    (nvm_ver & NVM_VERSION_MAJOR) >> NVM_VERSION_MAJOR_SHIFT,
-	    (nvm_ver & NVM_VERSION_MINOR));
-	aprint_debug("(0x%04hx)", nvm_ver);
-
-	aprint_normal(", PHY FW version 0x%04hx\n", phy_ver);
+	    nvm_ver & NVM_VERSION_MINOR, etk_hi, etk_lo);
 }
