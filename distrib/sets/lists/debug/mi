@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.424 2023/11/24 16:21:17 riastradh Exp $
+# $NetBSD: mi,v 1.427 2024/02/21 22:53:47 christos Exp $
 ./etc/mtree/set.debug                           comp-sys-root
 ./usr/lib					comp-sys-usr		compatdir
 ./usr/lib/i18n/libBIG5_g.a			comp-c-debuglib		debuglib,compatfile
@@ -68,9 +68,7 @@
 ./usr/lib/libfido2_g.a				comp-c-debuglib		debuglib,compatfile
 ./usr/lib/libfl_g.a				comp-c-debuglib		debuglib,compatfile
 ./usr/lib/libform_g.a				comp-c-debuglib		debuglib,compatfile
-./usr/lib/libgcc_eh_g.a				comp-c-debuglib		debuglib,compatfile,gcc
 ./usr/lib/libgcc_g.a				comp-c-debuglib		debuglib,compatfile,gcc
-./usr/lib/libgcc_s_g.a				comp-c-debuglib		debuglib,compatfile,gcc
 ./usr/lib/libgcov_g.a				comp-c-debuglib		debuglib,compatfile,gcc
 ./usr/lib/libgnuctf_g.a				comp-c-debuglib		debuglib,compatfile,binutils
 ./usr/lib/libgnumalloc_g.a			comp-c-debuglib		debuglib,compatfile
@@ -1085,7 +1083,7 @@
 ./usr/libdata/debug/usr/sbin/cron.debug		comp-cron-debug		debug
 ./usr/libdata/debug/usr/sbin/daicctl.debug	comp-obsolete		obsolete
 ./usr/libdata/debug/usr/sbin/dbsym.debug	comp-sysutil-debug	binutils,debug
-./usr/libdata/debug/usr/sbin/ddns-confgen.debug	comp-bind-bin		debug
+./usr/libdata/debug/usr/sbin/ddns-confgen.debug	comp-obsolete		obsolete
 ./usr/libdata/debug/usr/sbin/dev_mkdb.debug	comp-sysutil-debug	debug
 ./usr/libdata/debug/usr/sbin/dhcpd.debug	comp-dhcpd-debug	debug
 ./usr/libdata/debug/usr/sbin/dhcrelay.debug	comp-dhcpd-debug	debug
@@ -1360,6 +1358,7 @@
 ./usr/libdata/debug/usr/sbin/traceroute6.debug	comp-netutil-debug	use_inet6,debug
 ./usr/libdata/debug/usr/sbin/trpt.debug		comp-netutil-debug	debug
 ./usr/libdata/debug/usr/sbin/trsp.debug		comp-obsolete		obsolete,compatfile
+./usr/libdata/debug/usr/sbin/tsig-keygen.debug	comp-bind-bin		debug
 ./usr/libdata/debug/usr/sbin/unbound-anchor.debug	base-netutil-debug	debug,unbound
 ./usr/libdata/debug/usr/sbin/unbound-checkconf.debug	base-netutil-debug	debug,unbound
 ./usr/libdata/debug/usr/sbin/unbound-control.debug	base-netutil-debug	debug,unbound
@@ -2092,6 +2091,7 @@
 ./usr/libdata/debug/usr/tests/lib/libc/rpc/t_rpc.debug			tests-lib-debug		debug,atf,compattestfile
 ./usr/libdata/debug/usr/tests/lib/libc/rpc/t_xdr.debug			tests-lib-debug		debug,atf,compattestfile
 ./usr/libdata/debug/usr/tests/lib/libc/setjmp/t_setjmp.debug		tests-lib-debug		debug,atf,compattestfile
+./usr/libdata/debug/usr/tests/lib/libc/setjmp/t_sigstack.debug		tests-lib-debug		debug,atf,compattestfile
 ./usr/libdata/debug/usr/tests/lib/libc/setjmp/t_threadjmp.debug		tests-lib-debug		debug,atf,compattestfile
 ./usr/libdata/debug/usr/tests/lib/libc/ssp/h_fgets.debug		tests-lib-debug		debug,atf,ssp,compattestfile
 ./usr/libdata/debug/usr/tests/lib/libc/ssp/h_getcwd.debug		tests-lib-debug		debug,atf,ssp,compattestfile
