@@ -1,4 +1,4 @@
-/*	$NetBSD: lex_char.c,v 1.7 2023/03/28 14:44:34 rillig Exp $	*/
+/*	$NetBSD: lex_char.c,v 1.9 2024/02/02 19:07:58 rillig Exp $	*/
 # 3 "lex_char.c"
 
 /*
@@ -27,8 +27,10 @@ test(void)
 	sink('ä');
 
 	/* GCC extension */
-	/* expect+1: warning: dubious escape \e [79] */
 	sink('\e');
+
+	/* expect+1: warning: dubious escape \y [79] */
+	sink('\y');
 
 	/* since C99 */
 	sink('\x12');
@@ -59,6 +61,18 @@ test(void)
 
 	/* U+000D carriage return */
 	sink('\r');
+
+	/* A double quote may be escaped or not, since C90. */
+	sink('"');
+	sink('\"');
+
+	/* A question mark may be escaped or not, since C90. */
+	sink('?');
+	sink('\?');
+
+	sink('\\');
+
+	sink('\'');
 }
 
 /*

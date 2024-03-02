@@ -1,4 +1,4 @@
-/*	$NetBSD: atari_init.c,v 1.111 2024/01/15 03:14:31 thorpej Exp $	*/
+/*	$NetBSD: atari_init.c,v 1.113 2024/02/10 18:43:51 andvar Exp $	*/
 
 /*
  * Copyright (c) 1995 Leo Weppelman
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: atari_init.c,v 1.111 2024/01/15 03:14:31 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: atari_init.c,v 1.113 2024/02/10 18:43:51 andvar Exp $");
 
 #include "opt_ddb.h"
 #include "opt_mbtype.h"
@@ -121,7 +121,7 @@ static u_int milan_probe_bank(paddr_t paddr);
 static cpu_kcore_hdr_t cpu_kcore_hdr;
 
 extern u_int	lowram;
-int		machineid, mmutype, cputype, astpending;
+int		machineid, mmutype, cputype;
 
 extern char		*esym;
 extern struct pcb	*curpcb;
@@ -288,7 +288,7 @@ start_c(int id, u_int ttphystart, u_int ttphysize, u_int stphysize,
 	 * If we have enough RAMs reserve ST memory including for the Xserver.
 	 * Otherwise just allocate minimum one for SCSI and FDC.
 	 *
-	 * The round_page() call is ment to correct errors made by
+	 * The round_page() call is meant to correct errors made by
 	 * binpatching!
 	 */
 	if (st_pool_size > ST_POOL_SIZE_MIN * PAGE_SIZE &&

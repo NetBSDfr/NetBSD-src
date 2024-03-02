@@ -1,4 +1,4 @@
-/* $NetBSD: if_bce.c,v 1.63 2023/06/27 21:43:58 nisimura Exp $	 */
+/* $NetBSD: if_bce.c,v 1.65 2024/02/10 09:30:06 andvar Exp $	 */
 
 /*
  * Copyright (c) 2003 Clifford Wright. All rights reserved.
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_bce.c,v 1.63 2023/06/27 21:43:58 nisimura Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_bce.c,v 1.65 2024/02/10 09:30:06 andvar Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -346,7 +346,7 @@ bce_attach(device_t parent, device_t self, void *aux)
 	 */
 	/*
 	 * XXX PAGE_SIZE is wasteful; we only need 1KB + 1KB, but
-	 * due to the limition above. ??
+	 * due to the limitation above. ??
 	 */
 	if ((error = bus_dmamem_alloc(sc->bce_dmatag,
 	    2 * PAGE_SIZE, PAGE_SIZE, 2 * PAGE_SIZE,
@@ -543,7 +543,7 @@ bce_start(struct ifnet *ifp)
 
 		/*
 		 * Load the DMA map.  If this fails, the packet either
-		 * didn't fit in the alloted number of segments, or we
+		 * didn't fit in the allotted number of segments, or we
 		 * were short on resources. If the packet will not fit,
 		 * it will be dropped. If short on resources, it will
 		 * be tried again later.
@@ -1032,7 +1032,7 @@ bce_add_mac(struct bce_softc *sc, uint8_t *mac, u_long idx)
 	}
 }
 
-/* Add a receive buffer to the indiciated descriptor. */
+/* Add a receive buffer to the indicated descriptor. */
 static int
 bce_add_rxbuf(struct bce_softc *sc, int idx)
 {

@@ -1,4 +1,4 @@
-/*	$NetBSD: mkboot.c,v 1.11 2014/10/11 05:33:25 dholland Exp $	*/
+/*	$NetBSD: mkboot.c,v 1.15 2024/02/24 15:34:47 christos Exp $	*/
 
 /*
  * Copyright (c) 1990, 1993
@@ -38,16 +38,15 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__COPYRIGHT(
-"@(#) Copyright (c) 1990, 1993\n\
-	The Regents of the University of California.  All rights reserved.\n");
+__COPYRIGHT("@(#) Copyright (c) 1990, 1993\
+The Regents of the University of California.  All rights reserved.");
 #endif /* not lint */
 
 #ifndef lint
 #ifdef notdef
 static char sccsid[] = "@(#)mkboot.c	7.2 (Berkeley) 12/16/90";
 #endif
-__RCSID("$NetBSD: mkboot.c,v 1.11 2014/10/11 05:33:25 dholland Exp $");
+__RCSID("$NetBSD: mkboot.c,v 1.15 2024/02/24 15:34:47 christos Exp $");
 #endif /* not lint */
 
 #include <sys/param.h>
@@ -60,6 +59,7 @@ __RCSID("$NetBSD: mkboot.c,v 1.11 2014/10/11 05:33:25 dholland Exp $");
 #include <time.h>
 
 #include <ctype.h>
+#include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -78,17 +78,21 @@ __RCSID("$NetBSD: mkboot.c,v 1.11 2014/10/11 05:33:25 dholland Exp $");
 #define btolifs(b)	(((b) + (SECTSIZE - 1)) / SECTSIZE)
 #define lifstob(s)	((s) * SECTSIZE)
 
-int	lpflag;
-int	loadpoint;
+int	loadpoint = -1;
 struct  load ld;
 struct	lifvol lifv;
 struct	lifdir lifd[LIF_NUMDIR];
+time_t repro_epoch = 0;
 
 int	 main(int, char **);
 void	 bcddate(char *, char *);
 char	*lifname(char *);
 int	 putfile(char *, int);
 void	 usage(void);
+
+#define CLEAR(a, b, c)	\
+__CTASSERT(sizeof(b) - 1 == c); \
+memcpy((a), (b), (c))
 
 /*
  * Old Format:
@@ -110,24 +114,25 @@ int
 main(int argc, char **argv)
 {
 	char *n1, *n2, *n3;
-	int n, to;
+	int n, to, ch;
 	int count;
 
-	--argc;
-	++argv;
-	if (argc == 0)
-		usage();
-	if (!strcmp(argv[0], "-l")) {
-		argv++;
-		argc--;
-		if (argc == 0)
+
+	while ((ch = getopt(argc, argv, "l:t:")) != -1)
+		switch (ch) {
+		case 'l':
+			loadpoint = strtol(optarg, NULL, 0);
+			break;
+		case 't':
+			repro_epoch = (time_t)atoll(optarg);
+			break;
+		default:
 			usage();
-		sscanf(argv[0], "0x%x", &loadpoint);
-		lpflag++;
-		argv++;
-		argc--;
-	}
-	if (!lpflag || argc == 0)
+		}
+
+	argc -= optind;
+	argv += optind;
+	if (loadpoint == -1 || argc == 0)
 		usage();
 	n1 = argv[0];
 	argv++;
@@ -147,13 +152,10 @@ main(int argc, char **argv)
 	} else
 		n2 = n3 = NULL;
 
-	to = open(argv[0], O_WRONLY | O_TRUNC | O_CREAT, 0644);
-	if (to < 0) {
-		perror("open");
-		exit(1);
-	}
+	if ((to = open(argv[0], O_WRONLY | O_TRUNC | O_CREAT, 0644)) == -1)
+		err(1, "Can't open `%s'", argv[0]);
 	/* clear possibly unused directory entries */
-	strncpy(lifd[1].dir_name, "          ", 10);
+	CLEAR(lifd[1].dir_name, "          ", sizeof(lifd[1].dir_name));
 	lifd[1].dir_type = htobe16(-1);
 	lifd[1].dir_addr = htobe32(0);
 	lifd[1].dir_length = htobe32(0);
@@ -162,7 +164,7 @@ main(int argc, char **argv)
 	lifd[7] = lifd[6] = lifd[5] = lifd[4] = lifd[3] = lifd[2] = lifd[1];
 	/* record volume info */
 	lifv.vol_id = htobe16(VOL_ID);
-	strncpy(lifv.vol_label, "BOOT43", 6);
+	CLEAR(lifv.vol_label, "BOOT43", sizeof(lifv.vol_label));
 	lifv.vol_addr = htobe32(btolifs(LIF_DIRSTART));
 	lifv.vol_oct = htobe16(VOL_OCT);
 	lifv.vol_dirsize = htobe32(btolifs(LIF_DIRSIZE));
@@ -216,7 +218,7 @@ main(int argc, char **argv)
 	write(to, &lifv, LIF_VOLSIZE);
 	lseek(to, LIF_DIRSTART, SEEK_SET);
 	write(to, lifd, LIF_DIRSIZE);
-	exit(0);
+	return EXIT_SUCCESS;
 }
 
 int
@@ -224,21 +226,17 @@ putfile(char *from, int to)
 {
 	int fd;
 	struct stat statb;
-	int nr;
 	void *bp;
 
-	if ((fd = open(from, 0)) < 0) {
-		printf("error: unable to open file %s\n", from);
-		exit(1);
-	}
+	if ((fd = open(from, 0)) < 0)
+		err(EXIT_FAILURE, "Unable to open file `%s'", from);
 	fstat(fd, &statb);
 	ld.address = htobe32(loadpoint);
 	ld.count = htobe32(statb.st_size);
-	bp = malloc(statb.st_size);
-	if ((nr = read(fd, bp, statb.st_size)) < 0) {
-		printf("error: reading from file %s\n", from);
-		exit(1);
-	}
+	if ((bp = malloc(statb.st_size)) == NULL)
+		err(EXIT_FAILURE, "Can't allocate buffer");
+	if (read(fd, bp, statb.st_size) < 0)
+		err(EXIT_FAILURE, "Error reading from file `%s'", from);
 	(void)close(fd);
 	write(to, &ld, sizeof(ld));
 	write(to, bp, statb.st_size);
@@ -250,9 +248,9 @@ void
 usage(void)
 {
 
-	fprintf(stderr,
-		"usage:	 mkboot -l loadpoint prog1 [ prog2 ] outfile\n");
-	exit(1);
+	fprintf(stderr, "Usage:	%s -l <loadpoint> [-t <timestamp>] prog1 "
+	    "[ prog2 ] outfile\n", getprogname());
+	exit(EXIT_FAILURE);
 }
 
 char *
@@ -265,9 +263,9 @@ lifname(char *str)
 	if ((cp = strrchr(str, '/')) != NULL)
 		str = ++cp;
 	for (i = 4; i < 9; i++) {
-		if (islower(*str))
-			lname[i] = toupper(*str);
-		else if (isalnum(*str) || *str == '_')
+		if (islower((unsigned char)*str))
+			lname[i] = toupper((unsigned char)*str);
+		else if (isalnum((unsigned char)*str) || *str == '_')
 			lname[i] = *str;
 		else
 			break;
@@ -284,8 +282,12 @@ bcddate(char *name, char *toc)
 	struct stat statb;
 	struct tm *tm;
 
-	stat(name, &statb);
-	tm = localtime(&statb.st_ctime);
+	if (repro_epoch)
+		tm = gmtime(&repro_epoch);
+	else {
+		stat(name, &statb);
+		tm = localtime(&statb.st_ctime);
+	}
 	*toc = ((tm->tm_mon+1) / 10) << 4;
 	*toc++ |= (tm->tm_mon+1) % 10;
 	*toc = (tm->tm_mday / 10) << 4;

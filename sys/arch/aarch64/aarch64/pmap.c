@@ -1,7 +1,7 @@
-/*	$NetBSD: pmap.c,v 1.149 2023/04/20 08:28:02 skrll Exp $	*/
+/*	$NetBSD: pmap.c,v 1.151 2024/02/16 21:32:17 andvar Exp $	*/
 
 /*
- * Copyright (c) 2017 Ryo Shimizu <ryo@nerv.org>
+ * Copyright (c) 2017 Ryo Shimizu
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.149 2023/04/20 08:28:02 skrll Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pmap.c,v 1.151 2024/02/16 21:32:17 andvar Exp $");
 
 #include "opt_arm_debug.h"
 #include "opt_cpuoptions.h"
@@ -1192,7 +1192,7 @@ _pmap_enter_pv(struct pmap_page *pp, struct pmap *pm, struct pv_entry **pvp,
 
 #ifdef PMAP_PV_DEBUG
 	printf("pv %p alias added va=%016lx -> pa=%016lx\n", pv, va, pa);
-	pv_dump(pp, printf);
+	pmap_db_mdpg_print(PHYS_TO_VM_PAGE(pa), printf);
 #endif
 
 	return 0;

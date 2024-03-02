@@ -1,4 +1,4 @@
-/* $NetBSD: debug.c,v 1.65 2023/12/03 12:03:38 rillig Exp $ */
+/* $NetBSD: debug.c,v 1.71 2024/02/05 23:11:22 rillig Exp $ */
 
 /*-
  * Copyright (c) 2021 The NetBSD Foundation, Inc.
@@ -35,7 +35,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: debug.c,v 1.65 2023/12/03 12:03:38 rillig Exp $");
+__RCSID("$NetBSD: debug.c,v 1.71 2024/02/05 23:11:22 rillig Exp $");
 #endif
 
 #include <stdlib.h>
@@ -235,18 +235,24 @@ debug_node(const tnode_t *tn) // NOLINT(misc-no-recursion)
 		debug_printf("\n");
 		break;
 	case STRING:
-		if (tn->tn_string->st_char)
-			debug_printf(", length %zu, \"%s\"\n",
-			    tn->tn_string->st_len,
-			    (const char *)tn->tn_string->st_mem);
-		else {
-			size_t n = MB_CUR_MAX * (tn->tn_string->st_len + 1);
-			char *s = xmalloc(n);
-			(void)wcstombs(s, tn->tn_string->st_mem, n);
-			debug_printf(", length %zu, L\"%s\"\n",
-			    tn->tn_string->st_len, s);
-			free(s);
-		}
+		if (tn->tn_string->data != NULL)
+			debug_printf(", %s\n", tn->tn_string->data);
+		else
+			debug_printf(", length %zu\n", tn->tn_string->len);
+		break;
+	case CALL:
+	case ICALL:
+		debug_printf("\n");
+
+		debug_indent_inc();
+		const function_call *call = tn->tn_call;
+		debug_node(call->func);
+		if (call->args != NULL) {
+			for (size_t i = 0; i < call->args_len; i++)
+				debug_node(call->args[i]);
+		} else
+			debug_step("error in arguments");
+		debug_indent_dec();
 		break;
 	default:
 		debug_printf("\n");
@@ -257,7 +263,7 @@ debug_node(const tnode_t *tn) // NOLINT(misc-no-recursion)
 		debug_node(tn->tn_left);
 		if (op != INCBEF && op != INCAFT
 		    && op != DECBEF && op != DECAFT
-		    && op != CALL && op != ICALL && op != PUSH)
+		    && op != CALL && op != ICALL)
 			lint_assert(is_binary(tn) == (tn->tn_right != NULL));
 		if (tn->tn_right != NULL)
 			debug_node(tn->tn_right);
@@ -320,7 +326,7 @@ scl_name(scl_t scl)
 }
 
 const char *
-symt_name(symt_t kind)
+symbol_kind_name(symbol_kind kind)
 {
 	static const char *const name[] = {
 		"var-func-type",
@@ -373,7 +379,7 @@ debug_sym(const char *prefix, const sym_t *sym, const char *suffix)
 		debug_printf(" type='%s'", type_name(sym->s_type));
 	if (sym->s_rename != NULL)
 		debug_printf(" rename=%s", sym->s_rename);
-	debug_printf(" %s", symt_name(sym->s_kind));
+	debug_printf(" %s", symbol_kind_name(sym->s_kind));
 	debug_word(sym->s_keyword != NULL, "keyword");
 	debug_word(sym->s_bitfield, "bit-field");
 	debug_word(sym->s_set, "set");

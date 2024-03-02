@@ -1,4 +1,4 @@
-/*	$NetBSD: main1.c,v 1.78 2023/12/03 18:17:41 rillig Exp $	*/
+/*	$NetBSD: main1.c,v 1.82 2024/02/03 19:37:02 rillig Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -37,10 +37,11 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: main1.c,v 1.78 2023/12/03 18:17:41 rillig Exp $");
+__RCSID("$NetBSD: main1.c,v 1.82 2024/02/03 19:37:02 rillig Exp $");
 #endif
 
 #include <sys/types.h>
+#include <locale.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -134,6 +135,7 @@ main(int argc, char *argv[])
 {
 	int c;
 
+	setlocale(LC_ALL, "");
 	setprogname(argv[0]);
 
 	while ((c = getopt(argc, argv, "abceghpq:rstuvwyzA:FPR:STX:")) != -1) {
@@ -211,9 +213,8 @@ main(int argc, char *argv[])
 	if (argc != 2)
 		usage();
 
-
 	/* initialize output */
-	outopen(any_query_enabled ? "/dev/null" : argv[1]);
+	outopen(argv[1]);
 
 #ifdef DEBUG
 	setvbuf(stdout, NULL, _IONBF, 0);
@@ -224,8 +225,8 @@ main(int argc, char *argv[])
 #endif
 
 	(void)signal(SIGFPE, sigfpe);
-	initdecl();
-	initscan();
+	init_decl();
+	init_lex();
 
 	if (allow_gcc && allow_c90) {
 		if ((yyin = gcc_builtins()) == NULL)

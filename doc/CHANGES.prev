@@ -1,4 +1,4 @@
-LIST OF CHANGES FROM PREVIOUS RELEASES:			<$Revision: 1.178 $>
+LIST OF CHANGES FROM PREVIOUS RELEASES:			<$Revision: 1.182 $>
 
 
 Changes from 386bsd 0.1 + patchkit 0.2.2 to NetBSD 0.8:
@@ -11753,7 +11753,7 @@ Changes from NetBSD 7.0 to NetBSD 8.0:
 	rtsold(8): Removed in favour of dhcpcd. [roy 20140911]
 	dhcpcd(8): Import dhcpcd-6.4.5. [roy 20140918]
 	arm: Add support for i.MX6 SoC. [ryo 20140925]
-	gpt(8): Completed overhaul, including adding follwing subcommands:
+	gpt(8): Completed overhaul, including adding following subcommands:
 		resize, set, unset, backup, restore, and resizedisk.
 		[jnemeth 20140926]
 	dhcpcd(8): Import dhcpcd-6.4.7. [roy 20140927]
@@ -13444,6 +13444,8 @@ Changes from NetBSD 9.0 to NetBSD 10.0:
 	mips: Bump the maximum text size for binaries from 64MB
 		to 128MB. [he 20230514]
 	OpenSSL: Imported 3.0.9. [christos 20230531]
+	lua: Import version 5.4.6.
+		Bumped shlib minor because of API/ABI changes. [nikita 20230608]
 	pam(8): Disable pam_krb5, pam_ksu by default. [riastradh 20230620]
 	gcc(1): Import GCC 10.5.  [mrg 20230710]
 	amdgpu(4): Enable display core logic. [riastradh 20230714]
@@ -13463,7 +13465,29 @@ Changes from NetBSD 9.0 to NetBSD 10.0:
 		[rin 20231007]
 	eqos(4): Add support for Intel Elkhart Lake internal Ethernet devices.
 		[msaitoh 20231019]
+	build: Force MKSTRIPSYM=no if MKDEBUG=yes. [lukem 20231020]
+	top(1): Add network in & out bytes to the top display. [mrg 20231021]
 	OpenSSL: Imported 3.0.12. [christos 20231025]
 	OpenSSH: Import 9.5. [christos 20231025]
 	newsmips: Add support for LCD-MONO framebuffer on NWS-32x0 laptop
 		machines. [tsutsui 20231104]
+	newsmips: X.org server works with proper keymap with an updated
+		xf86-input-keyboard driver that supports getting keymap
+		via WSKBDIO_GETMAP ioctl(2). [tsutsui 20231107]
+	ena(4): MP-enable always, add RSS support, and reliability fixes.
+		[jdolecek 20231105]
+	gas(1): fix gas that doesn't handle MIPS1 FPR load hazard correctly.
+		[tsutsui 20231117]
+	iscsid(8): Handle IPv6 addresses. [mlelstv 20231125]
+	kernel: Import various bits of nouveau firmware for newer
+		nvidia graphics hardware. [bouyer 20231128]
+	OpenSSH: Import 9.6. [christos 20231220]
+	tzdata: Updated to 2023d (via 2023dgtz) [kre 20231223]
+	postfix(1): Import version 3.8.4. [christos 20231223]
+	postfix(1): Install postfix-tls-script (for "postfix tls")
+		[kim 20240101]
+	wm(4): Add some Meteor Lake devices (I219 V20-V21 and LM 20-21).
+		[msaitoh 20240118]
+	evbppc: Add support for the Nintendo Wii. [jmcneill 20240120]
+	vax: X.org server with xf86-video-wsfb works on smg(4) monochrome
+		framebuffer on VAXstation 3100. [tsutsui 20240126]

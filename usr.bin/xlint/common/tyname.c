@@ -1,4 +1,4 @@
-/*	$NetBSD: tyname.c,v 1.57 2023/08/02 18:51:25 rillig Exp $	*/
+/*	$NetBSD: tyname.c,v 1.61 2024/02/02 16:25:58 rillig Exp $	*/
 
 /*-
  * Copyright (c) 2005 The NetBSD Foundation, Inc.
@@ -35,7 +35,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: tyname.c,v 1.57 2023/08/02 18:51:25 rillig Exp $");
+__RCSID("$NetBSD: tyname.c,v 1.61 2024/02/02 16:25:58 rillig Exp $");
 #endif
 
 #include <assert.h>
@@ -43,7 +43,7 @@ __RCSID("$NetBSD: tyname.c,v 1.57 2023/08/02 18:51:25 rillig Exp $");
 #include <string.h>
 #include <stdlib.h>
 
-#if defined(IS_LINT1)
+#if IS_LINT1
 #include "lint1.h"
 #else
 #include "lint2.h"
@@ -55,13 +55,6 @@ typedef struct name_tree_node {
 	struct name_tree_node *ntn_less;
 	struct name_tree_node *ntn_greater;
 } name_tree_node;
-
-/* A growable string buffer. */
-typedef struct buffer {
-	size_t	len;
-	size_t	cap;
-	char *	data;
-} buffer;
 
 static name_tree_node *type_names;
 
@@ -101,7 +94,11 @@ intern(const char *name)
 	return n->ntn_name;
 }
 
+#if IS_LINT1
+void
+#else
 static void
+#endif
 buf_init(buffer *buf)
 {
 	buf->len = 0;
@@ -117,17 +114,30 @@ buf_done(buffer *buf)
 }
 
 static void
-buf_add(buffer *buf, const char *s)
+buf_add_mem(buffer *buf, const char *s, size_t n)
 {
-	size_t len = strlen(s);
-
-	while (buf->len + len + 1 >= buf->cap) {
-		buf->data = xrealloc(buf->data, 2 * buf->cap);
-		buf->cap = 2 * buf->cap;
+	while (buf->len + n + 1 >= buf->cap) {
+		buf->cap *= 2;
+		buf->data = xrealloc(buf->data, buf->cap);
 	}
 
-	memcpy(buf->data + buf->len, s, len + 1);
-	buf->len += len;
+	memcpy(buf->data + buf->len, s, n);
+	buf->len += n;
+	buf->data[buf->len] = '\0';
+}
+
+#if IS_LINT1
+void
+buf_add_char(buffer *buf, char c)
+{
+	buf_add_mem(buf, &c, 1);
+}
+#endif
+
+static void
+buf_add(buffer *buf, const char *s)
+{
+	buf_add_mem(buf, s, strlen(s));
 }
 
 static void
@@ -154,7 +164,7 @@ type_name_of_function(buffer *buf, const type_t *tp)
 
 	buf_add(buf, "(");
 	if (tp->t_proto) {
-#ifdef IS_LINT1
+#if IS_LINT1
 		const sym_t *param = tp->t_params;
 		if (param == NULL)
 			buf_add(buf, "void");
@@ -186,7 +196,7 @@ static void
 type_name_of_struct_or_union(buffer *buf, const type_t *tp)
 {
 	buf_add(buf, " ");
-#ifdef IS_LINT1
+#if IS_LINT1
 	if (tp->t_sou->sou_tag->s_name == unnamed &&
 	    tp->t_sou->sou_first_typedef != NULL) {
 		buf_add(buf, "typedef ");
@@ -203,7 +213,7 @@ static void
 type_name_of_enum(buffer *buf, const type_t *tp)
 {
 	buf_add(buf, " ");
-#ifdef IS_LINT1
+#if IS_LINT1
 	if (tp->t_enum->en_tag->s_name == unnamed &&
 	    tp->t_enum->en_first_typedef != NULL) {
 		buf_add(buf, "typedef ");
@@ -220,7 +230,7 @@ static void
 type_name_of_array(buffer *buf, const type_t *tp)
 {
 	buf_add(buf, "[");
-#ifdef IS_LINT1
+#if IS_LINT1
 	if (tp->t_incomplete_array)
 		buf_add(buf, "unknown_size");
 	else
@@ -252,13 +262,13 @@ type_name(const type_t *tp)
 	if (tp->t_volatile)
 		buf_add(&buf, "volatile ");
 
-#ifdef IS_LINT1
+#if IS_LINT1
 	if (is_struct_or_union(t) && tp->t_sou->sou_incomplete)
 		buf_add(&buf, "incomplete ");
 #endif
 	buf_add(&buf, tspec_name(t));
 
-#ifdef IS_LINT1
+#if IS_LINT1
 	if (tp->t_bitfield) {
 		buf_add(&buf, ":");
 		buf_add_int(&buf, (int)tp->t_bit_field_width);

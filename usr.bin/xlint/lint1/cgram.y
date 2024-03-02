@@ -1,5 +1,5 @@
 %{
-/* $NetBSD: cgram.y,v 1.483 2024/01/13 11:24:57 rillig Exp $ */
+/* $NetBSD: cgram.y,v 1.489 2024/02/08 20:45:20 rillig Exp $ */
 
 /*
  * Copyright (c) 1996 Christopher G. Demetriou.  All Rights Reserved.
@@ -35,7 +35,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: cgram.y,v 1.483 2024/01/13 11:24:57 rillig Exp $");
+__RCSID("$NetBSD: cgram.y,v 1.489 2024/02/08 20:45:20 rillig Exp $");
 #endif
 
 #include <limits.h>
@@ -85,18 +85,6 @@ clear_warning_flags_loc(const char *file, size_t line)
 static void
 save_warning_flags_loc(const char *file, size_t line)
 {
-	/*
-	 * There used to be an assertion that saved_lwarn is
-	 * LWARN_NOTHING_SAVED here, but that triggered for the following
-	 * code:
-	 *
-	 * void function(int x) { if (x > 0) if (x > 1) return; }
-	 *
-	 * It didn't trigger if the inner 'if' was enclosed in braces though.
-	 *
-	 * TODO: If actually needed, add support for nested suppression of
-	 *  warnings.
-	 */
 	debug_step("%s:%zu: saving flags %d", file, line, lwarn);
 	saved_lwarn = lwarn;
 }
@@ -108,10 +96,6 @@ restore_warning_flags_loc(const char *file, size_t line)
 	if (saved_lwarn != LWARN_NOTHING_SAVED) {
 		lwarn = saved_lwarn;
 		debug_step("%s:%zu: restoring flags %d", file, line, lwarn);
-		/*
-		 * Do not set 'saved_lwarn = LWARN_NOTHING_SAVED' here, to
-		 * avoid triggering the assertion in save_warning_flags_loc.
-		 */
 	} else
 		clear_warning_flags_loc(file, line);
 }
@@ -145,10 +129,11 @@ is_either(const char *s, const char *a, const char *b)
 	type_qualifiers y_type_qualifiers;
 	function_specifier y_function_specifier;
 	struct parameter_list y_parameter_list;
+	function_call *y_arguments;
 	type_t	*y_type;
 	tnode_t	*y_tnode;
 	range_t	y_range;
-	strg_t	*y_string;
+	buffer	*y_string;
 	qual_ptr *y_qual_ptr;
 	bool	y_seen_statement;
 	struct generic_association *y_generic;
@@ -178,6 +163,12 @@ is_either(const char *s, const char *a, const char *b)
 %printer {
 	fprintf(yyo, "%s", function_specifier_name($$));
 } <y_function_specifier>
+%printer {
+	size_t n = 0;
+	for (const sym_t *p = $$.first; p != NULL; p = p->s_next)
+		n++;
+	fprintf(yyo, "%zu parameter%s", n, n != 1 ? "s" : "");
+} <y_parameter_list>
 %printer { fprintf(yyo, "%s", type_name($$)); } <y_type>
 %printer {
 	if ($$ == NULL)
@@ -187,7 +178,7 @@ is_either(const char *s, const char *a, const char *b)
 		    op_name($$->tn_op), type_name($$->tn_type));
 } <y_tnode>
 %printer { fprintf(yyo, "%zu to %zu", $$.lo, $$.hi); } <y_range>
-%printer { fprintf(yyo, "length %zu", $$->st_len); } <y_string>
+%printer { fprintf(yyo, "length %zu", $$->len); } <y_string>
 %printer {
 	fprintf(yyo, "%s *", type_qualifiers_string($$->qualifiers));
 } <y_qual_ptr>
@@ -195,6 +186,19 @@ is_either(const char *s, const char *a, const char *b)
 %printer { fprintf(yyo, "%s", type_name($$->ga_arg)); } <y_generic>
 %printer { fprintf(yyo, "%d", $$.dim); } <y_array_size>
 %printer { fprintf(yyo, "%s", $$ ? "yes" : "no"); } <y_in_system_header>
+%printer {
+	if ($$.dn_len == 0)
+		fprintf(yyo, "(empty)");
+	for (size_t i = 0; i < $$.dn_len; i++) {
+		const designator *dr = $$.dn_items + i;
+		if (dr->dr_kind == DK_MEMBER)
+			fprintf(yyo, ".%s", dr->dr_member->s_name);
+		else if (dr->dr_kind == DK_SUBSCRIPT)
+			fprintf(yyo, "[%zu]", dr->dr_subscript);
+		else
+			fprintf(yyo, "<scalar>");
+	}
+} <y_designation>
 */
 
 %token			T_LBRACE T_RBRACE T_LBRACK T_RBRACK T_LPAREN T_RPAREN
@@ -298,7 +302,7 @@ is_either(const char *s, const char *a, const char *b)
 %type	<y_tnode>	gcc_statement_expr_list
 %type	<y_tnode>	gcc_statement_expr_item
 %type	<y_op>		point_or_arrow
-%type	<y_tnode>	argument_expression_list
+%type	<y_arguments>	argument_expression_list
 %type	<y_tnode>	unary_expression
 %type	<y_tnode>	cast_expression
 %type	<y_tnode>	expression_opt
@@ -427,13 +431,12 @@ is_either(const char *s, const char *a, const char *b)
 program:
 	/* empty */ {
 		/* TODO: Make this an error in C99 mode as well. */
-		if (!allow_trad && !allow_c99) {
+		if (!allow_trad && !allow_c99)
 			/* empty translation unit */
 			error(272);
-		} else if (allow_c90) {
+		else if (allow_c90)
 			/* empty translation unit */
 			warning(272);
-		}
 	}
 |	translation_unit
 ;
@@ -460,10 +463,9 @@ identifier:
 string:
 	T_STRING
 |	string T_STRING {
-		if (!allow_c90) {
+		if (!allow_c90)
 			/* concatenated strings are illegal in traditional C */
 			warning(219);
-		}
 		$$ = cat_strings($1, $2);
 	}
 ;
@@ -494,7 +496,7 @@ primary_expression:
 |	generic_selection
 	/* GCC primary-expression, see c_parser_postfix_expression */
 |	T_BUILTIN_OFFSETOF T_LPAREN type_name T_COMMA {
-		set_symtyp(FMEMBER);
+		set_sym_kind(SK_MEMBER);
 	} member_designator T_RPAREN {
 		$$ = build_offsetof($3, $6);
 	}
@@ -511,7 +513,7 @@ member_designator:
 		designation_push(&$$, DK_SUBSCRIPT, NULL, $3.lo);
 	}
 |	member_designator T_POINT {
-		set_symtyp(FMEMBER);
+		set_sym_kind(SK_MEMBER);
 	} identifier {
 		$$ = $1;
 		designation_push(&$$, DK_MEMBER, getsym($4), 0);
@@ -558,7 +560,9 @@ postfix_expression:
 		$$ = build_unary(INDIR, $3, build_binary($1, PLUS, $3, $4));
 	}
 |	postfix_expression T_LPAREN sys T_RPAREN {
-		$$ = build_function_call($1, $3, NULL);
+		function_call *call =
+		    expr_zero_alloc(sizeof(*call), "function_call");
+		$$ = build_function_call($1, $3, call);
 	}
 |	postfix_expression T_LPAREN sys argument_expression_list T_RPAREN {
 		$$ = build_function_call($1, $3, $4);
@@ -631,11 +635,11 @@ gcc_statement_expr_item:
 
 point_or_arrow:			/* helper for 'postfix_expression' */
 	T_POINT {
-		set_symtyp(FMEMBER);
+		set_sym_kind(SK_MEMBER);
 		$$ = POINT;
 	}
 |	T_ARROW {
-		set_symtyp(FMEMBER);
+		set_sym_kind(SK_MEMBER);
 		$$ = ARROW;
 	}
 ;
@@ -643,10 +647,11 @@ point_or_arrow:			/* helper for 'postfix_expression' */
 /* K&R 7.1, C90 ???, C99 6.5.2, C11 6.5.2 */
 argument_expression_list:
 	assignment_expression {
-		$$ = build_function_argument(NULL, $1);
+		$$ = expr_zero_alloc(sizeof(*$$), "function_call");
+		add_function_argument($$, $1);
 	}
 |	argument_expression_list T_COMMA assignment_expression {
-		$$ = build_function_argument($1, $3);
+		add_function_argument($1, $3);
 	}
 ;
 
@@ -663,10 +668,9 @@ unary_expression:
 		$$ = build_unary(INDIR, $2, $3);
 	}
 |	T_ADDITIVE sys cast_expression {
-		if (!allow_c90 && $1 == PLUS) {
+		if (!allow_c90 && $1 == PLUS)
 			/* unary '+' is illegal in traditional C */
 			warning(100);
-		}
 		$$ = build_unary($1 == PLUS ? UPLUS : UMINUS, $2, $3);
 	}
 |	T_COMPLEMENT sys cast_expression {
@@ -808,31 +812,28 @@ declaration_or_error:
 /* K&R ???, C90 ???, C99 6.7, C11 ???, C23 6.7 */
 declaration:
 	begin_type_declmods end_type T_SEMI {
-		if (dcs->d_scl == TYPEDEF) {
+		if (dcs->d_scl == TYPEDEF)
 			/* typedef declares no type name */
 			warning(72);
-		} else {
+		else
 			/* empty declaration */
 			warning(2);
-		}
 	}
 |	begin_type_declmods end_type notype_init_declarators T_SEMI {
-		if (dcs->d_scl == TYPEDEF) {
+		if (dcs->d_scl == TYPEDEF)
 			/* syntax error '%s' */
 			error(249, "missing base type for typedef");
-		} else {
+		else
 			/* old-style declaration; add 'int' */
 			error(1);
-		}
 	}
 |	begin_type_declaration_specifiers end_type T_SEMI {
-		if (dcs->d_scl == TYPEDEF) {
+		if (dcs->d_scl == TYPEDEF)
 			/* typedef declares no type name */
 			warning(72);
-		} else if (!dcs->d_nonempty_decl) {
+		else if (!dcs->d_nonempty_decl)
 			/* empty declaration */
 			warning(2);
-		}
 	}
 |	begin_type_declaration_specifiers end_type
 	    type_init_declarators T_SEMI
@@ -1010,7 +1011,7 @@ struct_or_union_specifier:
 		$$ = complete_struct_or_union($3);
 	}
 |	struct_or_union error {
-		set_symtyp(FVFT);
+		set_sym_kind(SK_VCFT);
 		$$ = gettyp(INT);
 	}
 ;
@@ -1018,7 +1019,7 @@ struct_or_union_specifier:
 /* K&R ---, C90 ---, C99 6.7.2.1, C11 ???, C23 6.7.2.1 */
 struct_or_union:
 	T_STRUCT_OR_UNION {
-		set_symtyp(FTAG);
+		set_sym_kind(SK_TAG);
 		begin_declaration_level($1 == STRUCT ? DLK_STRUCT : DLK_UNION);
 		dcs->d_sou_size_in_bits = 0;
 		dcs->d_sou_align_in_bits = CHAR_SIZE;
@@ -1029,7 +1030,7 @@ struct_or_union:
 
 braced_member_declaration_list:	/* see C99 6.7.2.1 */
 	T_LBRACE {
-		set_symtyp(FVFT);
+		set_sym_kind(SK_VCFT);
 	} member_declaration_list_with_rbrace {
 		$$ = $3;
 	}
@@ -1038,7 +1039,7 @@ braced_member_declaration_list:	/* see C99 6.7.2.1 */
 member_declaration_list_with_rbrace:	/* see C99 6.7.2.1 */
 	member_declaration_list T_RBRACE
 |	T_RBRACE {
-		/* XXX: This is not allowed by any C standard. */
+		/* XXX: Allowed since C23. */
 		$$ = NULL;
 	}
 ;
@@ -1058,15 +1059,15 @@ member_declaration:
 	begin_type_qualifier_list end_type {
 		/* ^^ There is no check for the missing type-specifier. */
 		/* too late, i know, but getsym() compensates it */
-		set_symtyp(FMEMBER);
+		set_sym_kind(SK_MEMBER);
 	} notype_member_declarators T_SEMI {
-		set_symtyp(FVFT);
+		set_sym_kind(SK_VCFT);
 		$$ = $4;
 	}
 |	begin_type_specifier_qualifier_list end_type {
-		set_symtyp(FMEMBER);
+		set_sym_kind(SK_MEMBER);
 	} type_member_declarators T_SEMI {
-		set_symtyp(FVFT);
+		set_sym_kind(SK_VCFT);
 		$$ = $4;
 	}
 |	begin_type_qualifier_list end_type type_attribute_opt T_SEMI {
@@ -1076,7 +1077,7 @@ member_declaration:
 	}
 |	begin_type_specifier_qualifier_list end_type type_attribute_opt
 	    T_SEMI {
-		set_symtyp(FVFT);
+		set_sym_kind(SK_VCFT);
 		if (!allow_c11 && !allow_gcc)
 			/* anonymous struct/union members is a C11 feature */
 			warning(49);
@@ -1092,7 +1093,7 @@ member_declaration:
 		$$ = NULL;
 	}
 |	error T_SEMI {
-		set_symtyp(FVFT);
+		set_sym_kind(SK_VCFT);
 		$$ = NULL;
 	}
 ;
@@ -1103,7 +1104,7 @@ notype_member_declarators:
 		$$ = declare_member($1);
 	}
 |	notype_member_declarators {
-		set_symtyp(FMEMBER);
+		set_sym_kind(SK_MEMBER);
 	} T_COMMA type_member_declarator {
 		$$ = concat_symbols($1, declare_member($4));
 	}
@@ -1115,7 +1116,7 @@ type_member_declarators:
 		$$ = declare_member($1);
 	}
 |	type_member_declarators {
-		set_symtyp(FMEMBER);
+		set_sym_kind(SK_MEMBER);
 	} T_COMMA type_member_declarator {
 		$$ = concat_symbols($1, declare_member($4));
 	}
@@ -1130,7 +1131,7 @@ notype_member_declarator:
 	}
 	/* C99 6.7.2.1 */
 |	{
-		set_symtyp(FVFT);
+		set_sym_kind(SK_VCFT);
 	} T_COLON constant_expression {
 		$$ = set_bit_field_width(NULL, to_int_constant($3, true));
 	}
@@ -1143,7 +1144,7 @@ type_member_declarator:
 		$$ = set_bit_field_width($1, to_int_constant($3, true));
 	}
 |	{
-		set_symtyp(FVFT);
+		set_sym_kind(SK_VCFT);
 	} T_COLON constant_expression type_attribute_list_opt {
 		$$ = set_bit_field_width(NULL, to_int_constant($3, true));
 	}
@@ -1165,21 +1166,21 @@ enum_specifier:
 		$$ = complete_enum($4);
 	}
 |	enum error {
-		set_symtyp(FVFT);
+		set_sym_kind(SK_VCFT);
 		$$ = gettyp(INT);
 	}
 ;
 
 enum:				/* helper for C99 6.7.2.2 */
 	T_ENUM {
-		set_symtyp(FTAG);
+		set_sym_kind(SK_TAG);
 		begin_declaration_level(DLK_ENUM);
 	}
 ;
 
 enum_declaration:		/* helper for C99 6.7.2.2 */
 	T_LBRACE {
-		set_symtyp(FVFT);
+		set_sym_kind(SK_VCFT);
 		enumval = 0;
 	} enums_with_opt_comma T_RBRACE {
 		$$ = $3;
@@ -1189,13 +1190,12 @@ enum_declaration:		/* helper for C99 6.7.2.2 */
 enums_with_opt_comma:		/* helper for C99 6.7.2.2 */
 	enumerator_list
 |	enumerator_list T_COMMA {
-		if (!allow_c99 && !allow_trad) {
+		if (!allow_c99 && !allow_trad)
 			/* trailing ',' in enum declaration requires C99 ... */
 			error(54);
-		} else {
+		else
 			/* trailing ',' in enum declaration requires C99 ... */
 			c99ism(54);
-		}
 		$$ = $1;
 	}
 ;
@@ -1568,13 +1568,12 @@ vararg_parameter_type_list:	/* specific to lint */
 	}
 |	T_ELLIPSIS {
 		/* TODO: C99 6.7.5 makes this an error as well. */
-		if (!allow_trad && !allow_c99) {
+		if (!allow_trad && !allow_c99)
 			/* C90 to C17 require formal parameter before '...' */
 			error(84);
-		} else if (allow_c90) {
+		else if (allow_c90)
 			/* C90 to C17 require formal parameter before '...' */
 			warning(84);
-		}
 		$$ = (struct parameter_list){ .vararg = true };
 	}
 ;
@@ -1771,7 +1770,7 @@ labeled_statement:		/* C99 6.8.1 */
 
 label:
 	T_NAME T_COLON {
-		set_symtyp(FLABEL);
+		set_sym_kind(SK_LABEL);
 		named_label(getsym($1));
 	}
 |	T_CASE constant_expression T_COLON {
@@ -1977,7 +1976,7 @@ jump_statement:			/* C99 6.8.6 */
 		stmt_goto(getsym($2));
 	}
 |	goto error T_SEMI {
-		set_symtyp(FVFT);
+		set_sym_kind(SK_VCFT);
 	}
 |	T_CONTINUE T_SEMI {
 		stmt_continue();
@@ -1995,7 +1994,7 @@ jump_statement:			/* C99 6.8.6 */
 
 goto:				/* see C99 6.8.6 */
 	T_GOTO {
-		set_symtyp(FLABEL);
+		set_sym_kind(SK_LABEL);
 	}
 ;
 
@@ -2035,13 +2034,12 @@ external_declaration:		/* C99 6.9 */
 		 * TODO: Only allow this in GCC mode, not in plain C99.
 		 * This is one of the top 10 warnings in the NetBSD build.
 		 */
-		if (!allow_trad && !allow_c99) {
+		if (!allow_trad && !allow_c99)
 			/* empty declaration */
 			error(0);
-		} else if (allow_c90) {
+		else if (allow_c90)
 			/* empty declaration */
 			warning(0);
-		}
 	}
 ;
 
@@ -2057,13 +2055,12 @@ external_declaration:		/* C99 6.9 */
 top_level_declaration:		/* C99 6.9 calls this 'declaration' */
 	begin_type end_type notype_init_declarators T_SEMI {
 		/* TODO: Make this an error in C99 mode as well. */
-		if (!allow_trad && !allow_c99) {
+		if (!allow_trad && !allow_c99)
 			/* old-style declaration; add 'int' */
 			error(1);
-		} else if (allow_c90) {
+		else if (allow_c90)
 			/* old-style declaration; add 'int' */
 			warning(1);
-		}
 	}
 |	declaration
 |	error T_SEMI {
@@ -2106,17 +2103,15 @@ function_definition:		/* C99 6.9.1 */
 
 func_declarator:
 	begin_type end_type notype_declarator {
-		if (!allow_trad) {
+		if (!allow_trad)
 			/* old-style declaration; add 'int' */
 			error(1);
-		}
 		$$ = $3;
 	}
 |	begin_type_declmods end_type notype_declarator {
-		if (!allow_trad) {
+		if (!allow_trad)
 			/* old-style declaration; add 'int' */
 			error(1);
-		}
 		$$ = $3;
 	}
 |	begin_type_declaration_specifiers end_type type_declarator {
@@ -2147,20 +2142,18 @@ arg_declaration:
 	}
 |	begin_type_declmods end_type notype_init_declarators T_SEMI
 |	begin_type_declaration_specifiers end_type T_SEMI {
-		if (!dcs->d_nonempty_decl) {
+		if (!dcs->d_nonempty_decl)
 			/* empty declaration */
 			warning(2);
-		} else {
+		else
 			/* '%s' declared in parameter declaration list */
 			warning(3, type_name(dcs->d_type));
-		}
 	}
 |	begin_type_declaration_specifiers end_type
 	    type_init_declarators T_SEMI {
-		if (dcs->d_nonempty_decl) {
+		if (dcs->d_nonempty_decl)
 			/* '%s' declared in parameter declaration list */
 			warning(3, type_name(dcs->d_type));
-		}
 	}
 |	begin_type_declmods error
 |	begin_type_declaration_specifiers error

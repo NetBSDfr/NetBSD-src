@@ -1,9 +1,9 @@
 #!  /usr/bin/lua
--- $NetBSD: check-expect.lua,v 1.8 2023/08/11 04:27:49 rillig Exp $
+-- $NetBSD: check-expect.lua,v 1.12 2024/01/28 08:54:27 rillig Exp $
 
 --[[
 
-usage: lua ./check-expect.lua *.c
+usage: lua ./check-expect.lua [-u] *.c
 
 Check that the /* expect+-n: ... */ comments in the .c source files match the
 actual messages found in the corresponding .exp files.  The .exp files are
@@ -185,21 +185,35 @@ test(function()
   assert_equals(matches("abc123xyz", "...y..."), true)
   assert_equals(matches("abc123xyz", "...z..."), true)
   assert_equals(matches("pattern", "...pattern..."), true)
+  assert_equals(matches("pattern", "... pattern ..."), false)
 end)
 
 
--- Inserts the '/* expect */' lines to the .c file, so that the .c file matches
--- the .exp file.  Multiple 'expect' comments for a single line of code are not
--- handled correctly, but it's still better than doing the same work manually.
+-- Inserts the '/* expect */' lines to the .c file, so that the .c file
+-- matches the .exp file.
+--
+-- TODO: Fix crashes in tests with '# line file' preprocessing directives.
 local function insert_missing(missing)
   for fname, items in pairs(missing) do
-    table.sort(items, function(a, b) return a.lineno > b.lineno end)
+    for i, item in ipairs(items) do
+      item.stable_sort_rank = i
+    end
+    local function less(a, b)
+      if a.lineno ~= b.lineno then
+        return a.lineno > b.lineno
+      end
+      return a.stable_sort_rank > b.stable_sort_rank
+    end
+    table.sort(items, less)
     local lines = assert(load_lines(fname))
+    local seen = {}
     for _, item in ipairs(items) do
       local lineno, message = item.lineno, item.message
       local indent = (lines[lineno] or ""):match("^([ \t]*)")
-      local line = ("%s/* expect+1: %s */"):format(indent, message)
+      local offset = 1 + (seen[lineno] or 0)
+      local line = ("%s/* expect+%d: %s */"):format(indent, offset, message)
       table.insert(lines, lineno, line)
+      seen[lineno] = (seen[lineno] or 0) + 1
     end
     save_lines(fname, lines)
   end
@@ -222,9 +236,11 @@ local function check_test(c_fname, update)
 
     local found = false
     for i, c_comment in ipairs(c_comments) do
-      if c_comment ~= "" and matches(expected_message, c_comment) then
-        c_comments[i] = ""
-        found = true
+      if c_comment ~= "" then
+        if matches(expected_message, c_comment) then
+          c_comments[i] = ""
+          found = true
+        end
         break
       end
     end

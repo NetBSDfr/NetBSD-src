@@ -1,4 +1,4 @@
-/*	$NetBSD: externs.h,v 1.31 2023/12/03 18:17:41 rillig Exp $	*/
+/*	$NetBSD: externs.h,v 1.36 2024/02/02 16:25:58 rillig Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -34,16 +34,22 @@
 /*
  * tyname.c
  */
-#if defined(IS_LINT1) || defined(IS_LINT2)
+#if IS_LINT1 || IS_LINT2
 const char *type_name(const type_t *);
 const char *tspec_name(tspec_t);
+#endif
+#if IS_LINT1
+void buf_init(buffer *);
+void buf_add_char(buffer *, char);
 #endif
 
 /*
  * mem.c
  */
+#if IS_LINT1 || IS_LINT2
 void *xmalloc(size_t);
 void *xcalloc(size_t, size_t);
+#endif
 void *xrealloc(void *, size_t);
 char *xstrdup(const char *);
 char *xasprintf(const char *, ...) __printflike(1, 2);
@@ -51,7 +57,7 @@ char *xasprintf(const char *, ...) __printflike(1, 2);
 /*
  * emit.c
  */
-#if defined(IS_LINT1) || defined(IS_LINT2)
+#if IS_LINT1 || IS_LINT2
 void outopen(const char *);
 void outclose(void);
 void outchar(char);

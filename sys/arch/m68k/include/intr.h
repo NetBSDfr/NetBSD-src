@@ -1,4 +1,4 @@
-/*	$NetBSD: intr.h,v 1.5 2024/01/16 01:16:46 thorpej Exp $	*/
+/*	$NetBSD: intr.h,v 1.9 2024/02/08 20:11:56 andvar Exp $	*/
 
 /*-
  * Copyright (c) 2023, 2024 The NetBSD Foundation, Inc.
@@ -32,8 +32,15 @@
 #ifndef _M68k_INTR_H_
 #define	_M68k_INTR_H_
 
-#include <sys/types.h>
 #include <machine/psl.h>
+
+#if (defined(_KERNEL) && !defined(_LOCORE)) || defined(_KMEMUSER)
+typedef struct {
+	uint16_t _psl;		/* physical manifestation of logical IPL_* */
+} ipl_cookie_t;
+#endif
+
+#ifdef _KERNEL
 
 /*
  * Logical interrupt priority levels -- these are distinct from
@@ -61,14 +68,9 @@
 #define	ISRPRI_TTYNOBUF		3	/* a particularly bad serial port */
 #define	ISRPRI_AUDIO		4	/* audio devices */
 
-#if defined(_KERNEL) || defined(_KMEMUSER)
-typedef struct {
-	uint16_t _psl;		/* physical manifestation of logical IPL_* */
-} ipl_cookie_t;
-#endif
+#ifndef _LOCORE
 
-#ifdef _KERNEL
-extern volatile int idepth;		/* interrupt depth */
+extern volatile unsigned int intr_depth;/* interrupt depth */
 extern const uint16_t ipl2psl_table[NIPL];
 
 typedef int ipl_t;		/* logical IPL_* value */
@@ -76,7 +78,7 @@ typedef int ipl_t;		/* logical IPL_* value */
 static inline bool
 cpu_intr_p(void)
 {
-	return idepth != 0;
+	return intr_depth != 0;
 }
 
 static inline ipl_cookie_t
@@ -176,7 +178,7 @@ do {									\
  * m68k interrupt priroity level (this is NOT an IPL_* value).  Otherwise.
  * the handler is registered at the specified vector.
  *
- * Vectored interrupts are not sharable.  The interrupt vector must be
+ * Vectored interrupts are not shareable.  The interrupt vector must be
  * within the platform's "user vector" region, which is generally defined
  * as vectors 64-255, although some platforms may use vectors that start
  * below 64 (in which case, that platform must define MACHINE_USERVEC_START
@@ -201,6 +203,8 @@ bool	m68k_intr_disestablish(void *);
 #ifdef __HAVE_M68K_INTR_VECTORED
 void	*m68k_intrvec_intrhand(int vec);	/* XXX */
 #endif
+
+#endif /* !_LOCORE */
 
 #endif /* _KERNEL */
 

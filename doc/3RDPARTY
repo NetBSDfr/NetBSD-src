@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1976 2024/01/16 09:42:44 wiz Exp $
+#	$NetBSD: 3RDPARTY,v 1.1992 2024/02/26 23:11:12 gutteridge Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -120,8 +120,8 @@ Notes:
 bc includes dc, both of which are in the NetBSD tree.
 
 Package:	bind [named and utils]
-Version:	9.16.42/MPL
-Current Vers:	9.16.342/MPL 9.19.14/MPL
+Version:	9.18.24/MPL
+Current Vers:	9.18.24/MPL 9.19.14/MPL
 Maintainer:	ISC
 Archive Site:	ftp://ftp.isc.org/isc/bind9/
 Home Page:	http://www.isc.org/software/bind/
@@ -164,12 +164,12 @@ Location:	external/mit/libuv/dist
 Notes:
 
 Package:	unbound
-Version:	1.16.3
-Current Vers:	1.17.1
+Version:	1.19.1
+Current Vers:	1.19.1
 Maintainer:	Nlnetlabs
 Archive Site:	https://www.unbound.net/downloads/unbound-latest.tar.gz
 Home Page:	https://www.unbound.net/
-Date:		2023-06-21
+Date:		2024-02-17
 Mailing List:	https://unbound.nlnetlabs.nl/mailman/listinfo/unbound-users
 Responsible:	christos
 License:	BSD-like
@@ -179,12 +179,12 @@ Use cleantags to import
 run configure and update config files in include
 
 Package:	nsd
-Version:	4.6.0
-Current Vers:	4.7.0
+Version:	4.8.0
+Current Vers:	4.8.0
 Maintainer:	Nlnetlabs
 Archive Site:	https://www.nlnetlabs.nl/svn/nsd/
 Home Page:	https://www.nlnetlabs.nl/projects/nsd/
-Date:		2023-06-21
+Date:		2024-02-17
 Mailing List:	https://open.nlnetlabs.nl/mailman/listinfo/nsd-users/
 Responsible:	christos
 License:	BSD-like
@@ -365,16 +365,16 @@ Notes:
 Please submit all changes upstream.
 Import using the import-src make target.
 
-Package:       drm
-Version:       Linux 3.15
-Current Vers:  ?
-Maintainer:    Intel, AMD, Linux kernel developers
-Archive Site:  git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
-Home Page:     http://dri.freedesktop.org/
-Mailing List:  dri-devel@lists.freedesktop.org
-Responsible:   riastradh
-License:       BSD
-Location:      sys/external/bsd/drm2/dist
+Package:	drm
+Version:	Linux 3.15
+Current Vers:	?
+Maintainer:	Intel, AMD, Linux kernel developers
+Archive Site:	git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+Home Page:	http://dri.freedesktop.org/
+Mailing List:	dri-devel@lists.freedesktop.org
+Responsible:	riastradh
+License:	BSD
+Location:	sys/external/bsd/drm2/dist
 Notes:
 Graphics drivers.   Talk to riastradh@ about updates.  When importing
 from Linux, we map
@@ -409,11 +409,11 @@ Notes:
 
 Package:	expat
 Version:	2.4.6
-Current Vers:	2.5.0
+Current Vers:	2.6.0
 Maintainer:	Expat Project
 Archive Site:	https://github.com/libexpat/libexpat/releases
 Home Page:	http://www.libexpat.org/
-Date:		2022-09-21
+Date:		2024-02-07
 Mailing List:	expat-discuss@libexpat.org
 Responsible:	mrg
 License:	MIT
@@ -499,11 +499,11 @@ When updating GDB, it is imperative to test that:
 
 Package:	binutils
 Version:	2.34/2.39
-Current Vers:	2.40
+Current Vers:	2.42
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/binutils/
 Home Page:	https://www.gnu.org/software/binutils/
-Date:		2023-01-15
+Date:		2024-01-29
 Mailing List:	bug-gnu-utils@gnu.org
 Responsible:	thorpej, mrg
 License:	GPLv3, LGPLv3, GPLv2, LGPLv2, BSD
@@ -698,14 +698,14 @@ Use external/bsd/kyua-testers/prepare-import.sh to regenerate the dist/
 directory.
 
 Package:	less
-Version:	less-458
-Current Vers:	less-608
+Version:	less-643
+Current Vers:	less-643
 Maintainer:	Mark Nudelman <markn@greenwoodsoftware.com>
 Archive Site:	http://www.greenwoodsoftware.com/less/download.html
 Home Page:	http://www.greenwoodsoftware.com/less/
-Date:		2023-02-07
+Date:		2023-10-06
 Mailing List:	less-announce-request@greenwoodsoftware.com
-Responsible:	mrg
+Responsible:	mrg, simonb
 License:	Less License (BSD 2-clause) or GPLv3 (v2 prior to less-418)
 Location:	external/bsd/less/dist
 Notes:
@@ -1230,11 +1230,11 @@ now to do a new import.
 
 Package:	Postfix
 Version:	3.8.4
-Current Vers:	3.8.4
+Current Vers:	3.8.5
 Maintainer:	Wietse Venema <wietse@porcupine.org>
 Archive Site:
 Home Page:	http://www.postfix.org/
-Date: 		2023-12-23
+Date: 		2024-01-22
 Mailing List:	postfix-users@postfix.org
 Responsible:	christos
 License:	IBM Public License. See also src/external/ibm-public/postfix/dist.
@@ -1429,14 +1429,14 @@ Location:	external/bsd/tradcpp
 Notes:
 
 Package:	tz
-Version:	tzcode2023d / tzdata2023dgtz
-Current Vers:	tzcode2023d / tzdata2023d
+Version:	tzcode2024a / tzdata2024agtz
+Current Vers:	tzcode2024a / tzdata2024a
 Maintainer:	Paul Eggert <eggert@cs.ucla.edu>
 Archive Site:	ftp://ftp.iana.org/tz/releases/
 Archive Site:	ftp://munnari.oz.au/pub/oldtz/
 Old Archive Site:	ftp://elsie.nci.nih.gov/pub/
 Home Page:	http://www.iana.org/time-zones
-Date:		2023-12-23
+Date:		2024-02-17
 Mailing List:	tz@iana.org
 Responsible:	kleink, christos, kre
 License:	Public domain
@@ -1451,21 +1451,21 @@ for now, late 2021, do it manually).
 
 Package:	wpa_supplicant/hostapd
 Version:	2.9
-Current Vers:	2.9
+Current Vers:	2.10
 Maintainer:	Jouni Malinen <jkmaline@cc.hut.fi>
 Archive Site:	http://w1.fi/releases/
 Home Page:	http://w1.fi/wpa_supplicant/
-Date:		2021-02-28
+Date:		2024-02-26
 Mailing List:
 Responsible:	scw, dyoung, christos
 License:	BSD or GPLv2
 Location:	external/bsd/wpa/dist
 Notes:
-See /usr/src/external/bsd/wpa/NetBSD-upgrade for update instructions.
+See src/external/bsd/wpa/NetBSD-upgrade for update instructions.
 
 Package:	zlib
 Version:	1.2.13
-Current Vers:	1.3
+Current Vers:	1.3.1
 Maintainer:	Jean-loup Gailly and Mark Adler <zlib@gzip.org>
 Archive Site:	http://www.zlib.net/
 Home Page:	http://www.zlib.net/
@@ -1520,11 +1520,11 @@ Notes:
 
 Package:	xz
 Version:	5.2.4
-Current Vers:	5.4.1
+Current Vers:	5.6.0
 Maintainer:	Lasse Collin <lasse.collin@tukanni.org>
 Archive Site:	http://tukaani.org/xz/
 Home Page:	http://tukaani.org/xz/
-Date: 		2023-01-12
+Date: 		2024-02-24
 Responsible:	joerg
 License:	public-domain
 Location:	external/public-domain/xz/dist
@@ -1658,39 +1658,39 @@ Responsible:	christos
 License:	BSD-like (2-clause)
 Location:	usr.bin/timeout
 
-Package:        libproc
-Version:        FreeBSD-2015-09-24
-Current Vers:   FreeBSD-2018-07-27 r336782
-Maintainer:     Rui Paulo <rpaulo@FreeBSD.org>
-Archive Site:   none
-Home Page:      https://svnweb.freebsd.org/base/head/lib/libproc/
-Mailing List:   none
-Responsible:    christos
-License:        BSD-like (2-clause)
-Location:       external/bsd/libproc/dist
+Package:	libproc
+Version:	FreeBSD-2015-09-24
+Current Vers:	FreeBSD-2018-07-27 r336782
+Maintainer:	Rui Paulo <rpaulo@FreeBSD.org>
+Archive Site:	none
+Home Page:	https://svnweb.freebsd.org/base/head/lib/libproc/
+Mailing List:	none
+Responsible:	christos
+License:	BSD-like (2-clause)
+Location:	external/bsd/libproc/dist
 
-Package:        librtld_db
-Version:        FreeBSD-2015-09-24
-Current Vers:   FreeBSD-2017-11-26 r326219
-Maintainer:     Rui Paulo <rpaulo@FreeBSD.org>
-Archive Site:   none
-Home Page:      https://svnweb.freebsd.org/base/head/lib/librtld_db/
-Mailing List:   none
-Responsible:    christos
-License:        BSD-like (2-clause)
-Location:       external/bsd/librtld_db/dist
+Package:	librtld_db
+Version:	FreeBSD-2015-09-24
+Current Vers:	FreeBSD-2017-11-26 r326219
+Maintainer:	Rui Paulo <rpaulo@FreeBSD.org>
+Archive Site:	none
+Home Page:	https://svnweb.freebsd.org/base/head/lib/librtld_db/
+Mailing List:	none
+Responsible:	christos
+License:	BSD-like (2-clause)
+Location:	external/bsd/librtld_db/dist
 
-Package:        netcat
-Version:        OpenBSD-2017-02-06
-Current Vers:   OpenBSD-2020-02-12
-Maintainer:     OpenBSD
-Archive Site:   http://cvsweb.openbsd.org/cgi-bin/cvsweb/src/usr.bin/nc/
-Home Page:      none
+Package:	netcat
+Version:	OpenBSD-2017-02-06
+Current Vers:	OpenBSD-2020-02-12
+Maintainer:	OpenBSD
+Archive Site:	http://cvsweb.openbsd.org/cgi-bin/cvsweb/src/usr.bin/nc/
+Home Page:	none
 Date:		2020-06-13
-Mailing List:   none
-Responsible:    christos
-License:        BSD-like (3-clause)
-Location:       usr.bin/nc
+Mailing List:	none
+Responsible:	christos
+License:	BSD-like (3-clause)
+Location:	usr.bin/nc
 
 Package:	gnu-efi
 Version:	3.0.14
@@ -2009,7 +2009,7 @@ Package:	tigon
 Version:	12.4.11
 Current Vers:
 Maintainer:	wpaul@brak.osd.bsdi.com
-Archive Site:   https://people.freebsd.org/~wpaul/Alteon/
+Archive Site:	https://people.freebsd.org/~wpaul/Alteon/
 Home Page:	http://www.alteon.com/support/openkits (extinct)
 Mailing List:
 License:	Alteon WebSystems, Inc.
@@ -2087,10 +2087,11 @@ Copied from FreeBSD:
 
 Package:	gettext
 Version:	0.16.1 (Last GPLv2+ version)
-Current Vers:	0.21
+Current Vers:	0.22.5
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/gettext/
 Home Page:	http://www.gnu.org/software/gettext/
+Date:		2024-02-25
 Mailing List:	bug-gnu-utils@gnu.org
 Responsible:	christos
 License:	GPLv2+ (0.16.1), GPLv3+ (0.17 and later)
@@ -2217,12 +2218,12 @@ Location:	sys/external/bsd/ena-com
 Notes:
 
 Package:	terminfo
-Version:	20190609
-Current Vers:	20190609
+Version:	20231209
+Current Vers:	20231209
 Maintainer:	Thomas Dickey (ncurses)
 Archive Site:	ftp://ftp.invisible-island.net/ncurses/current
 Home Page:	https://invisible-island.net/ncurses/
-Date:		2019-11-27
+Date:		2024-01-27
 Mailing List:	bug-ncurses@gnu.org
 Responsible:
 License:	none
@@ -2327,11 +2328,11 @@ Notes:
 
 Package:	mozilla-certdata
 Version:	2023-07-19 (f479bdba756c78ef9355a48c88744c69fdb4768e)
-Current Vers:	2023-07-19 (f479bdba756c78ef9355a48c88744c69fdb4768e)
+Current Vers:	2024-01-31 (a6efd358880291357a62d58586f9a218d47ad98b)
 Maintainer:	Mozilla
 Archive Site:	https://hg.mozilla.org/projects/nss/log/tip/lib/ckfw/builtins/certdata.txt
 Home Page:	https://wiki.mozilla.org/CA
-Date:		2023-08-16
+Date:		2024-02-01
 Mailing List:	
 License:	MPL
 Responsible:	riastradh, security-team

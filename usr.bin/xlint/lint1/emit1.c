@@ -1,4 +1,4 @@
-/* $NetBSD: emit1.c,v 1.81 2023/12/03 18:17:41 rillig Exp $ */
+/* $NetBSD: emit1.c,v 1.87 2024/02/08 20:45:20 rillig Exp $ */
 
 /*
  * Copyright (c) 1996 Christopher G. Demetriou.  All Rights Reserved.
@@ -38,13 +38,15 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: emit1.c,v 1.81 2023/12/03 18:17:41 rillig Exp $");
+__RCSID("$NetBSD: emit1.c,v 1.87 2024/02/08 20:45:20 rillig Exp $");
 #endif
+
+#include <stdlib.h>
 
 #include "lint1.h"
 
 static void outtt(sym_t *, sym_t *);
-static void outfstrg(strg_t *);
+static void outfstrg(const char *);
 
 /*
  * Write type into the output file, encoded as follows:
@@ -234,7 +236,6 @@ outfdef(const sym_t *fsym, const pos_t *posp, bool rval, bool osdef,
 	const sym_t *args)
 {
 	int narg;
-	const sym_t *arg;
 
 	if (posp->p_file == csrc_pos.p_file) {
 		outint(posp->p_line);
@@ -298,11 +299,11 @@ outfdef(const sym_t *fsym, const pos_t *posp, bool rval, bool osdef,
 	/* parameter types and return value */
 	if (osdef) {
 		narg = 0;
-		for (arg = args; arg != NULL; arg = arg->s_next)
+		for (const sym_t *arg = args; arg != NULL; arg = arg->s_next)
 			narg++;
 		outchar('f');
 		outint(narg);
-		for (arg = args; arg != NULL; arg = arg->s_next)
+		for (const sym_t *arg = args; arg != NULL; arg = arg->s_next)
 			outtype(arg->s_type);
 		outtype(fsym->s_type->t_subt);
 	} else {
@@ -322,10 +323,6 @@ outfdef(const sym_t *fsym, const pos_t *posp, bool rval, bool osdef,
 void
 outcall(const tnode_t *tn, bool retval_used, bool retval_discarded)
 {
-	tnode_t *args, *arg;
-	int narg, n, i;
-	tspec_t t;
-
 	outint(csrc_pos.p_line);
 	outchar('c');		/* function call */
 	outint(get_filename_id(curr_pos.p_file));
@@ -336,58 +333,55 @@ outcall(const tnode_t *tn, bool retval_used, bool retval_discarded)
 	 * flags; 'u' and 'i' must be last to make sure a letter is between the
 	 * numeric argument of a flag and the name of the function
 	 */
-	narg = 0;
-	args = tn_ck_right(tn);
-	for (arg = args; arg != NULL; arg = tn_ck_right(arg))
-		narg++;
+	const function_call *call = tn->tn_call;
+
 	/* information about arguments */
-	for (n = 1; n <= narg; n++) {
-		/* the last argument is the top one in the tree */
-		for (i = narg, arg = args; i > n; i--, arg = arg->tn_right)
-			continue;
-		arg = arg->tn_left;
+	for (size_t n = 1; call->args != NULL && n <= call->args_len; n++) {
+		const tnode_t *arg = call->args[n - 1];
 		if (arg->tn_op == CON) {
-			if (is_integer(t = arg->tn_type->t_tspec)) {
+			tspec_t t = arg->tn_type->t_tspec;
+			if (is_integer(t)) {
 				/*
 				 * XXX it would probably be better to
 				 * explicitly test the sign
 				 */
 				int64_t si = arg->tn_val.u.integer;
-				if (si == 0) {
+				if (si == 0)
 					/* zero constant */
 					outchar('z');
-				} else if (!msb(si, t)) {
+				else if (!msb(si, t))
 					/* positive if cast to signed */
 					outchar('p');
-				} else {
+				else
 					/* negative if cast to signed */
 					outchar('n');
-				}
-				outint(n);
+				outint((int)n);
 			}
 		} else if (arg->tn_op == ADDR &&
 		    arg->tn_left->tn_op == STRING &&
-		    arg->tn_left->tn_string->st_char) {
-			/* constant string, write all format specifiers */
+		    arg->tn_left->tn_string->data != NULL) {
+			buffer buf;
+			buf_init(&buf);
+			quoted_iterator it = { .start = 0 };
+			while (quoted_next(arg->tn_left->tn_string, &it))
+				buf_add_char(&buf, (char)it.value);
+
+			/* string literal, write all format specifiers */
 			outchar('s');
-			outint(n);
-			outfstrg(arg->tn_left->tn_string);
+			outint((int)n);
+			outfstrg(buf.data);
+			free(buf.data);
 		}
 	}
 	outchar((char)(retval_discarded ? 'd' : retval_used ? 'u' : 'i'));
 
-	/* name of the called function */
-	outname(tn_ck_left(tn->tn_left)->tn_sym->s_name);
+	outname(call->func->tn_left->tn_sym->s_name);
 
 	/* types of arguments */
 	outchar('f');
-	outint(narg);
-	for (n = 1; n <= narg; n++) {
-		/* the last argument is the top one in the tree */
-		for (i = narg, arg = args; i > n; i--, arg = arg->tn_right)
-			continue;
-		outtype(arg->tn_left->tn_type);
-	}
+	outint((int)call->args_len);
+	for (size_t i = 0; call->args != NULL && i < call->args_len; i++)
+		outtype(call->args[i]->tn_type);
 	/* expected type of return value */
 	outtype(tn->tn_type);
 	outchar('\n');
@@ -448,19 +442,12 @@ outqchar(char c)
  * writes them, enclosed in "" and quoted if necessary, to the output file
  */
 static void
-outfstrg(strg_t *strg)
+outfstrg(const char *cp)
 {
-	char c, oc;
-	bool first;
-	const char *cp;
-
-	lint_assert(strg->st_char);
-	cp = strg->st_mem;
 
 	outchar('"');
 
-	c = *cp++;
-
+	char c = *cp++;
 	while (c != '\0') {
 
 		if (c != '%') {
@@ -511,7 +498,7 @@ outfstrg(strg_t *strg)
 		 */
 		if (c != '\0') {
 			outqchar(c);
-			oc = c;
+			char oc = c;
 			c = *cp++;
 			/*
 			 * handle [ for scanf. [-] means that a minus sign was
@@ -522,7 +509,7 @@ outfstrg(strg_t *strg)
 					c = *cp++;
 				if (c == ']')
 					c = *cp++;
-				first = true;
+				bool first = true;
 				while (c != '\0' && c != ']') {
 					if (c == '-') {
 						if (!first && *cp != ']')
