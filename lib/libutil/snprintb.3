@@ -1,6 +1,6 @@
-.\"     $NetBSD: snprintb.3,v 1.33 2024/02/20 20:38:54 rillig Exp $
+.\"     $NetBSD: snprintb.3,v 1.35 2024/02/22 21:04:24 rillig Exp $
 .\"
-.\" Copyright (c) 1998 The NetBSD Foundation, Inc.
+.\" Copyright (c) 1998, 2024 The NetBSD Foundation, Inc.
 .\" All rights reserved.
 .\"
 .\" This code is derived from software contributed to The NetBSD Foundation
@@ -27,7 +27,7 @@
 .\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd February 20, 2024
+.Dd February 22, 2024
 .Dt SNPRINTB 3
 .Os
 .Sh NAME
@@ -55,8 +55,7 @@ into the buffer
 .Fa buf ,
 of size
 .Fa bufsize ,
-using a specified radix and an interpretation of
-the bits within that integer as though they were flags or groups of bits.
+interpreting the bits within that integer as flags or groups of bits.
 The buffer is always
 .Tn NUL Ns -terminated.
 If the buffer
@@ -67,6 +66,11 @@ will fill as much as it can, and return the number of bytes
 that it would have written if the buffer were long enough excluding the
 terminating
 .Tn NUL .
+If
+.Fa bufsize
+is zero, nothing is written and
+.Fa arg
+may be a null pointer.
 .Pp
 The
 .Fn snprintb_m
@@ -75,9 +79,7 @@ function accepts an additional
 argument.
 If this argument is zero, the
 .Fn snprintb_m
-function returns exactly the same results in the
-.Fa buf
-as the
+function behaves exactly like the
 .Fn snprintb
 function.
 If the
@@ -109,11 +111,11 @@ The main advantage of the
 .Dq new
 formatting is that it is capable of handling multi-bit fields.
 .Pp
-The first character of
+If the first character of
 .Fa fmt
-may be
+is
 .Ql \e177 ,
-indicating that the remainder of the
+the remainder of the
 .Fa fmt
 argument follows the
 .Dq new
@@ -395,6 +397,9 @@ or the second character
 format
 .Pc
 does not describe a supported numeral base,
+or a bit number in the
+.Ar fmt
+argument is out of bounds,
 or
 .Fn snprintf
 failed.
