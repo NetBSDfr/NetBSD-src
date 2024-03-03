@@ -1141,7 +1141,7 @@ ENTRY(start_genpvh)
 	movl $MMAP_ENTRY_SIZE, %ebx
 	mull %ebx			/* eax * ebx => edx:eax */
 	movl %eax, %ecx
-	shll $2, %ecx
+	shrl $2, %ecx
 	rep movsl
 
 .reload_ebx:
