@@ -1,4 +1,4 @@
-/*	$NetBSD: cpu.h,v 1.105 2024/01/20 00:15:32 thorpej Exp $	*/
+/*	$NetBSD: cpu.h,v 1.107 2024/02/28 13:05:40 thorpej Exp $	*/
 
 /*
  * Copyright (c) 1988 University of Utah.
