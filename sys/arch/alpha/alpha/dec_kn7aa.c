@@ -1,12 +1,11 @@
-/* $NetBSD: gbusreg.h,v 1.2 2008/04/28 20:23:12 martin Exp $ */
+/* $NetBSD: dec_kn7aa.c,v 1.1 2024/03/02 20:15:33 thorpej Exp $ */
 
 /*-
- * Copyright (c) 1998 The NetBSD Foundation, Inc.
+ * Copyright (c) 2024 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
  * This code is derived from software contributed to The NetBSD Foundation
- * by Jason R. Thorpe of the Numerical Aerospace Simulation Facility,
- * NASA Ames Research Center.
+ * by Jason R. Thorpe.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,10 +29,56 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-/*
- * Register definitions for the Gbus found on TurboLaser CPU modules.
- */
+#include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
 
-#define GBUS_DUART0_OFFSET	0x10000000		/* duart 0 */
-#define GBUS_DUART1_OFFSET	0x11000000		/* duart 1 */
-#define GBUS_CLOCK_OFFSET	0x20000000		/* clock */
+__KERNEL_RCSID(0, "$NetBSD: dec_kn7aa.c,v 1.1 2024/03/02 20:15:33 thorpej Exp $");
+
+#include <sys/param.h>
+#include <sys/systm.h>
+#include <sys/device.h>
+#include <sys/conf.h>
+
+#include <dev/cons.h>
+
+#include <machine/rpb.h>
+#include <machine/autoconf.h>
+#include <machine/cpuconf.h>
+
+void		dec_kn7aa_init(void);
+void		dec_kn7aa_cons_init(void);
+static void	dec_kn7aa_device_register(device_t, void *);
+
+const struct alpha_variation_table dec_kn7aa_variations[] = {
+	{ 0, "DEC 7000" },
+	{ 1, "DEC 10000" },
+	{ 0, NULL },
+};
+
+void
+dec_kn7aa_init(void)
+{
+	uint64_t variation;
+
+	platform.family = "KN7AA (\"Ruby\")";
+
+	if ((platform.model = alpha_dsr_sysname()) == NULL) {
+		variation = hwrpb->rpb_variation & SV_ST_MASK;
+		if ((platform.model = alpha_variation_name(variation,
+		    dec_kn7aa_variations)) == NULL)
+			platform.model = alpha_unknown_sysname();
+	}
+
+	platform.iobus = "lsb";
+	platform.cons_init = dec_kn7aa_cons_init;
+	platform.device_register = dec_kn7aa_device_register;
+}
+
+void
+dec_kn7aa_cons_init(void)
+{
+}
+
+static void
+dec_kn7aa_device_register(device_t dev, void *aux)
+{
+}

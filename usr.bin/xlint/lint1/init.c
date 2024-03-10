@@ -1,4 +1,4 @@
-/*	$NetBSD: init.c,v 1.259 2024/02/08 20:45:20 rillig Exp $	*/
+/*	$NetBSD: init.c,v 1.263 2024/03/09 13:54:47 rillig Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: init.c,v 1.259 2024/02/08 20:45:20 rillig Exp $");
+__RCSID("$NetBSD: init.c,v 1.263 2024/03/09 13:54:47 rillig Exp $");
 #endif
 
 #include <stdlib.h>
@@ -195,7 +195,7 @@ first_named_member(const type_t *tp)
 {
 
 	lint_assert(is_struct_or_union(tp->t_tspec));
-	return skip_unnamed(tp->t_sou->sou_first_member);
+	return skip_unnamed(tp->u.sou->sou_first_member);
 }
 
 /*
@@ -207,7 +207,7 @@ update_type_of_array_of_unknown_size(sym_t *sym, size_t size)
 {
 
 	type_t *tp = block_dup_type(sym->s_type);
-	tp->t_dim = (int)size;
+	tp->u.dimension = (int)size;
 	tp->t_incomplete_array = false;
 	sym->s_type = tp;
 	debug_step("completed array type is '%s'", type_name(sym->s_type));
@@ -272,7 +272,7 @@ check_init_expr(const type_t *ltp, sym_t *lsym, tnode_t *rn)
 	ln->tn_op = NAME;
 	ln->tn_type = lutp;
 	ln->tn_lvalue = true;
-	ln->tn_sym = lsym;
+	ln->u.sym = lsym;
 
 	rn = cconv(rn);
 
@@ -327,7 +327,8 @@ designator_type(const designator *dr, const type_t *tp)
 			    "designator '.member' is only for struct/union");
 		}
 		if (!tp->t_incomplete_array)
-			lint_assert(dr->dr_subscript < (size_t)tp->t_dim);
+			lint_assert(
+			    dr->dr_subscript < (size_t)tp->u.dimension);
 		return tp->t_subt;
 	default:
 		if (dr->dr_kind != DK_SCALAR)
@@ -533,7 +534,7 @@ brace_level_advance(brace_level *bl, size_t *max_subscript)
 		    dr->dr_subscript > *max_subscript)
 			*max_subscript = dr->dr_subscript;
 		if (!tp->t_incomplete_array &&
-		    dr->dr_subscript >= (size_t)tp->t_dim)
+		    dr->dr_subscript >= (size_t)tp->u.dimension)
 			dr->dr_done = true;
 		break;
 	default:
@@ -555,7 +556,7 @@ warn_too_many_initializers(designator_kind kind, const type_t *tp)
 		lint_assert(tp->t_tspec == ARRAY);
 		lint_assert(!tp->t_incomplete_array);
 		/* too many array initializers, expected %d */
-		error(173, tp->t_dim);
+		error(173, tp->u.dimension);
 	} else
 		/* too many initializers */
 		error(174);
@@ -717,7 +718,7 @@ initialization_lbrace(initialization *in)
 		/* initialization of union is illegal in traditional C */
 		warning(238);
 
-	if (is_struct_or_union(tp->t_tspec) && tp->t_sou->sou_incomplete) {
+	if (is_struct_or_union(tp->t_tspec) && tp->u.sou->sou_incomplete) {
 		/* initialization of incomplete type '%s' */
 		error(175, type_name(tp));
 		in->in_err = true;
@@ -804,7 +805,7 @@ initialization_add_designator_member(initialization *in, const char *name)
 	return;
 
 proceed:;
-	const sym_t *member = find_member(tp->t_sou, name);
+	const sym_t *member = find_member(tp->u.sou, name);
 	if (member == NULL) {
 		/* type '%s' does not have member '%s' */
 		error(101, type_name(tp), name);
@@ -833,9 +834,9 @@ initialization_add_designator_subscript(initialization *in, size_t subscript)
 		return;
 	}
 
-	if (!tp->t_incomplete_array && subscript >= (size_t)tp->t_dim) {
+	if (!tp->t_incomplete_array && subscript >= (size_t)tp->u.dimension) {
 		/* array subscript cannot be > %d: %ld */
-		error(168, tp->t_dim - 1, (long)subscript);
+		error(168, tp->u.dimension - 1, (long)subscript);
 		subscript = 0;	/* suppress further errors */
 	}
 
@@ -884,16 +885,17 @@ initialization_init_array_from_string(initialization *in, tnode_t *tn)
 	if (!can_init_character_array(tp, tn))
 		return false;
 
-	size_t len = tn->tn_string->len;
-	if (tn->tn_string->data != NULL) {
-		quoted_iterator it = { .start = 0 };
-		for (len = 0; quoted_next(tn->tn_string, &it); len++)
+	size_t len = tn->u.str_literals->len;
+	if (tn->u.str_literals->data != NULL) {
+		quoted_iterator it = { .end = 0 };
+		for (len = 0; quoted_next(tn->u.str_literals, &it); len++)
 			continue;
 	}
 
-	if (!tp->t_incomplete_array && (size_t)tp->t_dim < len)
+	if (!tp->t_incomplete_array && (size_t)tp->u.dimension < len)
 		/* string literal too long (%lu) for target array (%lu) */
-		warning(187, (unsigned long)len, (unsigned long)tp->t_dim);
+		warning(187, (unsigned long)len,
+		    (unsigned long)tp->u.dimension);
 
 	brace_level *bl = in->in_brace_level;
 	if (bl != NULL && bl->bl_designation.dn_len == 0)
