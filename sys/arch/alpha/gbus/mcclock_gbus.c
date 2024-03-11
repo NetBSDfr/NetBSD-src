@@ -1,4 +1,4 @@
-/* $NetBSD: mcclock_tlsb.c,v 1.18 2021/05/07 22:46:11 thorpej Exp $ */
+/* $NetBSD: mcclock_gbus.c,v 1.5 2024/03/06 07:34:11 thorpej Exp $ */
 
 /*
  * Copyright (c) 1997 by Matthew Jacob
@@ -32,7 +32,7 @@
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
 
-__KERNEL_RCSID(0, "$NetBSD: mcclock_tlsb.c,v 1.18 2021/05/07 22:46:11 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: mcclock_gbus.c,v 1.5 2024/03/06 07:34:11 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/kernel.h>
@@ -41,9 +41,7 @@ __KERNEL_RCSID(0, "$NetBSD: mcclock_tlsb.c,v 1.18 2021/05/07 22:46:11 thorpej Ex
 
 #include <sys/bus.h>
 
-#include <alpha/tlsb/gbusvar.h>
-
-#include <alpha/tlsb/tlsbreg.h>		/* XXX */
+#include <alpha/gbus/gbusvar.h>
 
 #include <dev/clock_subr.h>
 
@@ -54,29 +52,17 @@ __KERNEL_RCSID(0, "$NetBSD: mcclock_tlsb.c,v 1.18 2021/05/07 22:46:11 thorpej Ex
 
 #include "ioconf.h"
 
-#define	KV(_addr)	((void *)ALPHA_PHYS_TO_K0SEG((_addr)))
-/*
- * Registers are 64 bytes apart (and 1 byte wide)
- */
-#define	REGSHIFT	6
+static int	mcclock_gbus_match(device_t, cfdata_t, void *);
+static void	mcclock_gbus_attach(device_t, device_t, void *);
 
-struct mcclock_tlsb_softc {
-	struct mc146818_softc	sc_mc146818;
-	unsigned long regbase;
-};
+CFATTACH_DECL_NEW(mcclock_gbus, sizeof(struct mcclock_softc),
+    mcclock_gbus_match, mcclock_gbus_attach, NULL, NULL);
 
-static int	mcclock_tlsb_match(device_t, cfdata_t, void *);
-static void	mcclock_tlsb_attach(device_t, device_t, void *);
-
-CFATTACH_DECL_NEW(mcclock_tlsb, sizeof(struct mcclock_tlsb_softc),
-    mcclock_tlsb_match, mcclock_tlsb_attach, NULL, NULL);
-
-static void	mcclock_tlsb_write(struct mc146818_softc *, u_int, u_int);
-static u_int	mcclock_tlsb_read(struct mc146818_softc *, u_int);
-
+static void	mcclock_gbus_write(struct mc146818_softc *, u_int, u_int);
+static u_int	mcclock_gbus_read(struct mc146818_softc *, u_int);
 
 static int
-mcclock_tlsb_match(device_t parent, cfdata_t cf, void *aux)
+mcclock_gbus_match(device_t parent, cfdata_t cf, void *aux)
 {
 	struct gbus_attach_args *ga = aux;
 
@@ -86,38 +72,37 @@ mcclock_tlsb_match(device_t parent, cfdata_t cf, void *aux)
 }
 
 static void
-mcclock_tlsb_attach(device_t parent, device_t self, void *aux)
+mcclock_gbus_attach(device_t parent, device_t self, void *aux)
 {
-	struct mcclock_tlsb_softc *tsc = device_private(self);
+	struct mcclock_softc *msc = device_private(self);
+	struct mc146818_softc *sc = &msc->sc_mc146818;
 	struct gbus_attach_args *ga = aux;
-	struct mc146818_softc *sc = &tsc->sc_mc146818;
-
-	/* XXX Should be bus.h'd, so we can accommodate the kn7aa. */
-	tsc->regbase = TLSB_GBUS_BASE + ga->ga_offset;
 
 	sc->sc_dev = self;
-	sc->sc_mcread  = mcclock_tlsb_read;
-	sc->sc_mcwrite = mcclock_tlsb_write;
+	sc->sc_bst = ga->ga_iot;
 
-	mcclock_attach(sc);
+	if (bus_space_map(sc->sc_bst, ga->ga_offset, MC_NREGS+MC_NVRAM_SIZE,
+			  0, &sc->sc_bsh) != 0) {
+		panic("mcclock_gbus_attach: couldn't map clock I/O space");
+	}
+
+	/* The RTC is accessible only by a CPU on the primary CPU module. */
+	msc->sc_primary_only = true;
+
+	sc->sc_mcread  = mcclock_gbus_read;
+	sc->sc_mcwrite = mcclock_gbus_write;
+
+	mcclock_attach(msc);
 }
 
 static void
-mcclock_tlsb_write(struct mc146818_softc *sc, u_int reg, u_int val)
+mcclock_gbus_write(struct mc146818_softc *sc, u_int reg, u_int val)
 {
-	struct mcclock_tlsb_softc *tsc = (void *)sc;
-	unsigned char *ptr = (unsigned char *)
-		KV(tsc->regbase + (reg << REGSHIFT));
-
-	*ptr = val;
+	bus_space_write_1(sc->sc_bst, sc->sc_bsh, reg, (uint8_t)val);
 }
 
 static u_int
-mcclock_tlsb_read(struct mc146818_softc *sc, u_int reg)
+mcclock_gbus_read(struct mc146818_softc *sc, u_int reg)
 {
-	struct mcclock_tlsb_softc *tsc = (void *)sc;
-	unsigned char *ptr = (unsigned char *)
-		KV(tsc->regbase + (reg << REGSHIFT));
-
-	return *ptr;
+	return bus_space_read_1(sc->sc_bst, sc->sc_bsh, reg);
 }

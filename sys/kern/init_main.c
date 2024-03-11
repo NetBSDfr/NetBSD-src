@@ -1,4 +1,4 @@
-/*	$NetBSD: init_main.c,v 1.547 2024/01/17 10:18:41 hannken Exp $	*/
+/*	$NetBSD: init_main.c,v 1.549 2024/03/05 20:59:41 thorpej Exp $	*/
 
 /*-
  * Copyright (c) 2008, 2009, 2019, 2023 The NetBSD Foundation, Inc.
@@ -97,7 +97,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.547 2024/01/17 10:18:41 hannken Exp $");
+__KERNEL_RCSID(0, "$NetBSD: init_main.c,v 1.549 2024/03/05 20:59:41 thorpej Exp $");
 
 #include "opt_cnmagic.h"
 #include "opt_ddb.h"

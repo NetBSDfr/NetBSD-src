@@ -1,4 +1,4 @@
-/* $NetBSD: emit1.c,v 1.87 2024/02/08 20:45:20 rillig Exp $ */
+/* $NetBSD: emit1.c,v 1.92 2024/03/09 13:54:47 rillig Exp $ */
 
 /*
  * Copyright (c) 1996 Christopher G. Demetriou.  All Rights Reserved.
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: emit1.c,v 1.87 2024/02/08 20:45:20 rillig Exp $");
+__RCSID("$NetBSD: emit1.c,v 1.92 2024/03/09 13:54:47 rillig Exp $");
 #endif
 
 #include <stdlib.h>
@@ -113,20 +113,22 @@ outtype(const type_t *tp)
 		outchar(tt[ts]);
 
 		if (ts == ARRAY) {
-			outint(tp->t_dim);
+			outint(tp->u.dimension);
 		} else if (ts == ENUM) {
-			outtt(tp->t_enum->en_tag, tp->t_enum->en_first_typedef);
+			outtt(tp->u.enumer->en_tag,
+			    tp->u.enumer->en_first_typedef);
 		} else if (is_struct_or_union(ts)) {
-			outtt(tp->t_sou->sou_tag, tp->t_sou->sou_first_typedef);
+			outtt(tp->u.sou->sou_tag,
+			    tp->u.sou->sou_first_typedef);
 		} else if (ts == FUNC && tp->t_proto) {
 			na = 0;
-			for (const sym_t *param = tp->t_params;
+			for (const sym_t *param = tp->u.params;
 			    param != NULL; param = param->s_next)
 				na++;
 			if (tp->t_vararg)
 				na++;
 			outint(na);
-			for (const sym_t *param = tp->t_params;
+			for (const sym_t *param = tp->u.params;
 			    param != NULL; param = param->s_next)
 				outtype(param->s_type);
 			if (tp->t_vararg)
@@ -185,7 +187,7 @@ outsym(const sym_t *sym, scl_t sc, def_t def)
 	 */
 	if (sc != EXTERN && !(sc == STATIC && sym->s_type->t_tspec == FUNC))
 		return;
-	if (ch_isdigit(sym->s_name[0]))	/* 00000000_tmp */
+	if (isdigit((unsigned char)sym->s_name[0]))	/* 00000000_tmp */
 		return;
 
 	outint(csrc_pos.p_line);
@@ -333,7 +335,7 @@ outcall(const tnode_t *tn, bool retval_used, bool retval_discarded)
 	 * flags; 'u' and 'i' must be last to make sure a letter is between the
 	 * numeric argument of a flag and the name of the function
 	 */
-	const function_call *call = tn->tn_call;
+	const function_call *call = tn->u.call;
 
 	/* information about arguments */
 	for (size_t n = 1; call->args != NULL && n <= call->args_len; n++) {
@@ -345,7 +347,7 @@ outcall(const tnode_t *tn, bool retval_used, bool retval_discarded)
 				 * XXX it would probably be better to
 				 * explicitly test the sign
 				 */
-				int64_t si = arg->tn_val.u.integer;
+				int64_t si = arg->u.value.u.integer;
 				if (si == 0)
 					/* zero constant */
 					outchar('z');
@@ -358,12 +360,12 @@ outcall(const tnode_t *tn, bool retval_used, bool retval_discarded)
 				outint((int)n);
 			}
 		} else if (arg->tn_op == ADDR &&
-		    arg->tn_left->tn_op == STRING &&
-		    arg->tn_left->tn_string->data != NULL) {
+		    arg->u.ops.left->tn_op == STRING &&
+		    arg->u.ops.left->u.str_literals->data != NULL) {
 			buffer buf;
 			buf_init(&buf);
-			quoted_iterator it = { .start = 0 };
-			while (quoted_next(arg->tn_left->tn_string, &it))
+			quoted_iterator it = { .end = 0 };
+			while (quoted_next(arg->u.ops.left->u.str_literals, &it))
 				buf_add_char(&buf, (char)it.value);
 
 			/* string literal, write all format specifiers */
@@ -375,7 +377,7 @@ outcall(const tnode_t *tn, bool retval_used, bool retval_discarded)
 	}
 	outchar((char)(retval_discarded ? 'd' : retval_used ? 'u' : 'i'));
 
-	outname(call->func->tn_left->tn_sym->s_name);
+	outname(call->func->u.ops.left->u.sym->s_name);
 
 	/* types of arguments */
 	outchar('f');
@@ -392,7 +394,7 @@ static void
 outqchar(char c)
 {
 
-	if (ch_isprint(c) && c != '\\' && c != '"' && c != '\'') {
+	if (isprint((unsigned char)c) && c != '\\' && c != '"' && c != '\'') {
 		outchar(c);
 		return;
 	}
@@ -466,7 +468,7 @@ outfstrg(const char *cp)
 		}
 
 		/* numeric field width */
-		while (ch_isdigit(c)) {
+		while (isdigit((unsigned char)c)) {
 			outchar(c);
 			c = *cp++;
 		}
@@ -479,7 +481,7 @@ outfstrg(const char *cp)
 				outchar(c);
 				c = *cp++;
 			} else {
-				while (ch_isdigit(c)) {
+				while (isdigit((unsigned char)c)) {
 					outchar(c);
 					c = *cp++;
 				}
@@ -533,7 +535,7 @@ outfstrg(const char *cp)
 void
 outusg(const sym_t *sym)
 {
-	if (ch_isdigit(sym->s_name[0]))	/* 00000000_tmp, from mktempsym */
+	if (isdigit((unsigned char)sym->s_name[0]))	/* see mktempsym */
 		return;
 
 	outint(csrc_pos.p_line);

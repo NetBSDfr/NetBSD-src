@@ -1,4 +1,4 @@
-/*	$NetBSD: func.c,v 1.181 2024/02/08 20:45:20 rillig Exp $	*/
+/*	$NetBSD: func.c,v 1.184 2024/03/09 13:54:47 rillig Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -37,7 +37,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: func.c,v 1.181 2024/02/08 20:45:20 rillig Exp $");
+__RCSID("$NetBSD: func.c,v 1.184 2024/03/09 13:54:47 rillig Exp $");
 #endif
 
 #include <stdlib.h>
@@ -162,12 +162,7 @@ end_control_statement(control_statement_kind kind)
 	control_statement *cs = cstmt;
 	cstmt = cs->c_surrounding;
 
-	case_label_t *cl, *next;
-	for (cl = cs->c_case_labels; cl != NULL; cl = next) {
-		next = cl->cl_next;
-		free(cl);
-	}
-
+	free(cs->c_case_labels.vals);
 	free(cs->c_switch_type);
 	free(cs);
 }
@@ -258,7 +253,7 @@ begin_function(sym_t *fsym)
 	 * is already removed from the list of parameters.)
 	 */
 	int n = 1;
-	for (const sym_t *param = fsym->s_type->t_params;
+	for (const sym_t *param = fsym->s_type->u.params;
 	    param != NULL; param = param->s_next) {
 		if (param->s_scl == ABSTRACT) {
 			lint_assert(param->s_name == unnamed);
@@ -406,12 +401,12 @@ static void
 check_case_label_bitand(const tnode_t *case_expr, const tnode_t *switch_expr)
 {
 	if (switch_expr->tn_op != BITAND ||
-	    switch_expr->tn_right->tn_op != CON)
+	    switch_expr->u.ops.right->tn_op != CON)
 		return;
 
 	lint_assert(case_expr->tn_op == CON);
-	uint64_t case_value = (uint64_t)case_expr->tn_val.u.integer;
-	uint64_t mask = (uint64_t)switch_expr->tn_right->tn_val.u.integer;
+	uint64_t case_value = (uint64_t)case_expr->u.value.u.integer;
+	uint64_t mask = (uint64_t)switch_expr->u.ops.right->u.value.u.integer;
 
 	if ((case_value & ~mask) != 0)
 		/* statement not reached */
@@ -426,7 +421,7 @@ check_case_label_enum(const tnode_t *tn, const control_statement *cs)
 	if (!(tn->tn_type->t_is_enum || cs->c_switch_type->t_is_enum))
 		return;
 	if (tn->tn_type->t_is_enum && cs->c_switch_type->t_is_enum &&
-	    tn->tn_type->t_enum == cs->c_switch_type->t_enum)
+	    tn->tn_type->u.enumer == cs->c_switch_type->u.enumer)
 		return;
 
 #if 0 /* not yet ready, see msg_130.c */
@@ -434,6 +429,34 @@ check_case_label_enum(const tnode_t *tn, const control_statement *cs)
 	warning(130, type_name(cs->c_switch_type), op_name(EQ),
 	    type_name(tn->tn_type));
 #endif
+}
+
+static bool
+check_duplicate_case_label(control_statement *cs, const val_t *nv)
+{
+	case_labels *labels = &cs->c_case_labels;
+	size_t i = 0, n = labels->len;
+
+	while (i < n && labels->vals[i].u.integer != nv->u.integer)
+		i++;
+
+	if (i < n) {
+		if (is_uinteger(nv->v_tspec))
+			/* duplicate case '%lu' in switch */
+			error(200, (unsigned long)nv->u.integer);
+		else
+			/* duplicate case '%ld' in switch */
+			error(199, (long)nv->u.integer);
+		return false;
+	}
+
+	if (labels->len >= labels->cap) {
+		labels->cap = 16 + 2 * labels->cap;
+		labels->vals = xrealloc(labels->vals,
+		    sizeof(*labels->vals) * labels->cap);
+	}
+	labels->vals[labels->len++] = *nv;
+	return true;
 }
 
 static void
@@ -487,27 +510,8 @@ check_case_label(tnode_t *tn)
 	convert_constant(CASE, 0, cs->c_switch_type, &nv, v);
 	free(v);
 
-	/* look if we had this value already */
-	case_label_t *cl;
-	for (cl = cs->c_case_labels; cl != NULL; cl = cl->cl_next) {
-		if (cl->cl_val.u.integer == nv.u.integer)
-			break;
-	}
-	if (cl != NULL && is_uinteger(nv.v_tspec))
-		/* duplicate case '%lu' in switch */
-		error(200, (unsigned long)nv.u.integer);
-	else if (cl != NULL)
-		/* duplicate case '%ld' in switch */
-		error(199, (long)nv.u.integer);
-	else {
+	if (check_duplicate_case_label(cs, &nv))
 		check_getopt_case_label(nv.u.integer);
-
-		/* Prepend the value to the list of case values. */
-		cl = xcalloc(1, sizeof(*cl));
-		cl->cl_val = nv;
-		cl->cl_next = cs->c_case_labels;
-		cs->c_case_labels = cl;
-	}
 }
 
 void
@@ -635,7 +639,7 @@ stmt_switch_expr(tnode_t *tn)
 	if (tn != NULL) {
 		tp->t_tspec = tn->tn_type->t_tspec;
 		if ((tp->t_is_enum = tn->tn_type->t_is_enum) != false)
-			tp->t_enum = tn->tn_type->t_enum;
+			tp->u.enumer = tn->tn_type->u.enumer;
 	} else {
 		tp->t_tspec = INT;
 	}
@@ -660,7 +664,6 @@ stmt_switch_expr_stmt(void)
 {
 	int nenum = 0, nclab = 0;
 	sym_t *esym;
-	case_label_t *cl;
 
 	lint_assert(cstmt->c_switch_type != NULL);
 
@@ -670,13 +673,12 @@ stmt_switch_expr_stmt(void)
 		 * number of enumerators.
 		 */
 		nenum = nclab = 0;
-		lint_assert(cstmt->c_switch_type->t_enum != NULL);
-		for (esym = cstmt->c_switch_type->t_enum->en_first_enumerator;
+		lint_assert(cstmt->c_switch_type->u.enumer != NULL);
+		for (esym = cstmt->c_switch_type->u.enumer->en_first_enumerator;
 		    esym != NULL; esym = esym->s_next) {
 			nenum++;
 		}
-		for (cl = cstmt->c_case_labels; cl != NULL; cl = cl->cl_next)
-			nclab++;
+		nclab = (int)cstmt->c_case_labels.len;
 		if (hflag && eflag && nclab < nenum && !cstmt->c_default)
 			/* enumeration value(s) not handled in switch */
 			warning(206);
@@ -906,7 +908,7 @@ static bool
 is_parenthesized(const tnode_t *tn)
 {
 	while (!tn->tn_parenthesized && tn->tn_op == COMMA)
-		tn = tn->tn_right;
+		tn = tn->u.ops.right;
 	return tn->tn_parenthesized && !tn->tn_sys;
 }
 
@@ -923,16 +925,16 @@ check_return_value(bool sys, tnode_t *tn)
 	ln->tn_op = NAME;
 	ln->tn_type = expr_unqualified_type(funcsym->s_type->t_subt);
 	ln->tn_lvalue = true;
-	ln->tn_sym = funcsym;	/* better than nothing */
+	ln->u.sym = funcsym;	/* better than nothing */
 
 	tnode_t *retn = build_binary(ln, RETURN, sys, tn);
 
 	if (retn != NULL) {
-		const tnode_t *rn = retn->tn_right;
+		const tnode_t *rn = retn->u.ops.right;
 		while (rn->tn_op == CVT || rn->tn_op == PLUS)
-			rn = rn->tn_left;
-		if (rn->tn_op == ADDR && rn->tn_left->tn_op == NAME &&
-		    rn->tn_left->tn_sym->s_scl == AUTO)
+			rn = rn->u.ops.left;
+		if (rn->tn_op == ADDR && rn->u.ops.left->tn_op == NAME &&
+		    rn->u.ops.left->u.sym->s_scl == AUTO)
 			/* '%s' returns pointer to automatic object */
 			warning(302, funcsym->s_name);
 	}

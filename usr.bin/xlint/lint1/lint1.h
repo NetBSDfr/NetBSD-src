@@ -1,4 +1,4 @@
-/* $NetBSD: lint1.h,v 1.214 2024/02/05 23:11:22 rillig Exp $ */
+/* $NetBSD: lint1.h,v 1.221 2024/03/09 13:54:47 rillig Exp $ */
 
 /*
  * Copyright (c) 1996 Christopher G. Demetriou.  All Rights Reserved.
@@ -71,19 +71,6 @@ typedef struct {
 	int	p_uniq;			/* uniquifier */
 } pos_t;
 
-// TODO: Use bit-fields instead of plain bool, but keep an eye on arm and
-// powerpc, on which NetBSD's GCC 10.5.0 (but not the upstream GCC) generates
-// code that leads to extra 327 warnings, even in msg_327.c, which does not
-// contain any type qualifier at all.
-//
-// A possible starting point for continuing the investigation is that
-// type_qualifiers is a very small struct that contains only bool bit-fields,
-// and this struct is a member of the parser's union.
-//
-// Instead of using plain bool instead of bit-fields, an alternative workaround
-// is to compile cgram.c with -Os or -O1 instead of -O2.  The generated code
-// between -Os and -O2 differs too much though to give a hint at the root
-// cause.
 typedef struct {
 	bool tq_const;
 	bool tq_restrict;
@@ -108,6 +95,8 @@ typedef struct {
 	} u;
 } val_t;
 
+typedef struct sym sym_t;
+
 /*
  * Structures of type struct_or_union uniquely identify structures. This can't
  * be done in structures of type type_t, because these are copied if they must
@@ -121,64 +110,49 @@ typedef struct {
 	unsigned int sou_size_in_bits;
 	unsigned int sou_align_in_bits;
 	bool	sou_incomplete:1;
-	struct sym *sou_first_member;
-	struct sym *sou_tag;
-	struct sym *sou_first_typedef;
+	sym_t	*sou_first_member;
+	sym_t	*sou_tag;
+	sym_t	*sou_first_typedef;
 } struct_or_union;
 
-/*
- * same as above for enums
- */
+/* The same as in struct_or_union, only for enums. */
 typedef struct {
 	bool	en_incomplete:1;
-	struct sym *en_first_enumerator;
-	struct sym *en_tag;
-	struct sym *en_first_typedef;
+	sym_t	*en_first_enumerator;
+	sym_t	*en_tag;
+	sym_t	*en_first_typedef;
 } enumeration;
 
-/*
- * The type of an expression or object. Complex types are formed via t_subt
- * (for arrays, pointers and functions), as well as t_sou.
- */
+/* The type of an expression, object or function. */
 struct lint1_type {
 	tspec_t	t_tspec;	/* type specifier */
 	bool	t_incomplete_array:1;
-	bool	t_const:1;	/* const modifier */
-	bool	t_volatile:1;	/* volatile modifier */
-	bool	t_proto:1;	/* function prototype (t_params valid) */
+	bool	t_const:1;
+	bool	t_volatile:1;
+	bool	t_proto:1;	/* function prototype (u.params valid) */
 	bool	t_vararg:1;	/* prototype with '...' */
 	bool	t_typedef:1;	/* type defined with typedef */
 	bool	t_typeof:1;	/* type defined with GCC's __typeof__ */
 	bool	t_bitfield:1;
 	/*
-	 * Either the type is currently an enum (having t_tspec ENUM), or it is
-	 * an integer type (typically INT) that has been implicitly converted
-	 * from an enum type.  In both cases, t_enum is valid.
-	 *
-	 * The information about a former enum type is retained to allow type
-	 * checks in expressions such as ((var1 & 0x0001) == var2), to detect
-	 * when var1 and var2 are from incompatible enum types.
+	 * Either the type is currently an enum (having t_tspec ENUM), or it
+	 * is an integer type (typically INT) that has been implicitly
+	 * converted from an enum type.  In both cases, u.enumer is valid.
 	 */
 	bool	t_is_enum:1;
 	bool	t_packed:1;
 	union {
-		int		_t_dim;		/* dimension (if ARRAY) */
-		struct_or_union	*_t_sou;
-		enumeration	*_t_enum;
-		struct sym	*_t_params;	/* parameters (if t_proto) */
-	} t_u;
+		int		dimension;	/* if ARRAY */
+		struct_or_union	*sou;
+		enumeration	*enumer;
+		sym_t		*params;	/* if t_proto */
+	} u;
 	unsigned int	t_bit_field_width:8;
 	unsigned int	t_bit_field_offset:24;
 	struct lint1_type *t_subt;	/*- element type (if ARRAY),
 					 * return value (if FUNC),
 					 * target type (if PTR) */
 };
-
-#define	t_dim	t_u._t_dim
-#define	t_sou	t_u._t_sou
-#define	t_enum	t_u._t_enum
-#define	t_params	t_u._t_params
-
 
 typedef enum {
 	SK_VCFT,		/* variable, constant, function, type */
@@ -187,16 +161,14 @@ typedef enum {
 	SK_LABEL
 } symbol_kind;
 
-/*
- * storage classes and related things
- */
+/* storage classes and related things */
 typedef enum {
 	NO_SCL,
 	EXTERN,			/* external symbols (independent of decl_t) */
 	STATIC,			/* static symbols (local and global) */
 	AUTO,			/* automatic symbols (except register) */
 	REG,			/* register */
-	TYPEDEF,		/* typedef */
+	TYPEDEF,
 	THREAD_LOCAL,
 	STRUCT_TAG,
 	UNION_TAG,
@@ -215,10 +187,8 @@ typedef enum {
 	FS_NORETURN,		/* since C11 */
 } function_specifier;
 
-/*
- * symbol table entry
- */
-typedef struct sym {
+/* A type, variable, keyword; basically anything that has a name. */
+struct sym {
 	const char *s_name;
 	const char *s_rename;	/* renamed symbol's given name */
 	pos_t	s_def_pos;	/* position of last (prototype) definition,
@@ -230,26 +200,26 @@ typedef struct sym {
 	symbol_kind s_kind;
 	const struct keyword *s_keyword;
 	bool	s_bitfield:1;
-	bool	s_set:1;	/* variable set, label defined */
-	bool	s_used:1;	/* variable/label used */
-	bool	s_param:1;	/* symbol is function parameter */
-	bool	s_register:1;	/* symbol is register variable */
+	bool	s_set:1;
+	bool	s_used:1;
+	bool	s_param:1;
+	bool	s_register:1;
 	bool	s_defparam:1;	/* undefined symbol in old-style function
 				 * definition */
 	bool	s_return_type_implicit_int:1;
 	bool	s_osdef:1;	/* symbol stems from old-style function def. */
-	bool	s_inline:1;	/* true if this is an inline function */
-	struct sym *s_ext_sym;	/* for locally declared external symbols, the
+	bool	s_inline:1;
+	sym_t	*s_ext_sym;	/* for locally declared external symbols, the
 				 * pointer to the external symbol with the same
 				 * name */
 	def_t	s_def;		/* declared, tentative defined, defined */
-	scl_t	s_scl;		/* storage class, more or less */
+	scl_t	s_scl;
 	int	s_block_level;	/* level of declaration, -1 if not in symbol
 				 * table */
 	type_t	*s_type;
 	union {
 		bool s_bool_constant;
-		int s_enum_constant;	/* XXX: should be TARG_INT */
+		int s_enum_constant;
 		struct {
 			struct_or_union *sm_containing_type;
 			unsigned int sm_offset_in_bits;
@@ -265,23 +235,22 @@ typedef struct sym {
 				function_specifier function_specifier;
 			} u;
 		} s_keyword;
-		struct sym *s_old_style_params;	/* parameters in an old-style
+		sym_t	*s_old_style_params;	/* parameters in an old-style
 						 * function definition */
 	} u;
-	struct sym *s_symtab_next;	/* next symbol with same hash value */
-	struct sym **s_symtab_ref;	/* pointer to s_symtab_next of the
-					 * previous symbol */
-	struct sym *s_next;	/* next struct/union member, enumerator,
+	sym_t	*s_symtab_next;	/* next symbol in the same symtab bucket */
+	sym_t	**s_symtab_ref;	/* pointer to s_symtab_next of the previous
+				 * symbol */
+	sym_t	*s_next;	/* next struct/union member, enumerator,
 				 * parameter */
-	struct sym *s_level_next;	/* next symbol declared on the same
-					 * level */
-} sym_t;
+	sym_t	*s_level_next;	/* next symbol declared on the same level */
+};
 
 /*
  * Used to keep some information about symbols before they are entered
  * into the symbol table.
  */
-typedef struct sbuf {
+typedef struct {
 	const char *sb_name;		/* name of symbol */
 	size_t	sb_len;			/* length (without '\0') */
 	sym_t	*sb_sym;		/* symbol table entry */
@@ -295,28 +264,25 @@ typedef struct {
 	size_t args_cap;
 } function_call;
 
-/*
- * tree node
- */
-typedef struct tnode {
-	op_t	tn_op;		/* operator */
-	type_t	*tn_type;	/* type */
-	bool	tn_lvalue:1;	/* node is lvalue */
+typedef struct tnode tnode_t;
+
+/* An expression, forming an abstract syntax tree. */
+struct tnode {
+	op_t	tn_op;
+	type_t	*tn_type;
+	bool	tn_lvalue:1;
 	bool	tn_cast:1;	/* if tn_op == CVT, it's an explicit cast */
 	bool	tn_parenthesized:1;
-	bool	tn_sys:1;	/* the operator comes from a system header;
-				 * used in strict bool mode to allow mixing
-				 * bool and scalar, as these places are not
-				 * considered fixable */
+	bool	tn_sys:1;	/* comes from a system header */
 	bool	tn_system_dependent:1; /* depends on sizeof or offsetof */
 	union {
 		struct {
-			struct tnode *_tn_left;	/* (left) operand */
-			struct tnode *_tn_right;	/* right operand */
-		} tn_s;
-		sym_t	*_tn_sym;	/* symbol if op == NAME */
-		val_t	_tn_val;	/* value if op == CON */
-		buffer	*_tn_string;	/* string if op == STRING; for
+			tnode_t *left;	/* (left) operand */
+			tnode_t *right;	/* right operand */
+		} ops;
+		sym_t	*sym;		/* if NAME */
+		val_t	value;		/* if CON */
+		buffer	*str_literals;	/* if STRING; for
 					 * character strings, 'data' points to
 					 * the concatenated string literals in
 					 * source form, and 'len' is the
@@ -324,16 +290,9 @@ typedef struct tnode {
 					 * wide strings, 'data' is NULL and
 					 * 'len' is the number of resulting
 					 * characters */
-		function_call *_tn_call;
-	} tn_u;
-} tnode_t;
-
-#define	tn_left		tn_u.tn_s._tn_left
-#define tn_right	tn_u.tn_s._tn_right
-#define tn_sym		tn_u._tn_sym
-#define	tn_val		tn_u._tn_val
-#define	tn_string	tn_u._tn_string
-#define tn_call		tn_u._tn_call
+		function_call *call;	/* if CALL or ICALL */
+	} u;
+};
 
 struct generic_association {
 	type_t *ga_arg;		/* NULL means default or error */
@@ -341,16 +300,16 @@ struct generic_association {
 	struct generic_association *ga_prev;
 };
 
-struct array_size {
+typedef struct {
 	bool has_dim;
 	int dim;
-};
+} array_size;
 
 typedef enum decl_level_kind {
 	DLK_EXTERN,		/* global types, variables or functions */
-	DLK_STRUCT,		/* members */
-	DLK_UNION,		/* members */
-	DLK_ENUM,		/* constants */
+	DLK_STRUCT,		/* struct members */
+	DLK_UNION,		/* union members */
+	DLK_ENUM,		/* enum constants */
 	DLK_OLD_STYLE_PARAMS,	/* parameters in an old-style function
 				 * definition */
 	DLK_PROTO_PARAMS,	/* parameters in a prototype function
@@ -393,8 +352,8 @@ typedef struct decl_level {
 	bool	d_asm:1;	/* set if d_ctx == AUTO and asm() present */
 	bool	d_packed:1;
 	bool	d_used:1;
-	type_t	*d_tag_type;	/* during a member declaration, the tag type to
-				 * which the member belongs */
+	type_t	*d_tag_type;	/* during a member or enumerator declaration,
+				 * the tag type to which the member belongs */
 	sym_t	*d_func_params;	/* during a function declaration, the
 				 * parameters, stored in the enclosing level */
 	pos_t	d_func_def_pos;	/* position of the function definition */
@@ -407,11 +366,11 @@ typedef struct decl_level {
 	struct decl_level *d_enclosing; /* the enclosing declaration level */
 } decl_level;
 
-struct parameter_list {
+typedef struct {
 	sym_t	*first;
 	bool	vararg:1;
 	bool	prototype:1;
-};
+} parameter_list;
 
 /*
  * A sequence of asterisks and qualifiers, from right to left.  For example,
@@ -424,14 +383,12 @@ typedef struct qual_ptr {
 	struct qual_ptr *p_next;
 } qual_ptr;
 
-/*
- * The values of the 'case' labels, linked via cl_next in reverse order of
- * appearance in the code, that is from bottom to top.
- */
-typedef struct case_label {
-	val_t	cl_val;
-	struct case_label *cl_next;
-} case_label_t;
+/* The values of the 'case' labels. */
+typedef struct {
+	val_t	*vals;
+	size_t	len;
+	size_t	cap;
+} case_labels;
 
 typedef enum {
 	CS_DO_WHILE,
@@ -465,7 +422,7 @@ typedef struct control_statement {
 
 	type_t	*c_switch_type;	/* type of switch expression */
 	tnode_t	*c_switch_expr;
-	case_label_t *c_case_labels;	/* list of case values */
+	case_labels c_case_labels;	/* list of case values */
 
 	memory_pool c_for_expr3_mem;	/* saved memory for end of loop
 					 * expression in for() */
@@ -532,7 +489,7 @@ typedef enum {
 
 typedef struct {
 	size_t start;
-	size_t i;
+	size_t end;
 	uint64_t value;
 	bool escaped;		/* \n, \003, \x24 */
 	bool named_escape;	/* \a, \n, etc. */
@@ -553,20 +510,6 @@ typedef struct {
 		if (!(cond))						\
 			assert_failed(__FILE__, __LINE__, __func__, #cond); \
 	} while (false)
-
-static inline tnode_t *
-tn_ck_left(const tnode_t *tn)
-{
-	lint_assert(has_operands(tn));
-	return tn->tn_left;
-}
-
-static inline tnode_t *
-tn_ck_right(const tnode_t *tn)
-{
-	lint_assert(has_operands(tn));
-	return tn->tn_right;
-}
 
 #ifdef DEBUG
 #  include "err-msgs.h"
@@ -655,20 +598,20 @@ static inline bool
 constant_is_nonzero(const tnode_t *tn)
 {
 	lint_assert(tn->tn_op == CON);
-	lint_assert(tn->tn_type->t_tspec == tn->tn_val.v_tspec);
-	return is_nonzero_val(&tn->tn_val);
+	lint_assert(tn->tn_type->t_tspec == tn->u.value.v_tspec);
+	return is_nonzero_val(&tn->u.value);
 }
 
 static inline bool
 is_zero(const tnode_t *tn)
 {
-	return tn != NULL && tn->tn_op == CON && !is_nonzero_val(&tn->tn_val);
+	return tn != NULL && tn->tn_op == CON && !is_nonzero_val(&tn->u.value);
 }
 
 static inline bool
 is_nonzero(const tnode_t *tn)
 {
-	return tn != NULL && tn->tn_op == CON && is_nonzero_val(&tn->tn_val);
+	return tn != NULL && tn->tn_op == CON && is_nonzero_val(&tn->u.value);
 }
 
 static inline const char *
