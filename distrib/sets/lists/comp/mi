@@ -1,4 +1,4 @@
-#	$NetBSD: mi,v 1.2454 2024/02/21 22:53:47 christos Exp $
+#	$NetBSD: mi,v 1.2457 2024/03/07 22:15:52 christos Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 ./etc/mtree/set.comp				comp-sys-root
@@ -645,6 +645,7 @@
 ./usr/include/dev/ic/smc91cxxvar.h		comp-obsolete		obsolete
 ./usr/include/dev/ic/smc93cx6var.h		comp-obsolete		obsolete
 ./usr/include/dev/ic/st16650reg.h		comp-obsolete		obsolete
+./usr/include/dev/ic/stireg.h			comp-c-include
 ./usr/include/dev/ic/tms320av110reg.h		comp-obsolete		obsolete
 ./usr/include/dev/ic/tms320av110var.h		comp-obsolete		obsolete
 ./usr/include/dev/ic/uhareg.h			comp-obsolete		obsolete
@@ -6163,6 +6164,7 @@
 ./usr/share/man/cat3/__svc_getcallercreds.0	comp-c-catman		.cat
 ./usr/share/man/cat3/__unused.0			comp-c-catman		.cat
 ./usr/share/man/cat3/__used.0			comp-c-catman		.cat
+./usr/share/man/cat3/_dlauxinfo.0		comp-c-catman		.cat
 ./usr/share/man/cat3/_longjmp.0			comp-c-catman		.cat
 ./usr/share/man/cat3/_lwp_makecontext.0		comp-c-catman		.cat
 ./usr/share/man/cat3/_setjmp.0			comp-c-catman		.cat
@@ -9142,7 +9144,6 @@
 ./usr/share/man/cat3/logbf.0			comp-c-catman		.cat
 ./usr/share/man/cat3/logbl.0			comp-c-catman		.cat
 ./usr/share/man/cat3/logf.0			comp-c-catman		.cat
-./usr/share/man/cat3/logl.0			comp-c-catman		.cat
 ./usr/share/man/cat3/login.0			comp-c-catman		.cat
 ./usr/share/man/cat3/login_cap.0		comp-c-catman		.cat
 ./usr/share/man/cat3/login_close.0		comp-c-catman		.cat
@@ -9155,6 +9156,7 @@
 ./usr/share/man/cat3/login_getpwclass.0		comp-c-catman		.cat
 ./usr/share/man/cat3/login_tty.0		comp-c-catman		.cat
 ./usr/share/man/cat3/loginx.0			comp-c-catman		.cat
+./usr/share/man/cat3/logl.0			comp-c-catman		.cat
 ./usr/share/man/cat3/logout.0			comp-c-catman		.cat
 ./usr/share/man/cat3/logoutx.0			comp-c-catman		.cat
 ./usr/share/man/cat3/logwtmp.0			comp-c-catman		.cat
@@ -10660,6 +10662,7 @@
 ./usr/share/man/cat3/sqlite3_finalize.0	comp-c-catman		.cat
 ./usr/share/man/cat3/sqlite3_get_autocommit.0	comp-c-catman		.cat
 ./usr/share/man/cat3/sqlite3_get_auxdata.0	comp-c-catman		.cat
+./usr/share/man/cat3/sqlite3_get_clientdata.0		comp-c-catman	.cat
 ./usr/share/man/cat3/sqlite3_get_table.0	comp-c-catman		.cat
 ./usr/share/man/cat3/sqlite3_index_info.0	comp-c-catman		.cat
 ./usr/share/man/cat3/sqlite3_initialize.0	comp-c-catman		.cat
@@ -10767,6 +10770,7 @@
 ./usr/share/man/cat3/sqlite3changegroup_delete.0 comp-c-catman .cat
 ./usr/share/man/cat3/sqlite3changegroup_new.0	comp-3-catman	.cat
 ./usr/share/man/cat3/sqlite3changegroup_output.0 comp-c-catman .cat
+./usr/share/man/cat3/sqlite3changegroup_schema.0		comp-c-catman	.cat
 ./usr/share/man/cat3/sqlite3changeset_apply.0	comp-3-catman	.cat
 ./usr/share/man/cat3/sqlite3changeset_apply_strm.0	comp-3-catman	.cat
 ./usr/share/man/cat3/sqlite3changeset_concat.0	comp-3-catman	.cat
@@ -10780,6 +10784,7 @@
 ./usr/share/man/cat3/sqlite3changeset_op.0	comp-3-catman	.cat
 ./usr/share/man/cat3/sqlite3changeset_pk.0	comp-3-catman	.cat
 ./usr/share/man/cat3/sqlite3changeset_start.0	comp-3-catman	.cat
+./usr/share/man/cat3/sqlite3changeset_upgrade.0		comp-c-catman	.cat
 ./usr/share/man/cat3/sqlite3rebaser_configure.0   comp-c-catman           .cat
 ./usr/share/man/cat3/sqlite3rebaser_create.0   comp-c-catman           .cat
 ./usr/share/man/cat3/sqlite3rebaser_delete.0   comp-c-catman           .cat
@@ -14709,6 +14714,7 @@
 ./usr/share/man/html3/__svc_getcallercreds.html comp-c-htmlman		html
 ./usr/share/man/html3/__unused.html		comp-c-htmlman		html
 ./usr/share/man/html3/__used.html		comp-c-htmlman		html
+./usr/share/man/html3/_dlauxinfo.html		comp-c-htmlman		html
 ./usr/share/man/html3/_longjmp.html		comp-c-htmlman		html
 ./usr/share/man/html3/_lwp_makecontext.html	comp-c-htmlman		html
 ./usr/share/man/html3/_setjmp.html		comp-c-htmlman		html
@@ -17610,7 +17616,6 @@
 ./usr/share/man/html3/logbf.html		comp-c-htmlman		html
 ./usr/share/man/html3/logbl.html		comp-c-htmlman		html
 ./usr/share/man/html3/logf.html			comp-c-htmlman		html
-./usr/share/man/html3/logl.html			comp-c-htmlman		html
 ./usr/share/man/html3/login.html		comp-c-htmlman		html
 ./usr/share/man/html3/login_cap.html		comp-c-htmlman		html
 ./usr/share/man/html3/login_close.html		comp-c-htmlman		html
@@ -17623,6 +17628,7 @@
 ./usr/share/man/html3/login_getpwclass.html	comp-c-htmlman		html
 ./usr/share/man/html3/login_tty.html		comp-c-htmlman		html
 ./usr/share/man/html3/loginx.html		comp-c-htmlman		html
+./usr/share/man/html3/logl.html			comp-c-htmlman		html
 ./usr/share/man/html3/logout.html		comp-c-htmlman		html
 ./usr/share/man/html3/logoutx.html		comp-c-htmlman		html
 ./usr/share/man/html3/logwtmp.html		comp-c-htmlman		html
@@ -19123,6 +19129,7 @@
 ./usr/share/man/html3/sqlite3_finalize.html	comp-c-htmlman		html
 ./usr/share/man/html3/sqlite3_get_autocommit.html	comp-c-htmlman		html
 ./usr/share/man/html3/sqlite3_get_auxdata.html	comp-c-htmlman		html
+./usr/share/man/html3/sqlite3_get_clientdata.html	comp-c-htmlman	html
 ./usr/share/man/html3/sqlite3_get_table.html	comp-c-htmlman		html
 ./usr/share/man/html3/sqlite3_index_info.html	comp-c-htmlman		html
 ./usr/share/man/html3/sqlite3_initialize.html	comp-c-htmlman		html
@@ -19230,6 +19237,7 @@
 ./usr/share/man/html3/sqlite3changegroup_delete.html comp-c-htmlman html
 ./usr/share/man/html3/sqlite3changegroup_new.html	comp-c-htmlman	html
 ./usr/share/man/html3/sqlite3changegroup_output.html comp-c-htmlman html
+./usr/share/man/html3/sqlite3changegroup_schema.html	comp-c-htmlman	html
 ./usr/share/man/html3/sqlite3changeset_apply.html	comp-c-htmlman	html
 ./usr/share/man/html3/sqlite3changeset_apply_strm.html	comp-c-htmlman	html
 ./usr/share/man/html3/sqlite3changeset_concat.html	comp-c-htmlman	html
@@ -19243,6 +19251,7 @@
 ./usr/share/man/html3/sqlite3changeset_op.html	comp-c-htmlman	html
 ./usr/share/man/html3/sqlite3changeset_pk.html	comp-c-htmlman	html
 ./usr/share/man/html3/sqlite3changeset_start.html	comp-c-htmlman	html
+./usr/share/man/html3/sqlite3changeset_upgrade.html	comp-c-htmlman	html
 ./usr/share/man/html3/sqlite3rebaser_configure.html       comp-c-htmlman          html
 ./usr/share/man/html3/sqlite3rebaser_create.html       comp-c-htmlman          html
 ./usr/share/man/html3/sqlite3rebaser_delete.html       comp-c-htmlman          html
@@ -23092,6 +23101,7 @@
 ./usr/share/man/man3/__svc_getcallercreds.3	comp-c-man		.man
 ./usr/share/man/man3/__unused.3			comp-c-man		.man
 ./usr/share/man/man3/__used.3			comp-c-man		.man
+./usr/share/man/man3/_dlauxinfo.3		comp-c-man		.man
 ./usr/share/man/man3/_longjmp.3			comp-c-man		.man
 ./usr/share/man/man3/_lwp_makecontext.3		comp-c-man		.man
 ./usr/share/man/man3/_setjmp.3			comp-c-man		.man
@@ -26083,7 +26093,6 @@
 ./usr/share/man/man3/logbf.3			comp-c-man		.man
 ./usr/share/man/man3/logbl.3			comp-c-man		.man
 ./usr/share/man/man3/logf.3			comp-c-man		.man
-./usr/share/man/man3/logl.3			comp-c-man		.man
 ./usr/share/man/man3/login.3			comp-c-man		.man
 ./usr/share/man/man3/login_cap.3		comp-c-man		.man
 ./usr/share/man/man3/login_close.3		comp-c-man		.man
@@ -26096,6 +26105,7 @@
 ./usr/share/man/man3/login_getpwclass.3		comp-c-man		.man
 ./usr/share/man/man3/login_tty.3		comp-c-man		.man
 ./usr/share/man/man3/loginx.3			comp-c-man		.man
+./usr/share/man/man3/logl.3			comp-c-man		.man
 ./usr/share/man/man3/logout.3			comp-c-man		.man
 ./usr/share/man/man3/logoutx.3			comp-c-man		.man
 ./usr/share/man/man3/logwtmp.3			comp-c-man		.man
@@ -27620,6 +27630,7 @@
 ./usr/share/man/man3/sqlite3_finalize.3		comp-c-man		.man
 ./usr/share/man/man3/sqlite3_get_autocommit.3	comp-c-man		.man
 ./usr/share/man/man3/sqlite3_get_auxdata.3	comp-c-man		.man
+./usr/share/man/man3/sqlite3_get_clientdata.3		comp-c-man	.man
 ./usr/share/man/man3/sqlite3_get_table.3	comp-c-man		.man
 ./usr/share/man/man3/sqlite3_index_info.3	comp-c-man		.man
 ./usr/share/man/man3/sqlite3_initialize.3	comp-c-man		.man
@@ -27727,6 +27738,7 @@
 ./usr/share/man/man3/sqlite3changegroup_delete.3 comp-c-man .man
 ./usr/share/man/man3/sqlite3changegroup_new.3	comp-c-man	.man
 ./usr/share/man/man3/sqlite3changegroup_output.3 comp-c-man .man
+./usr/share/man/man3/sqlite3changegroup_schema.3		comp-c-man	.man
 ./usr/share/man/man3/sqlite3changeset_apply.3	comp-c-man	.man
 ./usr/share/man/man3/sqlite3changeset_apply_strm.3	comp-c-man	.man
 ./usr/share/man/man3/sqlite3changeset_concat.3	comp-c-man	.man
@@ -27740,6 +27752,7 @@
 ./usr/share/man/man3/sqlite3changeset_op.3	comp-c-man	.man
 ./usr/share/man/man3/sqlite3changeset_pk.3	comp-c-man	.man
 ./usr/share/man/man3/sqlite3changeset_start.3	comp-c-man	.man
+./usr/share/man/man3/sqlite3changeset_upgrade.3		comp-c-man	.man
 ./usr/share/man/man3/sqlite3rebaser_configure.3   comp-c-man              .man
 ./usr/share/man/man3/sqlite3rebaser_create.3   comp-c-man              .man
 ./usr/share/man/man3/sqlite3rebaser_delete.3   comp-c-man              .man

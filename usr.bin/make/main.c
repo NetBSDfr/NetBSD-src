@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.610 2024/02/07 06:43:02 rillig Exp $	*/
+/*	$NetBSD: main.c,v 1.612 2024/03/10 02:53:37 sjg Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -111,7 +111,7 @@
 #include "trace.h"
 
 /*	"@(#)main.c	8.3 (Berkeley) 3/19/94"	*/
-MAKE_RCSID("$NetBSD: main.c,v 1.610 2024/02/07 06:43:02 rillig Exp $");
+MAKE_RCSID("$NetBSD: main.c,v 1.612 2024/03/10 02:53:37 sjg Exp $");
 #if defined(MAKE_NATIVE)
 __COPYRIGHT("@(#) Copyright (c) 1988, 1989, 1990, 1993 "
 	    "The Regents of the University of California.  "
@@ -1735,7 +1735,7 @@ Cmd_Exec(const char *cmd, char **error)
 		return bmake_strdup("");
 	}
 
-	Var_ReexportVars();
+	Var_ReexportVars(SCOPE_GLOBAL);
 
 	switch (cpid = vfork()) {
 	case 0:
@@ -2037,10 +2037,13 @@ static void
 SetErrorVars(GNode *gn)
 {
 	StringListNode *ln;
+	char sts[16];
 
 	/*
 	 * We can print this even if there is no .ERROR target.
 	 */
+	snprintf(sts, sizeof(sts), "%d", gn->exit_status);
+	Global_Set(".ERROR_EXIT", sts);
 	Global_Set(".ERROR_TARGET", gn->name);
 	Global_Delete(".ERROR_CMD");
 

@@ -1,4 +1,4 @@
-#	$NetBSD: 3RDPARTY,v 1.1992 2024/02/26 23:11:12 gutteridge Exp $
+#	$NetBSD: 3RDPARTY,v 1.1998 2024/03/07 00:35:10 gutteridge Exp $
 #
 # This file contains a list of the software that has been integrated into
 # NetBSD where we are not the primary maintainer.
@@ -482,11 +482,11 @@ Before importing a new version of external/gpl3/gcc:
 
 Package:	gdb
 Version:	13.2
-Current Vers:	14.1
+Current Vers:	14.2
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/gdb/
 Home Page:	http://www.gnu.org/software/gdb/
-Date:		2023-08-11
+Date:		2024-03-03
 Mailing List:	bug-gdb@gnu.org
 Responsible:	christos
 License:	GPLv3, LGPLv3.1
@@ -512,11 +512,11 @@ Notes:
 
 Package:	autoconf
 Version:	2.69
-Current Vers:	2.69
+Current Vers:	2.72
 Maintainer:	FSF
 Archive Site:	ftp://ftp.gnu.org/gnu/autoconf/
 Home Page:	http://www.gnu.org/software/autoconf/
-Date:		2020-06-13
+Date:		2024-03-06
 Mailing List:	bug-autoconf@gnu.org
 Responsible:	christos
 License:	GPLv3+
@@ -760,10 +760,10 @@ Notes:
 
 Package:	llvm
 Version:	10.0.0git (01f3a59fb3e2542fce74c768718f594d0debd0da)
-Current Vers.:	10.0.0
+Current Vers.:	18.1
 Maintainer:	llvm-dev@lists.llvm.org
 Home Page:	https://llvm.org
-Date:		2020-06-13
+Date:		2024-03-06
 Responsible:	joerg
 License:	Apache2 with runtime exceptions
 Location:	external/apache2/llvm/dist
@@ -1327,16 +1327,16 @@ arithmetic code is unchanged, though, and should behave exactly like the
 original.
 
 Package:	sqlite
-Version:	3.43.0
-Current Vers:	3.45.0
+Version:	3.45.1
+Current Vers:	3.45.1
 Maintainer:	Richard Hipp <drh@sqlite.org>
 Home Page:	http://www.sqlite.org
-Date: 		2024-01-16
+Date: 		2024-03-01
 Responsible:	joerg
 License:	Public domain
 Location:	external/public-domain/sqlite/dist
 Notes:
-Run cleantags before importing because sqlite3.c has an RCSID
+See README file
 
 
 Package:	TestFloat
@@ -1635,17 +1635,18 @@ Notes:
 		Need to feed back local changes
 
 Package:	elftoolchain (libelf/libdwarf)
-Version:	FreeBSD-2016-02-19-r295822
+Version:	r4037
 Current Vers:	0.7.1
 Maintainer:	Joseph Koshi <jkoshi@freebsd.org>
 Archive Site:	none
 Home Page:	http://elftoolchain.sourceforge.net
+Date:		2024-03-03
 Mailing List:	none
 Responsible:	christos
 License:	BSD-like (2-clause)
 Location:	sys/external/bsd/elftoolchain/dist
 Notes:
-		Run prepare-import.sh; next time use svn id.
+		See README we use the svn id as the tag.
 
 Package:	timeout
 Version:	FreeBSD-2014-07-16 r268763
@@ -2327,12 +2328,12 @@ Location:	share/wscons/fonts
 Notes:
 
 Package:	mozilla-certdata
-Version:	2023-07-19 (f479bdba756c78ef9355a48c88744c69fdb4768e)
-Current Vers:	2024-01-31 (a6efd358880291357a62d58586f9a218d47ad98b)
+Version:	2024-02-12 (a6efd358880291357a62d58586f9a218d47ad98b)
+Current Vers:	2024-02-12 (a6efd358880291357a62d58586f9a218d47ad98b)
 Maintainer:	Mozilla
 Archive Site:	https://hg.mozilla.org/projects/nss/log/tip/lib/ckfw/builtins/certdata.txt
 Home Page:	https://wiki.mozilla.org/CA
-Date:		2024-02-01
+Date:		2024-02-12
 Mailing List:	
 License:	MPL
 Responsible:	riastradh, security-team

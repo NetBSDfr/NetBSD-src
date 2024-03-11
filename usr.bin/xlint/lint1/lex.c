@@ -1,4 +1,4 @@
-/* $NetBSD: lex.c,v 1.217 2024/02/08 20:59:19 rillig Exp $ */
+/* $NetBSD: lex.c,v 1.222 2024/03/03 16:09:01 rillig Exp $ */
 
 /*
  * Copyright (c) 1996 Christopher G. Demetriou.  All Rights Reserved.
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: lex.c,v 1.217 2024/02/08 20:59:19 rillig Exp $");
+__RCSID("$NetBSD: lex.c,v 1.222 2024/03/03 16:09:01 rillig Exp $");
 #endif
 
 #include <ctype.h>
@@ -481,84 +481,72 @@ lex_name(const char *yytext, size_t yyleng)
 // Determines whether the constant is signed in traditional C but unsigned in
 // C90 and later.
 static bool
-is_unsigned_since_c90(tspec_t t, uint64_t ui, int base)
+is_unsigned_since_c90(unsigned ls, uint64_t ui, int base)
 {
-	if (!(allow_trad && allow_c90))
+	if (ui <= TARG_INT_MAX)
 		return false;
-	if (t == INT) {
-		if (ui > TARG_INT_MAX && ui <= TARG_UINT_MAX && base != 10)
-			return true;
-		return ui > TARG_LONG_MAX;
-	}
-	return t == LONG && ui > TARG_LONG_MAX;
+	if (ls == 0 && ui <= TARG_UINT_MAX && base != 10)
+		return true;
+	return ls <= 1 && ui > TARG_LONG_MAX;
 }
 
 static tspec_t
-integer_constant_type(tspec_t t, uint64_t ui, int base, bool warned)
+integer_constant_type_signed(unsigned ls, uint64_t ui, int base, bool warned)
 {
-	switch (t) {
-	case INT:
-		if (ui <= TARG_INT_MAX)
-			return INT;
-		if (ui <= TARG_UINT_MAX && base != 10 && allow_c90)
-			return UINT;
-		if (ui <= TARG_LONG_MAX)
-			return LONG;
-		/* FALLTHROUGH */
-	case LONG:
-		if (ui <= TARG_LONG_MAX)
-			return LONG;
-		if (ui <= TARG_ULONG_MAX && base != 10)
-			return allow_c90 ? ULONG : LONG;
-		if (!allow_c99) {
-			if (!warned)
-				/* integer constant out of range */
-				warning(252);
-			return allow_c90 ? ULONG : LONG;
-		}
-		/* FALLTHROUGH */
-	case LLONG:
-		if (ui <= TARG_LLONG_MAX)
-			return LLONG;
-		if (ui <= TARG_ULLONG_MAX && base != 10)
-			return allow_c90 ? ULLONG : LLONG;
+	if (ls == 0 && ui <= TARG_INT_MAX)
+		return INT;
+	if (ls == 0 && ui <= TARG_UINT_MAX && base != 10 && allow_c90)
+		return UINT;
+	if (ls == 0 && ui <= TARG_LONG_MAX)
+		return LONG;
+
+	if (ls <= 1 && ui <= TARG_LONG_MAX)
+		return LONG;
+	if (ls <= 1 && ui <= TARG_ULONG_MAX && base != 10)
+		return allow_c90 ? ULONG : LONG;
+	if (ls <= 1 && !allow_c99) {
 		if (!warned)
 			/* integer constant out of range */
 			warning(252);
-		return allow_c90 ? ULLONG : LLONG;
-	case UINT:
-		if (ui <= TARG_UINT_MAX)
-			return UINT;
-		/* FALLTHROUGH */
-	case ULONG:
-		if (ui <= TARG_ULONG_MAX)
-			return ULONG;
-		if (!allow_c99) {
-			if (!warned)
-				/* integer constant out of range */
-				warning(252);
-			return ULONG;
-		}
-		/* FALLTHROUGH */
-	default:
-		if (ui <= TARG_ULLONG_MAX)
-			return ULLONG;
-		if (!warned)
-			/* integer constant out of range */
-			warning(252);
-		return ULLONG;
+		return allow_c90 ? ULONG : LONG;
 	}
+
+	if (ui <= TARG_LLONG_MAX)
+		return LLONG;
+	if (ui <= TARG_ULLONG_MAX && base != 10)
+		return allow_c90 ? ULLONG : LLONG;
+	if (!warned)
+		/* integer constant out of range */
+		warning(252);
+	return allow_c90 ? ULLONG : LLONG;
+}
+
+static tspec_t
+integer_constant_type_unsigned(unsigned l, uint64_t ui, bool warned)
+{
+	if (l == 0 && ui <= TARG_UINT_MAX)
+		return UINT;
+
+	if (l <= 1 && ui <= TARG_ULONG_MAX)
+		return ULONG;
+	if (l <= 1 && !allow_c99) {
+		if (!warned)
+			/* integer constant out of range */
+			warning(252);
+		return ULONG;
+	}
+
+	if (ui <= TARG_ULLONG_MAX)
+		return ULLONG;
+	if (!warned)
+		/* integer constant out of range */
+		warning(252);
+	return ULLONG;
 }
 
 int
 lex_integer_constant(const char *yytext, size_t yyleng, int base)
 {
-	/* C11 6.4.4.1p5 */
-	static const tspec_t suffix_type[2][3] = {
-		{ INT,  LONG,  LLONG, },
-		{ UINT, ULONG, ULLONG, }
-	};
-
 	const char *cp = yytext;
 	size_t len = yyleng;
 
@@ -590,7 +578,6 @@ lex_integer_constant(const char *yytext, size_t yyleng, int base)
 	if (!allow_c90 && u_suffix > 0)
 		/* suffix 'U' is illegal in traditional C */
 		warning(97);
-	tspec_t ct = suffix_type[u_suffix][l_suffix];
 
 	bool warned = false;
 	errno = 0;
@@ -607,14 +594,17 @@ lex_integer_constant(const char *yytext, size_t yyleng, int base)
 		/* octal number '%.*s' */
 		query_message(8, (int)len, cp);
 
-	bool ansiu = is_unsigned_since_c90(ct, ui, base);
+	bool unsigned_since_c90 = allow_trad && allow_c90 && u_suffix == 0
+	    && is_unsigned_since_c90(l_suffix, ui, base);
 
-	tspec_t t = integer_constant_type(ct, ui, base, warned);
+	tspec_t t = u_suffix > 0
+	    ? integer_constant_type_unsigned(l_suffix, ui, warned)
+	    : integer_constant_type_signed(l_suffix, ui, base, warned);
 	ui = (uint64_t)convert_integer((int64_t)ui, t, 0);
 
 	yylval.y_val = xcalloc(1, sizeof(*yylval.y_val));
 	yylval.y_val->v_tspec = t;
-	yylval.y_val->v_unsigned_since_c90 = ansiu;
+	yylval.y_val->v_unsigned_since_c90 = unsigned_since_c90;
 	yylval.y_val->u.integer = (int64_t)ui;
 
 	return T_CON;
@@ -736,50 +726,53 @@ read_quoted(bool *complete, char delim, bool wide)
 	return buf;
 }
 
+/*
+ * Analyze the lexical representation of the next character in the string
+ * literal list. At the end, only update the position information.
+ */
 bool
 quoted_next(const buffer *lit, quoted_iterator *it)
 {
 	const char *s = lit->data;
-	size_t len = lit->len;
 
-	*it = (quoted_iterator){ .i = it->i, .start = it->i };
+	*it = (quoted_iterator){ .start = it->end };
 
 	char delim = s[s[0] == 'L' ? 1 : 0];
 
-	bool in_the_middle = it->i > 0;
-	if (it->i == 0) {
+	bool in_the_middle = it->start > 0;
+	if (!in_the_middle) {
 		it->start = s[0] == 'L' ? 2 : 1;
-		it->i = it->start;
+		it->end = it->start;
 	}
 
-	for (;;) {
-		if (s[it->i] != delim)
-			break;
-		if (it->i + 1 == len)
+	while (s[it->start] == delim) {
+		if (it->start + 1 == lit->len) {
+			it->end = it->start;
 			return false;
+		}
 		it->next_literal = in_the_middle;
 		it->start += 2;
-		it->i += 2;
 	}
+	it->end = it->start;
 
 again:
-	switch (s[it->i]) {
+	switch (s[it->end]) {
 	case '\\':
-		it->i++;
+		it->end++;
 		goto backslash;
 	case '\n':
 		it->unescaped_newline = true;
 		return false;
 	default:
-		it->value = (unsigned char)s[it->i++];
+		it->value = (unsigned char)s[it->end++];
 		return true;
 	}
 
 backslash:
 	it->escaped = true;
-	if ('0' <= s[it->i] && s[it->i] <= '7')
+	if ('0' <= s[it->end] && s[it->end] <= '7')
 		goto octal_escape;
-	switch (s[it->i++]) {
+	switch (s[it->end++]) {
 	case '\n':
 		goto again;
 	case 'a':
@@ -835,19 +828,19 @@ backslash:
 	case '\'':
 	case '\\':
 		it->literal_escape = true;
-		it->value = (unsigned char)s[it->i - 1];
+		it->value = (unsigned char)s[it->end - 1];
 		return true;
 	}
 
 octal_escape:
 	it->octal_digits++;
-	it->value = s[it->i++] - '0';
-	if ('0' <= s[it->i] && s[it->i] <= '7') {
+	it->value = s[it->end++] - '0';
+	if ('0' <= s[it->end] && s[it->end] <= '7') {
 		it->octal_digits++;
-		it->value = 8 * it->value + (s[it->i++] - '0');
-		if ('0' <= s[it->i] && s[it->i] <= '7') {
+		it->value = 8 * it->value + (s[it->end++] - '0');
+		if ('0' <= s[it->end] && s[it->end] <= '7') {
 			it->octal_digits++;
-			it->value = 8 * it->value + (s[it->i++] - '0');
+			it->value = 8 * it->value + (s[it->end++] - '0');
 			it->overflow = it->value > TARG_UCHAR_MAX
 			    && s[0] != 'L';
 		}
@@ -856,7 +849,7 @@ octal_escape:
 
 hex_escape:
 	for (;;) {
-		char ch = s[it->i];
+		char ch = s[it->end];
 		unsigned digit_value;
 		if ('0' <= ch && ch <= '9')
 			digit_value = ch - '0';
@@ -867,7 +860,7 @@ hex_escape:
 		else
 			break;
 
-		it->i++;
+		it->end++;
 		it->value = 16 * it->value + digit_value;
 		uint64_t limit = s[0] == 'L' ? TARG_UINT_MAX : TARG_UCHAR_MAX;
 		if (it->value > limit)
@@ -882,7 +875,7 @@ hex_escape:
 static void
 check_quoted(const buffer *buf, bool complete, char delim)
 {
-	quoted_iterator it = { .start = 0 }, prev = it;
+	quoted_iterator it = { .end = 0 }, prev = it;
 	for (; quoted_next(buf, &it); prev = it) {
 		if (it.missing_hex_digits)
 			/* no hex digits follow \x */
@@ -908,7 +901,7 @@ check_quoted(const buffer *buf, bool complete, char delim)
 			/* \v undefined in traditional C */
 			warning(264);
 		else {
-			unsigned char ch = buf->data[it.i - 1];
+			unsigned char ch = buf->data[it.end - 1];
 			if (isprint(ch))
 				/* dubious escape \%c */
 				warning(79, ch);
@@ -929,7 +922,7 @@ check_quoted(const buffer *buf, bool complete, char delim)
 		if (prev.octal_digits > 0 && prev.octal_digits < 3
 		    && !it.escaped && it.value >= '8' && it.value <= '9')
 			/* short octal escape '%.*s' followed by digit '%c' */
-			warning(356, (int)(prev.i - prev.start),
+			warning(356, (int)(prev.end - prev.start),
 			    buf->data + prev.start, buf->data[it.start]);
 	}
 	if (it.unescaped_newline)
@@ -960,7 +953,7 @@ lex_character_constant(void)
 
 	size_t n = 0;
 	uint64_t val = 0;
-	quoted_iterator it = { .start = 0 };
+	quoted_iterator it = { .end = 0 };
 	while (quoted_next(buf, &it)) {
 		val = (val << CHAR_SIZE) + it.value;
 		n++;
@@ -1002,7 +995,7 @@ lex_wide_character_constant(void)
 	static char wbuf[MB_LEN_MAX + 1];
 	size_t n = 0, nmax = MB_CUR_MAX;
 
-	quoted_iterator it = { .start = 0 };
+	quoted_iterator it = { .end = 0 };
 	while (quoted_next(buf, &it)) {
 		if (n < nmax)
 			wbuf[n] = (char)it.value;
@@ -1044,11 +1037,11 @@ parse_line_directive_flags(const char *p,
 	*is_system = false;
 
 	while (*p != '\0') {
-		while (ch_isspace(*p))
+		while (isspace((unsigned char)*p))
 			p++;
 
 		const char *word = p;
-		while (*p != '\0' && !ch_isspace(*p))
+		while (*p != '\0' && !isspace((unsigned char)*p))
 			p++;
 		size_t len = (size_t)(p - word);
 
@@ -1092,8 +1085,9 @@ lex_directive(const char *yytext)
 	while (*p == ' ' || *p == '\t')
 		p++;
 
-	if (!ch_isdigit(*p)) {
-		if (strncmp(p, "pragma", 6) == 0 && ch_isspace(p[6]))
+	if (!isdigit((unsigned char)*p)) {
+		if (strncmp(p, "pragma", 6) == 0
+		    && isspace((unsigned char)p[6]))
 			return;
 		goto error;
 	}
@@ -1188,12 +1182,12 @@ lex_comment(void)
 	l = 0;
 	while (c != EOF && l < sizeof(keywd) - 1 &&
 	    (isalpha(c) || isspace(c))) {
-		if (islower(c) && l > 0 && ch_isupper(keywd[0]))
+		if (islower(c) && l > 0 && isupper((unsigned char)keywd[0]))
 			break;
 		keywd[l++] = (char)c;
 		c = read_byte();
 	}
-	while (l > 0 && ch_isspace(keywd[l - 1]))
+	while (l > 0 && isspace((unsigned char)keywd[l - 1]))
 		l--;
 	keywd[l] = '\0';
 
@@ -1303,7 +1297,7 @@ lex_wide_string(void)
 
 	buffer str;
 	buf_init(&str);
-	quoted_iterator it = { .start = 0 };
+	quoted_iterator it = { .end = 0 };
 	while (quoted_next(buf, &it))
 		buf_add_char(&str, (char)it.value);
 
