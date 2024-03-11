@@ -328,7 +328,7 @@ ld_virtio_attach(device_t parent, device_t self, void *aux)
 	if (features & VIRTIO_BLK_F_SEG_MAX) {
 		ld->sc_maxnsegs = virtio_read_device_config_4(vsc,
 		    VIRTIO_BLK_CONFIG_SEG_MAX);
-		if (maxnsegs == 0) {
+		if (ld->sc_maxnsegs == 0) {
 			aprint_error_dev(sc->sc_dev,
 			    "Invalid SEG_MAX %d\n", ld->sc_maxnsegs);
 			goto err;
