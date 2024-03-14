@@ -1029,7 +1029,7 @@ cpu_identify(struct cpu_info *ci)
 /*
  * Hypervisor
  */
-vm_guest_t vm_guest	= VM_GUEST_NO;
+vm_guest_t vm_guest = VM_GUEST_NO;
 
 struct vm_name_guest {
 	const char *name;
@@ -1065,11 +1065,10 @@ identify_hypervisor(void)
 	int i;
 
 	switch (vm_guest) {
-	/* guest type already known, no bios info */
 	case VM_GUEST_XENPV:
 	case VM_GUEST_XENPVH:
+		/* guest type already known, no bios info */
 		return;
-	/* continue for hypervisor detection */
 	default:
 		break;
 	}
@@ -1084,6 +1083,7 @@ identify_hypervisor(void)
 	 *
 	 */
 	if (ISSET(cpu_feature[1], CPUID2_RAZ)) {
+		vm_guest = VM_GUEST_VM;
 		x86_cpuid(0x40000000, regs);
 		if (regs[0] >= 0x40000000) {
 			memcpy(&hv_vendor[0], &regs[1], sizeof(*regs));
@@ -1097,10 +1097,6 @@ identify_hypervisor(void)
 				hyperv_early_init();
 #endif
 			} else if (memcmp(hv_vendor, "KVMKVMKVM\0\0\0", 12) == 0)
-				/*
-				 * The virtual machine manager (qemu, Firecracker...)
-				 * may run KVM as the hypervisor
-				 */
 				vm_guest = VM_GUEST_KVM;
 			else if (memcmp(hv_vendor, "XenVMMXenVMM", 12) == 0)
 				vm_guest = VM_GUEST_XENHVM;
