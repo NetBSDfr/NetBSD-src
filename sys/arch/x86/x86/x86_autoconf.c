@@ -71,6 +71,10 @@ __KERNEL_RCSID(0, "$NetBSD: x86_autoconf.c,v 1.87 2022/03/19 13:51:35 hannken Ex
 #include <x86/x86/hypervvar.h>
 #endif
 
+#ifdef XENPVHVM
+#include <xen/hypervisor.h>
+#endif
+
 struct disklist *x86_alldisks;
 int x86_ndisks;
 int x86_found_console;
@@ -540,7 +544,7 @@ void
 cpu_bootconf(void)
 {
 #ifdef XEN
-	if (vm_guest == VM_GUEST_XENPVH || vm_guest == VM_GUEST_GENPVH) {
+	if (pvh_boot) {
 		xen_bootconf();
 		return;
 	}

@@ -179,7 +179,7 @@ consinit(void)
 			return;
 		/* fallback to native console selection, useful for dom0 PVH */
 	}
-	if (vm_guest == VM_GUEST_GENPVH) {
+	if (pvh_boot) {
 		union xen_cmdline_parseinfo xcp;
 		/* get console= parameter from generic PVH VMM */
 		xen_parse_cmdline(XEN_PARSE_CONSOLE, &xcp);

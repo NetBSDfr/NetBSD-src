@@ -605,7 +605,7 @@ lapic_initclock(void)
 	 * If the hypervisor is KVM, don't use lapic, instead
 	 * use pvclock(4).
 	 */
-	if (hv_type == VM_GUEST_KVM)
+	if (vm_guest == VM_GUEST_KVM)
 		return;
 #endif
 	if (curcpu() == &cpu_info_primary) {

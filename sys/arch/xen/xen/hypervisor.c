@@ -211,6 +211,7 @@ enum {
 #ifdef XENPVHVM
 
 bool xenhvm_use_percpu_callback = 0;
+bool pvh_boot = false;
 
 static void
 xen_init_hypercall_page(void)
@@ -241,8 +242,12 @@ void
 init_xen_early(void)
 {
 	const char *cmd_line;
+
+	/* We didn't boot using PVH */
 	if (vm_guest != VM_GUEST_XENPVH && vm_guest != VM_GUEST_GENPVH)
 		return;
+
+	pvh_boot = true;
 
 	hvm_start_info = (void *)((uintptr_t)hvm_start_paddr + KERNBASE);
 
@@ -256,7 +261,7 @@ init_xen_early(void)
 	}
 	xen_start_info.flags = hvm_start_info->flags;
 
-	if (vm_guest != VM_GUEST_XENPVH)
+	if (vm_guest != VM_GUEST_XENPVH) /* non Xen PVH boot */
 		return;
 
 	xen_init_hypercall_page();

@@ -129,7 +129,7 @@ struct xen_npx_attach_args {
 #undef s64
 
 
-
+extern bool pvh_boot;
 /*
  * a placeholder for the start of day information passed up from the hypervisor
  */

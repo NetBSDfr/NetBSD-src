@@ -472,7 +472,7 @@ cpu_attach(device_t parent, device_t self, void *aux)
 			 */
 			if (!vm_guest_is_xenpvh_or_pvhvm()
 #if NPVCLOCK > 0
-				&& hv_type != VM_GUEST_KVM
+				&& vm_guest != VM_GUEST_KVM
 #endif
 				)
 				lapic_calibrate_timer(false);
