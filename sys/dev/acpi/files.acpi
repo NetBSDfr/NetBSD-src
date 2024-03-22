@@ -1,4 +1,4 @@
-#	$NetBSD: files.acpi,v 1.128 2023/07/18 10:02:25 riastradh Exp $
+#	$NetBSD: files.acpi,v 1.132 2024/03/21 02:36:01 riastradh Exp $
 
 defflag	opt_acpi.h	ACPIVERBOSE ACPI_DEBUG ACPI_ACTIVATE_DEV
 			ACPI_DSDT_OVERRIDE ACPI_SCANPCI ACPI_BREAKPOINT
@@ -14,8 +14,9 @@ define	acpiwdrtbus { }
 define	acpisdtbus { }
 define	acpigtdtbus { }
 define	acpimadtbus { }
+define	apeibus { }
 
-device	acpi: acpica, acpiapmbus, acpinodebus, acpiecdtbus, acpisdtbus, acpigtdtbus, acpimadtbus, acpihpetbus, acpiwdrtbus, sysmon_power, sysmon_taskq
+device	acpi: acpica, acpiapmbus, acpinodebus, acpiecdtbus, acpisdtbus, acpigtdtbus, acpimadtbus, acpihpetbus, acpiwdrtbus, apeibus, sysmon_power, sysmon_taskq
 attach	acpi at acpibus
 file	dev/acpi/acpi.c			acpi
 file	dev/acpi/acpi_debug.c		acpi
@@ -114,6 +115,23 @@ file	dev/acpi/acpi_pcc.c		acpipcc
 device	acpicppc: acpipcc
 attach	acpicppc at acpinodebus
 file	dev/acpi/acpi_cppc.c		acpicppc
+
+# ACPI Platform Error Interface
+device	apei
+attach	apei at apeibus
+file	dev/acpi/apei.c			apei
+file	dev/acpi/apei_bert.c		apei
+file	dev/acpi/apei_einj.c		apei
+file	dev/acpi/apei_erst.c		apei
+file	dev/acpi/apei_hest.c		apei
+file	dev/acpi/apei_interp.c		apei
+file	dev/acpi/apei_mapreg.c		apei
+file	dev/acpi/apei_reg.c		apei
+
+# ACPI Hardware Error Device
+device	acpihed: apei
+attach	acpihed at acpinodebus
+file	dev/acpi/acpi_hed.c		acpihed
 
 # Serial interface
 attach	com at acpinodebus with com_acpi
