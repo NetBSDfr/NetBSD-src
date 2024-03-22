@@ -1125,7 +1125,7 @@ vioif*	at virtio?			# Virtio network device
 viornd* at virtio?			# Virtio entropy device
 viocon* at virtio?
 
-#vio9p*	at virtio?			# Virtio 9P device
+vio9p*	at virtio?			# Virtio 9P device
 #vioscsi* at virtio?
 #scsibus* at vioscsi?
 
