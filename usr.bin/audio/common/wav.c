@@ -1,4 +1,4 @@
-/*	$NetBSD: wav.c,v 1.22 2024/03/12 00:34:38 mrg Exp $	*/
+/*	$NetBSD: wav.c,v 1.24 2024/03/20 20:18:39 mrg Exp $	*/
 
 /*
  * Copyright (c) 2002, 2009, 2013, 2015, 2019, 2024 Matthew R. Green
@@ -33,7 +33,7 @@
 #include <sys/cdefs.h>
 
 #ifndef lint
-__RCSID("$NetBSD: wav.c,v 1.22 2024/03/12 00:34:38 mrg Exp $");
+__RCSID("$NetBSD: wav.c,v 1.24 2024/03/20 20:18:39 mrg Exp $");
 #endif
 
 
@@ -91,15 +91,17 @@ wav_enc_from_val(int encoding)
  * WAV format helpers
  */
 
+#define RIFFNAMELEN	4
+
 static bool
-find_riff_chunk(const char search[4], size_t *remainp, char **wherep, uint32_t *partlen)
+find_riff_chunk(const char *search, size_t *remainp, char **wherep, uint32_t *partlen)
 {
 	wav_audioheaderpart part;
 
 	*partlen = 0;
 
 #define ADJUST(l) do {				\
-	if (l >= *(remainp))			\
+	if (l > *(remainp))			\
 		return false;			\
 	*(wherep) += (l);			\
 	*(remainp) -= (l);			\
@@ -116,7 +118,7 @@ find_riff_chunk(const char search[4], size_t *remainp, char **wherep, uint32_t *
 			emsg = " (odd length, adjusted)";
 			len += 1;
 		}
-		if (strncmp(part.name, search, sizeof *search) == 0) {
+		if (strncmp(part.name, search, RIFFNAMELEN) == 0) {
 			*partlen = len;
 			if (verbose > 1)
 				fprintf(stderr, "Found part %.04s length %d%s\n",
@@ -148,17 +150,17 @@ audio_wav_parse_hdr(void *hdr, size_t sz, u_int *enc, u_int *prec,
 	uint32_t len = 0;
 	u_int16_t fmttag;
 	static const char
-	    strfmt[4] = "fmt ",
-	    strRIFF[4] = "RIFF",
-	    strWAVE[4] = "WAVE",
-	    strdata[4] = "data";
+	    strfmt[RIFFNAMELEN] = "fmt ",
+	    strRIFF[RIFFNAMELEN] = "RIFF",
+	    strWAVE[RIFFNAMELEN] = "WAVE",
+	    strdata[RIFFNAMELEN] = "data";
 	bool found;
 
 	if (sz < 32)
 		return (AUDIO_ENOENT);
 
 #define ADJUST(l) do {				\
-	if (l >= remain)			\
+	if ((l) > remain)			\
 		return (AUDIO_ESHORTHDR);	\
 	where += (l);				\
 	remain -= (l);				\
@@ -279,20 +281,17 @@ audio_wav_parse_hdr(void *hdr, size_t sz, u_int *enc, u_int *prec,
 	if (!found)
 		return (AUDIO_EWAVNODATA);
 
-	if (len) {
-		if (channels)
-			*channels = (u_int)getle16(fmt.channels);
-		if (sample)
-			*sample = getle32(fmt.sample_rate);
-		if (enc)
-			*enc = newenc;
-		if (prec)
-			*prec = newprec;
-		if (datasize)
-			*datasize = (off_t)len;
-		return (where - (char *)hdr);
-	}
-	return (AUDIO_EWAVNODATA);
+	if (channels)
+		*channels = (u_int)getle16(fmt.channels);
+	if (sample)
+		*sample = getle32(fmt.sample_rate);
+	if (enc)
+		*enc = newenc;
+	if (prec)
+		*prec = newprec;
+	if (datasize)
+		*datasize = (off_t)len;
+	return (where - (char *)hdr);
 
 #undef ADJUST
 }
