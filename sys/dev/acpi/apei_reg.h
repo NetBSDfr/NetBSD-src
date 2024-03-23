@@ -1,4 +1,4 @@
-/*	$NetBSD: apei_reg.h,v 1.1 2024/03/20 17:11:44 riastradh Exp $	*/
+/*	$NetBSD: apei_reg.h,v 1.3 2024/03/22 20:48:14 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 2024 The NetBSD Foundation, Inc.
@@ -33,8 +33,12 @@
 
 #include <dev/acpi/acpivar.h>
 
-ACPI_STATUS apei_read_register(ACPI_GENERIC_ADDRESS *, uint64_t, uint64_t *);
-ACPI_STATUS apei_write_register(ACPI_GENERIC_ADDRESS *, uint64_t, bool,
-    uint64_t);
+struct acpi_generic_address;
+struct apei_mapreg;
+
+uint64_t apei_read_register(struct acpi_generic_address *,
+    struct apei_mapreg *, uint64_t);
+void apei_write_register(struct acpi_generic_address *, struct apei_mapreg *,
+    uint64_t, bool, uint64_t);
 
 #endif	/* _SYS_DEV_ACPI_APEI_REG_H_ */

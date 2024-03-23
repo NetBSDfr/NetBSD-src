@@ -1,4 +1,4 @@
-/*	$NetBSD: apei_reg.c,v 1.1 2024/03/20 17:11:44 riastradh Exp $	*/
+/*	$NetBSD: apei_reg.c,v 1.3 2024/03/22 20:48:14 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 2024 The NetBSD Foundation, Inc.
@@ -31,48 +31,45 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: apei_reg.c,v 1.1 2024/03/20 17:11:44 riastradh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: apei_reg.c,v 1.3 2024/03/22 20:48:14 riastradh Exp $");
 
 #include <sys/types.h>
 
 #include <dev/acpi/acpivar.h>
+#include <dev/acpi/apei_mapreg.h>
 #include <dev/acpi/apei_reg.h>
 
 /*
- * apei_read_register(Register, Mask, &X)
+ * apei_read_register(Register, map, Mask, &X)
  *
- *	Read from Register, shifted out of position and then masked
- *	with Mask, and store the result in X.
+ *	Read from Register mapped at map, shifted out of position and
+ *	then masked with Mask, and return the result.
  *
  *	https://uefi.org/specs/ACPI/6.5/18_Platform_Error_Interfaces.html#read-register
  *
  *	(I'm guessing this applies to both ERST and EINJ, even though
  *	that section is under the ERST part.)
  */
-ACPI_STATUS
-apei_read_register(ACPI_GENERIC_ADDRESS *Register, uint64_t Mask, uint64_t *p)
+uint64_t
+apei_read_register(ACPI_GENERIC_ADDRESS *Register, struct apei_mapreg *map,
+    uint64_t Mask)
 {
 	const uint8_t BitOffset = Register->BitOffset;
 	uint64_t X;
-	ACPI_STATUS rv;
 
-	rv = AcpiRead(&X, Register);
-	if (ACPI_FAILURE(rv)) {
-		*p = 0;		/* XXX */
-		return rv;
-	}
+	X = apei_mapreg_read(Register, map);
 	X >>= BitOffset;
 	X &= Mask;
 
-	*p = X;
-	return AE_OK;
+	return X;
 }
 
 /*
- * apei_write_register(Register, Mask, preserve_register, X)
+ * apei_write_register(Register, map, Mask, preserve_register, X)
  *
  *	Write X, masked with Mask and shifted into position, to
- *	Register, preserving other bits if preserve_register is true.
+ *	Register, mapped at map, preserving other bits if
+ *	preserve_register is true.
  *
  *	https://uefi.org/specs/ACPI/6.5/18_Platform_Error_Interfaces.html#write-register
  *
@@ -81,23 +78,20 @@ apei_read_register(ACPI_GENERIC_ADDRESS *Register, uint64_t Mask, uint64_t *p)
  *	https://uefi.org/sites/default/files/resources/ACPI_5_1release.pdf#page=714
  *	which has been lost in more recent versions of the spec.
  */
-ACPI_STATUS
-apei_write_register(ACPI_GENERIC_ADDRESS *Register, uint64_t Mask,
-    bool preserve_register, uint64_t X)
+void
+apei_write_register(ACPI_GENERIC_ADDRESS *Register, struct apei_mapreg *map,
+    uint64_t Mask, bool preserve_register, uint64_t X)
 {
 	const uint8_t BitOffset = Register->BitOffset;
-	ACPI_STATUS rv;
 
 	X &= Mask;
 	X <<= BitOffset;
 	if (preserve_register) {
 		uint64_t Y;
 
-		rv = AcpiRead(&Y, Register);
-		if (ACPI_FAILURE(rv))
-			return rv;
+		Y = apei_mapreg_read(Register, map);
 		Y &= ~(Mask << BitOffset);
 		X |= Y;
 	}
-	return AcpiWrite(X, Register);
+	apei_mapreg_write(Register, map, X);
 }
