@@ -1,4 +1,4 @@
-/*	$NetBSD: msg_132.c,v 1.36 2024/03/12 20:35:29 rillig Exp $	*/
+/*	$NetBSD: msg_132.c,v 1.38 2024/03/25 23:39:14 rillig Exp $	*/
 # 3 "msg_132.c"
 
 // Test for message: conversion from '%s' to '%s' may lose accuracy [132]
@@ -426,4 +426,27 @@ compare_bit_field_to_integer_constant(void)
 	b = s.s64 == 0;
 	b = s.u64 == 0;
 	b = !b;
+}
+
+/*
+ * Before tree.c 1.626 from 2024-03-26, the usual arithmetic conversions for
+ * bit-field types with the same base type but different widths simply took
+ * the type of the left operand, leading to wrong warnings about loss of
+ * accuracy when the right operand was wider than the left operand.
+ */
+void
+binary_operators_on_bit_fields(void)
+{
+	struct {
+		u64_t u15:15;
+		u64_t u48:48;
+		u64_t u64;
+	} s = { 0, 0, 0 };
+
+	u64 = s.u15 | s.u48;
+	u64 = s.u48 | s.u15;
+	u64 = s.u15 | s.u48 | s.u64;
+	u64 = s.u64 | s.u48 | s.u15;
+	cond = (s.u15 | s.u48 | s.u64) != 0;
+	cond = (s.u64 | s.u48 | s.u15) != 0;
 }
