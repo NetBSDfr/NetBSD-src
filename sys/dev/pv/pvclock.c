@@ -112,7 +112,7 @@ pvclock_match(device_t parent, cfdata_t cf, void *aux)
 	 * pvclock is provided by different hypervisors, we currently
 	 * only support the "kvmclock".
 	 */
-	x86_cpuid(0x40000000 + CPUID_OFFSET_KVM_FEATURES, regs);
+	x86_cpuid(CPUID_HV_SIGNATURE_START + CPUID_OFFSET_KVM_FEATURES, regs);
 	/*
 	 * We only implement support for the 2nd version of pvclock.
 	 * The first version is basically the same but with different
