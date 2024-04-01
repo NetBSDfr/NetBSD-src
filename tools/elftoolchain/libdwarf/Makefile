@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.3 2024/03/03 17:37:58 christos Exp $
+#	$NetBSD: Makefile,v 1.6 2024/03/30 22:39:53 riastradh Exp $
 
 HOSTLIB=dwarf
 

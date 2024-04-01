@@ -1,4 +1,4 @@
-/*	$NetBSD: tree.c,v 1.626 2024/03/25 23:39:13 rillig Exp $	*/
+/*	$NetBSD: tree.c,v 1.634 2024/03/31 20:28:45 rillig Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -37,7 +37,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: tree.c,v 1.626 2024/03/25 23:39:13 rillig Exp $");
+__RCSID("$NetBSD: tree.c,v 1.634 2024/03/31 20:28:45 rillig Exp $");
 #endif
 
 #include <float.h>
@@ -829,11 +829,11 @@ fold_unsigned_integer(op_t op, uint64_t l, uint64_t r,
 		*overflow = l < r;
 		return l - r;
 	case SHL:
-		/* TODO: warn about out-of-bounds 'sr'. */
+		/* TODO: warn about out-of-bounds 'r'. */
 		/* TODO: warn about overflow. */
 		return l << (r & 63);
 	case SHR:
-		/* TODO: warn about out-of-bounds 'sr'. */
+		/* TODO: warn about out-of-bounds 'r'. */
 		return l >> (r & 63);
 	case LT:
 		return l < r ? 1 : 0;
@@ -924,11 +924,11 @@ fold_signed_integer(op_t op, int64_t l, int64_t r,
 		}
 		return l - r;
 	case SHL:
-		/* TODO: warn about out-of-bounds 'sr'. */
+		/* TODO: warn about out-of-bounds 'r'. */
 		/* TODO: warn about overflow. */
 		return l << (r & 63);
 	case SHR:
-		/* TODO: warn about out-of-bounds 'sr'. */
+		/* TODO: warn about out-of-bounds 'r'. */
 		if (l < 0)
 			return (int64_t)~(~(uint64_t)l >> (r & 63));
 		return (int64_t)((uint64_t)l >> (r & 63));
@@ -1014,7 +1014,7 @@ fold_constant_integer(tnode_t *tn)
 
 	val_t *v = xcalloc(1, sizeof(*v));
 	v->v_tspec = tn->tn_type->t_tspec;
-	v->u.integer = convert_integer(res, t, 0);
+	v->u.integer = convert_integer(res, t, size_in_bits(t));
 
 	tnode_t *cn = build_constant(tn->tn_type, v);
 	if (tn->u.ops.left->tn_system_dependent)
@@ -1183,14 +1183,17 @@ build_plus_minus(op_t op, bool sys, tnode_t *ln, tnode_t *rn)
 	}
 
 	/* pointer +- integer */
-	if (ln->tn_type->t_tspec == PTR && rn->tn_type->t_tspec != PTR) {
-		lint_assert(is_integer(rn->tn_type->t_tspec));
+	tspec_t lt = ln->tn_type->t_tspec;
+	tspec_t rt = rn->tn_type->t_tspec;
+	if (lt == PTR && rt != PTR) {
+		lint_assert(is_integer(rt));
 
 		check_ctype_macro_invocation(ln, rn);
 		check_enum_array_index(ln, rn);
 
 		tnode_t *elsz = subt_size_in_bytes(ln->tn_type);
-		if (rn->tn_type->t_tspec != elsz->tn_type->t_tspec)
+		tspec_t szt = elsz->tn_type->t_tspec;
+		if (rt != szt && rt != unsigned_type(szt))
 			rn = convert(NOOP, 0, elsz->tn_type, rn);
 
 		tnode_t *prod = build_op(MULT, sys, rn->tn_type, rn, elsz);
@@ -1201,8 +1204,8 @@ build_plus_minus(op_t op, bool sys, tnode_t *ln, tnode_t *rn)
 	}
 
 	/* pointer - pointer */
-	if (rn->tn_type->t_tspec == PTR) {
-		lint_assert(ln->tn_type->t_tspec == PTR);
+	if (rt == PTR) {
+		lint_assert(lt == PTR);
 		lint_assert(op == MINUS);
 
 		type_t *ptrdiff = gettyp(PTRDIFF_TSPEC);
@@ -1714,8 +1717,7 @@ use(const tnode_t *tn)
 	case CON:
 	case STRING:
 		break;
-	case CALL:
-	case ICALL:;
+	case CALL:;
 		const function_call *call = tn->u.call;
 		for (size_t i = 0, n = call->args_len; i < n; i++)
 			use(call->args[i]);
@@ -1963,7 +1965,7 @@ remove_unknown_member(tnode_t *tn, sym_t *msym)
 {
 	/* type '%s' does not have member '%s' */
 	error(101, type_name(tn->tn_type), msym->s_name);
-	rmsym(msym);
+	symtab_remove_forever(msym);
 	msym->s_kind = SK_MEMBER;
 	msym->s_scl = STRUCT_MEMBER;
 
@@ -3639,7 +3641,11 @@ convert(op_t op, int arg, type_t *tp, tnode_t *tn)
 			convert_integer_from_pointer(op, nt, tp, tn);
 
 	} else if (is_floating(nt)) {
-		/* No further checks. */
+		if (is_integer(ot) && op != CVT) {
+			/* implicit conversion from integer '%s' to ... */
+			query_message(19,
+			    type_name(tn->tn_type), type_name(tp));
+		}
 
 	} else if (nt == PTR) {
 		if (is_null_pointer(tn)) {
@@ -4241,8 +4247,7 @@ check_function_arguments(const function_call *call)
 			error(151, i + 1);
 			return;
 		}
-		if (is_struct_or_union(at) &&
-		    is_incomplete(arg->tn_type)) {
+		if (is_struct_or_union(at) && is_incomplete(arg->tn_type)) {
 			/* argument cannot have unknown size, arg #%d */
 			error(152, i + 1);
 			return;
@@ -4274,9 +4279,6 @@ build_function_call(tnode_t *func, bool sys, function_call *call)
 	if (func == NULL)
 		return NULL;
 
-	op_t op = func->tn_op == NAME && func->tn_type->t_tspec == FUNC
-	    ? CALL : ICALL;
-
 	call->func = func;
 	check_ctype_function_call(call);
 
@@ -4293,7 +4295,7 @@ build_function_call(tnode_t *func, bool sys, function_call *call)
 	check_function_arguments(call);
 
 	tnode_t *ntn = expr_alloc_tnode();
-	ntn->tn_op = op;
+	ntn->tn_op = CALL;
 	ntn->tn_type = func->tn_type->t_subt->t_subt;
 	ntn->tn_sys = sys;
 	ntn->u.call = call;
@@ -4436,11 +4438,11 @@ proceed:;
 	int dim = arr->tn_type->u.dimension + (taking_address ? 1 : 0);
 
 	if (!is_uinteger(idx->tn_type->t_tspec) && con < 0)
-		/* array subscript cannot be negative: %ld */
-		warning(167, (long)con);
+		/* array subscript %jd cannot be negative */
+		warning(167, (intmax_t)con);
 	else if (dim > 0 && (uint64_t)con >= (uint64_t)dim)
-		/* array subscript cannot be > %d: %ld */
-		warning(168, dim - 1, (long)con);
+		/* array subscript %ju cannot be > %d */
+		warning(168, (uintmax_t)con, dim - 1);
 }
 
 static void
@@ -4573,13 +4575,16 @@ check_expr_misc(const tnode_t *tn, bool vctx, bool cond,
 	op_t op = tn->tn_op;
 	if (op == NAME || op == CON || op == STRING)
 		return;
-	if (op == CALL || op == ICALL) {
+	bool is_direct = op == CALL
+	    && tn->u.call->func->tn_op == ADDR
+	    && tn->u.call->func->u.ops.left->tn_op == NAME;
+	if (op == CALL) {
 		const function_call *call = tn->u.call;
-		if (op == CALL)
+		if (is_direct)
 			check_expr_call(tn, call->func,
 			    szof, vctx, cond, retval_discarded);
 		bool discard = op == CVT && tn->tn_type->t_tspec == VOID;
-		check_expr_misc(call->func, false, false, false, op == CALL,
+		check_expr_misc(call->func, false, false, false, is_direct,
 		    discard, szof);
 		for (size_t i = 0, n = call->args_len; i < n; i++)
 			check_expr_misc(call->args[i],
@@ -4609,7 +4614,7 @@ check_expr_misc(const tnode_t *tn, bool vctx, bool cond,
 	if (op == COLON && tn->tn_type->t_tspec == VOID)
 		cvctx = ccond = false;
 	bool discard = op == CVT && tn->tn_type->t_tspec == VOID;
-	check_expr_misc(ln, cvctx, ccond, eq, op == CALL, discard, szof);
+	check_expr_misc(ln, cvctx, ccond, eq, is_direct, discard, szof);
 
 	switch (op) {
 	case LOGAND:

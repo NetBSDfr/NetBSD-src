@@ -1,4 +1,4 @@
-/*	$NetBSD: libdwarf_reloc.c,v 1.5 2024/03/03 17:37:32 christos Exp $	*/
+/*	$NetBSD: libdwarf_reloc.c,v 1.7 2024/03/31 03:20:38 christos Exp $	*/
 
 /*-
  * Copyright (c) 2010 Kai Wang
@@ -28,7 +28,7 @@
 
 #include "_libdwarf.h"
 
-__RCSID("$NetBSD: libdwarf_reloc.c,v 1.5 2024/03/03 17:37:32 christos Exp $");
+__RCSID("$NetBSD: libdwarf_reloc.c,v 1.7 2024/03/31 03:20:38 christos Exp $");
 ELFTC_VCSID("Id: libdwarf_reloc.c 3741 2019-06-07 06:32:01Z jkoshy");
 
 Dwarf_Unsigned

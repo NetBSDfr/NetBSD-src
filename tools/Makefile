@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.216 2024/02/23 05:34:41 mrg Exp $
+#	$NetBSD: Makefile,v 1.219 2024/04/01 02:22:38 christos Exp $
 
 .include <bsd.own.mk>
 .include <bsd.endian.mk>
@@ -9,13 +9,11 @@
 
 # TOOLDIR must be valid, unless MKTOOLS=no
 .if ${MKTOOLS:Uyes} != "no"
-.if "${TOOLDIR}" == ""
-.error "TOOLDIR is undefined or empty"
-.elif "${TOOLDIR:tW:M/*}" == ""
-.error "TOOLDIR is not an absolute path: ${TOOLDIR}"
-#.elif !exists(TOOLDIR) # XXX .exists fails for directories
-#.error "TOOLDIR does not exist: ${TOOLDIR}"
-.endif
+.  if "${TOOLDIR}" == ""
+.    error TOOLDIR is undefined or empty
+.  elif ${TOOLDIR:tW:M/*} == ""
+.    error TOOLDIR '${TOOLDIR}' is not an absolute path
+.  endif
 .endif # MKTOOLS != no
 
 # TOOLS_BUILDRUMP == yes builds only the subset of the tools required
@@ -61,7 +59,9 @@ TOOLCHAIN_BITS+= dbsym mdsetimage
 
 DTRACE_BITS=
 .if ${MKDTRACE} != "no" || ${MKCTF} != "no"
-DTRACE_BITS+= .WAIT elftoolchain
+DTRACE_BITS+= .WAIT elftoolchain/common
+DTRACE_BITS+= .WAIT elftoolchain/libelf
+DTRACE_BITS+= .WAIT elftoolchain/libdwarf
 DTRACE_BITS+= .WAIT libctf
 .endif
 .if ${MKCTF} != "no"
@@ -105,7 +105,7 @@ SUBDIR+= cap_mkdb crunchgen ctags gencat hexdump \
 		makewhatis mtree nbperf .WAIT uudecode
 .endif
 
-SUBDIR+= cat rpcgen join lorder m4 mkdep tsort .WAIT yacc .WAIT awk .WAIT lex
+SUBDIR+= cat gzip rpcgen join lorder m4 mkdep tsort .WAIT yacc .WAIT awk .WAIT lex
 .if ${TOOLS_BUILDRUMP} == "no"
 SUBDIR+= xz-include .WAIT grep xz-lib pax .WAIT libprop
 

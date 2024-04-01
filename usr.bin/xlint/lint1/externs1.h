@@ -1,4 +1,4 @@
-/*	$NetBSD: externs1.h,v 1.219 2024/03/09 10:41:11 rillig Exp $	*/
+/*	$NetBSD: externs1.h,v 1.221 2024/03/29 08:35:32 rillig Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -36,21 +36,21 @@
 /*
  * main1.c
  */
+extern bool Fflag;
+extern bool Pflag;
+extern bool Tflag;
 extern int aflag;
 extern bool bflag;
 extern bool cflag;
 extern bool eflag;
-extern bool Fflag;
 extern bool hflag;
 extern bool pflag;
 extern bool rflag;
 extern bool uflag;
 extern bool vflag;
-extern bool yflag;
 extern bool wflag;
+extern bool yflag;
 extern bool zflag;
-extern bool Tflag;
-extern bool Pflag;
 
 extern bool allow_trad;
 extern bool allow_c90;
@@ -74,7 +74,7 @@ int yyerror(const char *);
 int yyparse(void);
 
 /*
- * scan.l
+ * lex.c
  */
 extern bool in_gcc_attribute;
 extern pos_t curr_pos;
@@ -85,12 +85,12 @@ extern FILE *yyin;
 
 void init_lex(void);
 int64_t convert_integer(int64_t, tspec_t, unsigned int);
-void clear_warn_flags(void);
+void reset_suppressions(void);
 sym_t *getsym(sbuf_t *);
 void clean_up_after_error(void);
 sym_t *pushdown(const sym_t *);
 sym_t *mktempsym(type_t *);
-void rmsym(sym_t *);
+void symtab_remove_forever(sym_t *);
 void symtab_remove_level(sym_t *);
 void inssym(int, sym_t *);
 void freeyyv(void *, int);

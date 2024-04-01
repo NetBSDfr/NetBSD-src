@@ -1,7 +1,7 @@
-/*	$NetBSD: msg_168.c,v 1.10 2023/03/28 14:44:35 rillig Exp $	*/
+/*	$NetBSD: msg_168.c,v 1.13 2024/03/30 17:12:26 rillig Exp $	*/
 # 3 "msg_168.c"
 
-// Test for message: array subscript cannot be > %d: %ld [168]
+// Test for message: array subscript %ju cannot be > %d [168]
 
 /* lint1-extra-flags: -X 351 */
 
@@ -27,7 +27,7 @@ example(void)
 	print_string(buf + 21);	/* undefined behavior, not detected */
 
 	print_char(buf[19]);
-	/* expect+1: warning: array subscript cannot be > 19: 20 [168] */
+	/* expect+1: warning: array subscript 20 cannot be > 19 [168] */
 	print_char(buf[20]);
 }
 
@@ -41,7 +41,7 @@ array_with_c99_initializer(void)
 	};
 
 	print_string(to_roman['9']);
-	/* expect+1: warning: array subscript cannot be > 57: 58 [168] */
+	/* expect+1: warning: array subscript 58 cannot be > 57 [168] */
 	print_string(to_roman[':']);
 }
 
