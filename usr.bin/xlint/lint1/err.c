@@ -1,4 +1,4 @@
-/*	$NetBSD: err.c,v 1.233 2024/03/25 22:37:43 rillig Exp $	*/
+/*	$NetBSD: err.c,v 1.239 2024/03/30 17:23:13 rillig Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -37,7 +37,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: err.c,v 1.233 2024/03/25 22:37:43 rillig Exp $");
+__RCSID("$NetBSD: err.c,v 1.239 2024/03/30 17:23:13 rillig Exp $");
 #endif
 
 #include <limits.h>
@@ -222,8 +222,8 @@ static const char *const msgs[] = {
 	"assignment of negative constant to unsigned type",		// 164
 	"constant truncated by assignment",				// 165
 	"precision lost in bit-field assignment",			// 166
-	"array subscript cannot be negative: %ld",			// 167
-	"array subscript cannot be > %d: %ld",				// 168
+	"array subscript %jd cannot be negative",			// 167
+	"array subscript %ju cannot be > %d",				// 168
 	"precedence confusion possible: parenthesize!",			// 169
 	"first operand of '?' must have scalar type",			// 170
 	"cannot assign to '%s' from '%s'",				// 171
@@ -241,8 +241,8 @@ static const char *const msgs[] = {
 	"illegal combination of %s '%s' and %s '%s'",			// 183
 	"illegal combination of '%s' and '%s'",				// 184
 	"cannot initialize '%s' from '%s'",				// 185
-	"bit-field initialization is illegal in traditional C",		// 186
-	"string literal too long (%lu) for target array (%lu)",		// 187
+	"bit-field initializer must be an integer in traditional C",	// 186
+	"string literal too long (%ju) for target array (%ju)",		// 187
 	"no automatic aggregate initialization in traditional C",	// 188
 	"",			/* no longer used */			// 189
 	"empty array declaration for '%s'",				// 190
@@ -254,8 +254,8 @@ static const char *const msgs[] = {
 	"case label affected by conversion",				// 196
 	"non-constant case expression",					// 197
 	"non-integral case expression",					// 198
-	"duplicate case '%ld' in switch",				// 199
-	"duplicate case '%lu' in switch",				// 200
+	"duplicate case '%jd' in switch",				// 199
+	"duplicate case '%ju' in switch",				// 200
 	"default outside switch",					// 201
 	"duplicate default in switch",					// 202
 	"case label must be of type 'int' in traditional C",		// 203
@@ -739,7 +739,8 @@ static const char *queries[] = {
 	"implicit conversion from integer 0 to pointer '%s'",		// Q15
 	"'%s' was declared 'static', now non-'static'",			// Q16
 	"invisible character U+%04X in %s",				// Q17
-	"const automatic variable '%s'",						// Q18
+	"const automatic variable '%s'",				// Q18
+	"implicit conversion from integer '%s' to floating point '%s'",	// Q19
 };
 
 bool any_query_enabled;		/* for optimizing non-query scenarios */
