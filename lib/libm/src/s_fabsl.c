@@ -1,4 +1,4 @@
-/*	$NetBSD: s_fabsl.c,v 1.6 2024/02/25 19:26:33 christos Exp $	*/
+/*	$NetBSD: s_fabsl.c,v 1.8 2024/04/02 18:40:50 christos Exp $	*/
 
 /*-
  * Copyright (c) 2010 The NetBSD Foundation, Inc.
@@ -26,7 +26,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: s_fabsl.c,v 1.6 2024/02/25 19:26:33 christos Exp $");
+__RCSID("$NetBSD: s_fabsl.c,v 1.8 2024/04/02 18:40:50 christos Exp $");
 
 #include <math.h>
 #include <machine/ieee.h>
