@@ -516,6 +516,7 @@ typedef enum vm_guest {
 	VM_GUEST_VMWARE,
 	VM_GUEST_KVM,
 	VM_GUEST_VIRTUALBOX,
+	VM_GUEST_GENPVH,
 	VM_LAST
 } vm_guest_t;
 extern vm_guest_t vm_guest;
