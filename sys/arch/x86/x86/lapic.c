@@ -606,8 +606,14 @@ lapic_initclock(void)
 		/*
 		 * Recalibrate the timer using the cycle counter, now that
 		 * the cycle counter itself has been recalibrated.
+		 *
+		 * Not needed when using the KVM hypervisor with qemu and
+		 * option +invtsc is passed to the cpu flag, as
+		 * lapic_per_second and TSC are read from CPUID 0x40000010
+		 * in this case.
 		 */
-		lapic_calibrate_timer(true);
+		if (vm_guest != VM_GUEST_KVM && !tsc_is_invariant())
+			lapic_calibrate_timer(true);
 
 		/*
 		 * Hook up time counter.  This assume that all LAPICs have
