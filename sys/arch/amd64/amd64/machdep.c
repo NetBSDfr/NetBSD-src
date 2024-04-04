@@ -1516,8 +1516,10 @@ init_x86_64_ksyms(void)
 	} else {
 		uintptr_t endp = (uintptr_t)(void *)&end;
 
-		ksyms_addsyms_elf(*(long *)endp,
-		    ((long *)endp) + 1, esym);
+		if (vm_guest != VM_GUEST_XENPVH && pvh_boot)
+			ksyms_addsyms_elf(0, ((long *)endp) + 1, esym);
+		else
+			ksyms_addsyms_elf(*(long *)endp, ((long *)endp) + 1, esym);
 	}
 #endif
 }
