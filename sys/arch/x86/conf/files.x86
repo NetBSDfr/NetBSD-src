@@ -168,6 +168,9 @@ file	arch/x86/pci/pciide_machdep.c	pciide_common
 file	arch/x86/pci/pci_bus_fixup.c	pci_bus_fixup
 file	arch/x86/pci/pci_addr_fixup.c	pci_addr_fixup
 
+# tslog(4) framework
+file	arch/x86/x86/tslog.c		tslog
+
 # AES-NI
 include "crypto/aes/arch/x86/files.aesni"
 
