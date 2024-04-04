@@ -119,3 +119,6 @@ pseudo-device	drvctl
 
 file-system	PUFFS
 pseudo-device	putter
+
+# tslog(4) boot-time event tracing facility
+#options   TSLOG
