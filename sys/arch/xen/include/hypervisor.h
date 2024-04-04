@@ -130,6 +130,7 @@ struct xen_npx_attach_args {
 
 
 
+extern bool pvh_boot;
 /*
  * a placeholder for the start of day information passed up from the hypervisor
  */
