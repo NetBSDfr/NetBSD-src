@@ -95,6 +95,8 @@ pv* at pvbus?
 virtio* at pv?
 #virtio* at acpi?
 #virtio* at pci? dev ? function ?	# Virtio PCI device
+# Paravirtual clock available in KVM
+pvclock* at pv?
 
 include "dev/virtio/virtio.config"
 no viomb* at virtio?			# XXX ?
