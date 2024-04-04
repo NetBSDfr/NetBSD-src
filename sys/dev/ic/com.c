@@ -168,6 +168,7 @@ int	com_to_tiocm(struct com_softc *);
 void	com_iflush(struct com_softc *);
 
 int	com_common_getc(dev_t, struct com_regs *);
+static void	com_txwait(struct com_regs *);
 static void	com_common_putc(dev_t, struct com_regs *, int, int);
 
 int	cominit(struct com_regs *, int, int, int, tcflag_t);
@@ -589,8 +590,10 @@ com_attach_subr(struct com_softc *sc)
 			break;
 		}
 
+		const int s = splserial();
+		com_txwait(regsp);
+		splx(s);
 		/* Make sure the console is always "hardwired". */
-		delay(10000);			/* wait for output to finish */
 		if (is_console) {
 			SET(sc->sc_hwflags, COM_HW_CONSOLE);
 		}
@@ -2526,10 +2529,20 @@ com_common_getc(dev_t dev, struct com_regs *regsp)
 }
 
 static void
+com_txwait(struct com_regs *regsp)
+{
+	int timo;
+
+	timo = 150000;
+	while (!ISSET(CSR_READ_1(regsp, COM_REG_LSR), LSR_TXRDY) && --timo)
+		continue;
+}
+
+static void
 com_common_putc(dev_t dev, struct com_regs *regsp, int c, int with_readahead)
 {
 	int s = splserial();
-	int cin, stat, timo;
+	int cin, stat;
 
 	if (with_readahead && com_readaheadcount < MAX_READAHEAD
 	     && ISSET(stat = CSR_READ_1(regsp, COM_REG_LSR), LSR_RXRDY)) {
@@ -2541,9 +2554,7 @@ com_common_putc(dev_t dev, struct com_regs *regsp, int c, int with_readahead)
 	}
 
 	/* wait for any pending transmission to finish */
-	timo = 150000;
-	while (!ISSET(CSR_READ_1(regsp, COM_REG_LSR), LSR_TXRDY) && --timo)
-		continue;
+	com_txwait(regsp);
 
 	CSR_WRITE_1(regsp, COM_REG_TXDATA, c);
 	COM_BARRIER(regsp, BR | BW);
