@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.1 2022/04/18 14:11:44 jkoshy Exp $
+#	$NetBSD: Makefile,v 1.3 2024/04/01 18:33:24 riastradh Exp $
 
 HOSTLIB=	elf
 
@@ -37,6 +37,7 @@ SRCS=		elf_begin.c						\
 		libelf_checksum.c					\
 		libelf_data.c						\
 		libelf_ehdr.c libelf_extended.c				\
+		libelf_elfmachine.c 					\
 		libelf_memory.c						\
 		libelf_open.c						\
 		libelf_phdr.c						\
@@ -53,7 +54,7 @@ CLEANFILES+=	${LIBELF_GENSRCS}
 CPPFLAGS+=	-I${.CURDIR}/../../compat
 CPPFLAGS+=	-I${LIBELF_DIR} -I${LIBELF_DIR}/../common
 CPPFLAGS+=	-I${LIBELF_OBJDIR}/../common
-CPPFLAGS+=	-I${TOOLDIR}/include -I${TOOLDIR}/include/nbinclude
+CPPFLAGS+=	-I${TOOLDIR}/include
 
 CPPFLAGS+=	-DLIBELF_TEST_HOOKS
 

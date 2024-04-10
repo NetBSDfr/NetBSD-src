@@ -1,4 +1,4 @@
-/*	$NetBSD: externs1.h,v 1.216 2024/02/05 23:11:22 rillig Exp $	*/
+/*	$NetBSD: externs1.h,v 1.221 2024/03/29 08:35:32 rillig Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -36,21 +36,21 @@
 /*
  * main1.c
  */
+extern bool Fflag;
+extern bool Pflag;
+extern bool Tflag;
 extern int aflag;
 extern bool bflag;
 extern bool cflag;
 extern bool eflag;
-extern bool Fflag;
 extern bool hflag;
 extern bool pflag;
 extern bool rflag;
 extern bool uflag;
 extern bool vflag;
-extern bool yflag;
 extern bool wflag;
+extern bool yflag;
 extern bool zflag;
-extern bool Tflag;
-extern bool Pflag;
 
 extern bool allow_trad;
 extern bool allow_c90;
@@ -74,7 +74,7 @@ int yyerror(const char *);
 int yyparse(void);
 
 /*
- * scan.l
+ * lex.c
  */
 extern bool in_gcc_attribute;
 extern pos_t curr_pos;
@@ -85,12 +85,12 @@ extern FILE *yyin;
 
 void init_lex(void);
 int64_t convert_integer(int64_t, tspec_t, unsigned int);
-void clear_warn_flags(void);
+void reset_suppressions(void);
 sym_t *getsym(sbuf_t *);
 void clean_up_after_error(void);
 sym_t *pushdown(const sym_t *);
 sym_t *mktempsym(type_t *);
-void rmsym(sym_t *);
+void symtab_remove_forever(sym_t *);
 void symtab_remove_level(sym_t *);
 void inssym(int, sym_t *);
 void freeyyv(void *, int);
@@ -233,7 +233,7 @@ void add_type_qualifiers(type_qualifiers *, type_qualifiers);
 qual_ptr *append_qualified_pointer(qual_ptr *, qual_ptr *);
 sym_t *add_pointer(sym_t *, qual_ptr *);
 sym_t *add_array(sym_t *, bool, int);
-sym_t *add_function(sym_t *, struct parameter_list);
+sym_t *add_function(sym_t *, parameter_list);
 void check_extern_declaration(const sym_t *);
 void check_function_definition(sym_t *, bool);
 sym_t *declarator_name(sym_t *);
@@ -301,6 +301,7 @@ bool constant_addr(const tnode_t *, const sym_t **, ptrdiff_t *);
 buffer *cat_strings(buffer *, buffer *);
 unsigned int type_size_in_bits(const type_t *);
 sym_t *find_member(const struct_or_union *, const char *);
+uint64_t possible_bits(const tnode_t *);
 
 void begin_statement_expr(void);
 void do_statement_expr(tnode_t *);
@@ -419,3 +420,6 @@ void check_getopt_begin_switch(void);
 void check_getopt_case_label(int64_t);
 void check_getopt_end_switch(void);
 void check_getopt_end_while(void);
+
+/* cksnprintb.c */
+void check_snprintb(const tnode_t *);

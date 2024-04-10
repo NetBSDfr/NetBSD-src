@@ -1,4 +1,4 @@
-/*	$NetBSD: msg_132.c,v 1.33 2024/01/28 08:17:27 rillig Exp $	*/
+/*	$NetBSD: msg_132.c,v 1.38 2024/03/25 23:39:14 rillig Exp $	*/
 # 3 "msg_132.c"
 
 // Test for message: conversion from '%s' to '%s' may lose accuracy [132]
@@ -401,4 +401,52 @@ test_ic_conditional(char c1, char c2)
 	 */
 	/* expect+1: warning: conversion from 'int' to 'unsigned char' may lose accuracy [132] */
 	u8 = cond ? s8 : u8;
+}
+
+void
+compare_bit_field_to_integer_constant(void)
+{
+	static _Bool b;
+	static struct {
+		short s16:15;
+		unsigned short u16:15;
+		int s32:15;
+		unsigned u32:15;
+		long long s64:15;
+		unsigned long long u64:15;
+	} s;
+
+	// Since decl.c 1.180 from 2021-05-02 and before tree.c 1.624 from
+	// 2024-03-12, lint warned about a possible loss of accuracy [132]
+	// when promoting an 'unsigned long long' bit-field to 'int'.
+	b = s.s16 == 0;
+	b = s.u16 == 0;
+	b = s.s32 == 0;
+	b = s.u32 == 0;
+	b = s.s64 == 0;
+	b = s.u64 == 0;
+	b = !b;
+}
+
+/*
+ * Before tree.c 1.626 from 2024-03-26, the usual arithmetic conversions for
+ * bit-field types with the same base type but different widths simply took
+ * the type of the left operand, leading to wrong warnings about loss of
+ * accuracy when the right operand was wider than the left operand.
+ */
+void
+binary_operators_on_bit_fields(void)
+{
+	struct {
+		u64_t u15:15;
+		u64_t u48:48;
+		u64_t u64;
+	} s = { 0, 0, 0 };
+
+	u64 = s.u15 | s.u48;
+	u64 = s.u48 | s.u15;
+	u64 = s.u15 | s.u48 | s.u64;
+	u64 = s.u64 | s.u48 | s.u15;
+	cond = (s.u15 | s.u48 | s.u64) != 0;
+	cond = (s.u64 | s.u48 | s.u15) != 0;
 }

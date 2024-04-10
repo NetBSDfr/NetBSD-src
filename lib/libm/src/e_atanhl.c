@@ -22,18 +22,15 @@
 #include "math.h"
 #include "math_private.h"
 
-#ifdef __HAVE_LONG_DOUBLE
 __weak_alias(atanhl, _atanhl)
+
+#ifdef __HAVE_LONG_DOUBLE
 /*
  * See e_atanh.c for complete comments.
  *
  * Converted to long double by David Schultz <das@FreeBSD.ORG> and
  * Bruce D. Evans.
  */
-
-#ifdef __i386__
-#include <ieeefp.h>
-#endif
 
 /* EXP_TINY is the threshold below which we use atanh(x) ~= x. */
 #if LDBL_MANT_DIG == 64
@@ -76,5 +73,9 @@ atanhl(long double x)
 	RETURNI((hx & 0x8000) == 0 ? t : -t);
 }
 #else
-__weak_alias(atanhl, atanh)
+long double
+atanhl(long double x)
+{
+	return atanh(x);
+}
 #endif

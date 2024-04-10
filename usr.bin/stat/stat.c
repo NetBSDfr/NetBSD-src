@@ -1,4 +1,4 @@
-/*	$NetBSD: stat.c,v 1.50 2024/01/29 22:01:58 christos Exp $ */
+/*	$NetBSD: stat.c,v 1.53 2024/03/14 21:17:54 rillig Exp $ */
 
 /*
  * Copyright (c) 2002-2011 The NetBSD Foundation, Inc.
@@ -37,7 +37,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(lint)
-__RCSID("$NetBSD: stat.c,v 1.50 2024/01/29 22:01:58 christos Exp $");
+__RCSID("$NetBSD: stat.c,v 1.53 2024/03/14 21:17:54 rillig Exp $");
 #endif
 
 #if ! HAVE_NBTOOL_CONFIG_H
@@ -1065,11 +1065,11 @@ format1(const struct stat *st,
 		errx(1, "%.*s: bad format", (int)flen, fmt);
 	}
 
-	/*
-	 * If a subdatum was specified but not supported, or an output
-	 * format was selected that is not supported, that's an error.
-	 */
-	if (hilo != 0 || (ofmt & formats) == 0)
+	if (hilo != 0			// subdatum not supported
+	    || !(ofmt & formats)	// output format not supported
+	    || (ofmt == FMTF_STRING && flags & FLAG_SPACE)
+	    || (ofmt == FMTF_STRING && flags & FLAG_PLUS)
+	    || (ofmt == FMTF_STRING && flags & FLAG_ZERO))
 		errx(1, "%.*s: bad format", (int)flen, fmt);
 
 	/*
@@ -1077,7 +1077,7 @@ format1(const struct stat *st,
 	 * First prefixlen chars are not encoded.
 	 */
 	if ((flags & FLAG_POUND) != 0 && ofmt == FMTF_STRING) {
-		flags &= !FLAG_POUND;
+		flags &= ~FLAG_POUND;
 		strncpy(visbuf, sdata, prefixlen);
 		/* Avoid GCC warnings. */
 		visbuf[prefixlen] = 0;

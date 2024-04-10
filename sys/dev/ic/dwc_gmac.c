@@ -1,4 +1,4 @@
-/* $NetBSD: dwc_gmac.c,v 1.81 2024/02/11 12:28:20 skrll Exp $ */
+/* $NetBSD: dwc_gmac.c,v 1.86 2024/03/14 16:43:00 jakllsch Exp $ */
 
 /*-
  * Copyright (c) 2013, 2014 The NetBSD Foundation, Inc.
@@ -41,7 +41,7 @@
 
 #include <sys/cdefs.h>
 
-__KERNEL_RCSID(1, "$NetBSD: dwc_gmac.c,v 1.81 2024/02/11 12:28:20 skrll Exp $");
+__KERNEL_RCSID(1, "$NetBSD: dwc_gmac.c,v 1.86 2024/03/14 16:43:00 jakllsch Exp $");
 
 /* #define	DWC_GMAC_DEBUG	1 */
 
@@ -98,7 +98,6 @@ static void dwc_gmac_tx_intr(struct dwc_gmac_softc *);
 static void dwc_gmac_rx_intr(struct dwc_gmac_softc *);
 static void dwc_gmac_setmulti(struct dwc_gmac_softc *);
 static int dwc_gmac_ifflags_cb(struct ethercom *);
-static uint32_t	bitrev32(uint32_t);
 static void dwc_gmac_desc_set_owned_by_dev(struct dwc_gmac_dev_dmadesc *);
 static int  dwc_gmac_desc_is_owned_by_dev(struct dwc_gmac_dev_dmadesc *);
 static void dwc_gmac_desc_std_set_len(struct dwc_gmac_dev_dmadesc *, int);
@@ -147,12 +146,12 @@ static const struct dwc_gmac_desc_methods desc_methods_enhanced = {
 };
 
 
-#define	TX_DESC_OFFSET(N)	((AWGE_RX_RING_COUNT+(N)) \
-				    *sizeof(struct dwc_gmac_dev_dmadesc))
-#define	TX_NEXT(N)		(((N)+1) & (AWGE_TX_RING_COUNT-1))
+#define	TX_DESC_OFFSET(N)	((AWGE_RX_RING_COUNT + (N)) \
+				    * sizeof(struct dwc_gmac_dev_dmadesc))
+#define	TX_NEXT(N)		(((N) + 1) & (AWGE_TX_RING_COUNT - 1))
 
-#define RX_DESC_OFFSET(N)	((N)*sizeof(struct dwc_gmac_dev_dmadesc))
-#define	RX_NEXT(N)		(((N)+1) & (AWGE_RX_RING_COUNT-1))
+#define RX_DESC_OFFSET(N)	((N) * sizeof(struct dwc_gmac_dev_dmadesc))
+#define	RX_NEXT(N)		(((N) + 1) & (AWGE_RX_RING_COUNT - 1))
 
 
 
@@ -245,6 +244,17 @@ dwc_gmac_attach(struct dwc_gmac_softc *sc, int phy_id, uint32_t mii_clk)
 		aprint_normal_dev(sc->sc_dev,
 		    "HW feature mask: %x\n", hwft);
 	}
+
+	if (sizeof(bus_addr_t) > 4) {
+		int error = bus_dmatag_subregion(sc->sc_dmat, 0, __MASK(32),
+		    &sc->sc_dmat, BUS_DMA_WAITOK);
+		if (error != 0) {
+			aprint_error_dev(sc->sc_dev,
+			    "failed to create DMA subregion\n");
+			return ENOMEM;
+		}
+	}
+
 	if (hwft & GMAC_DMA_FEAT_ENHANCED_DESC) {
 		aprint_normal_dev(sc->sc_dev,
 		    "Using enhanced descriptor format\n");
@@ -528,8 +538,8 @@ dwc_gmac_alloc_rx_ring(struct dwc_gmac_softc *sc,
 	}
 
 	bus_dmamap_sync(sc->sc_dmat, sc->sc_dma_ring_map, 0,
-	    AWGE_RX_RING_COUNT*sizeof(struct dwc_gmac_dev_dmadesc),
-	    BUS_DMASYNC_PREWRITE | BUS_DMASYNC_PREREAD);
+	    AWGE_RX_RING_COUNT * sizeof(struct dwc_gmac_dev_dmadesc),
+	    BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
 	bus_space_write_4(sc->sc_bst, sc->sc_bsh, AWIN_GMAC_DMA_RX_ADDR,
 	    ring->r_physaddr);
 
@@ -558,7 +568,7 @@ dwc_gmac_reset_rx_ring(struct dwc_gmac_softc *sc,
 	}
 
 	bus_dmamap_sync(sc->sc_dmat, sc->sc_dma_ring_map, 0,
-	    AWGE_RX_RING_COUNT*sizeof(struct dwc_gmac_dev_dmadesc),
+	    AWGE_RX_RING_COUNT * sizeof(struct dwc_gmac_dev_dmadesc),
 	    BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
 
 	ring->r_cur = ring->r_next = 0;
@@ -616,7 +626,7 @@ dwc_gmac_alloc_dma_rings(struct dwc_gmac_softc *sc)
 	/* and next rings to the TX side */
 	sc->sc_txq.t_desc = sc->sc_rxq.r_desc + AWGE_RX_RING_COUNT;
 	sc->sc_txq.t_physaddr = sc->sc_rxq.r_physaddr +
-	    AWGE_RX_RING_COUNT*sizeof(struct dwc_gmac_dev_dmadesc);
+	    AWGE_RX_RING_COUNT * sizeof(struct dwc_gmac_dev_dmadesc);
 
 	return 0;
 
@@ -652,7 +662,7 @@ dwc_gmac_free_rx_ring(struct dwc_gmac_softc *sc, struct dwc_gmac_rx_ring *ring)
 		if (data->rd_map != NULL) {
 			bus_dmamap_sync(sc->sc_dmat, data->rd_map, 0,
 			    AWGE_RX_RING_COUNT
-				*sizeof(struct dwc_gmac_dev_dmadesc),
+				* sizeof(struct dwc_gmac_dev_dmadesc),
 			    BUS_DMASYNC_POSTREAD);
 			bus_dmamap_unload(sc->sc_dmat, data->rd_map);
 			bus_dmamap_destroy(sc->sc_dmat, data->rd_map);
@@ -671,10 +681,10 @@ dwc_gmac_alloc_tx_ring(struct dwc_gmac_softc *sc,
 	ring->t_queued = 0;
 	ring->t_cur = ring->t_next = 0;
 
-	memset(ring->t_desc, 0, AWGE_TX_RING_COUNT*sizeof(*ring->t_desc));
+	memset(ring->t_desc, 0, AWGE_TX_RING_COUNT * sizeof(*ring->t_desc));
 	bus_dmamap_sync(sc->sc_dmat, sc->sc_dma_ring_map,
 	    TX_DESC_OFFSET(0),
-	    AWGE_TX_RING_COUNT*sizeof(struct dwc_gmac_dev_dmadesc),
+	    AWGE_TX_RING_COUNT * sizeof(struct dwc_gmac_dev_dmadesc),
 	    BUS_DMASYNC_POSTWRITE);
 
 	for (i = 0; i < AWGE_TX_RING_COUNT; i++) {
@@ -707,20 +717,20 @@ dwc_gmac_txdesc_sync(struct dwc_gmac_softc *sc, int start, int end, int ops)
 	if (end > start) {
 		bus_dmamap_sync(sc->sc_dmat, sc->sc_dma_ring_map,
 		    TX_DESC_OFFSET(start),
-		    TX_DESC_OFFSET(end)-TX_DESC_OFFSET(start),
+		    TX_DESC_OFFSET(end) - TX_DESC_OFFSET(start),
 		    ops);
 		return;
 	}
 	/* sync from 'start' to end of ring */
 	bus_dmamap_sync(sc->sc_dmat, sc->sc_dma_ring_map,
 	    TX_DESC_OFFSET(start),
-	    TX_DESC_OFFSET(AWGE_TX_RING_COUNT)-TX_DESC_OFFSET(start),
+	    TX_DESC_OFFSET(AWGE_TX_RING_COUNT) - TX_DESC_OFFSET(start),
 	    ops);
 	if (TX_DESC_OFFSET(end) - TX_DESC_OFFSET(0) > 0) {
 		/* sync from start of ring to 'end' */
 		bus_dmamap_sync(sc->sc_dmat, sc->sc_dma_ring_map,
 		    TX_DESC_OFFSET(0),
-		    TX_DESC_OFFSET(end)-TX_DESC_OFFSET(0),
+		    TX_DESC_OFFSET(end) - TX_DESC_OFFSET(0),
 		    ops);
 	}
 }
@@ -747,7 +757,7 @@ dwc_gmac_reset_tx_ring(struct dwc_gmac_softc *sc,
 
 	bus_dmamap_sync(sc->sc_dmat, sc->sc_dma_ring_map,
 	    TX_DESC_OFFSET(0),
-	    AWGE_TX_RING_COUNT*sizeof(struct dwc_gmac_dev_dmadesc),
+	    AWGE_TX_RING_COUNT * sizeof(struct dwc_gmac_dev_dmadesc),
 	    BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
 	bus_space_write_4(sc->sc_bst, sc->sc_bsh, AWIN_GMAC_DMA_TX_ADDR,
 	    sc->sc_txq.t_physaddr);
@@ -1179,11 +1189,11 @@ dwc_gmac_tx_intr(struct dwc_gmac_softc *sc)
 #endif
 
 		/*
-		 * i+1 does not need to be a valid descriptor,
+		 * i + 1 does not need to be a valid descriptor,
 		 * this is just a special notion to just sync
 		 * a single tx descriptor (i)
 		 */
-		dwc_gmac_txdesc_sync(sc, i, i+1,
+		dwc_gmac_txdesc_sync(sc, i, i + 1,
 		    BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
 
 		desc = &sc->sc_txq.t_desc[i];
@@ -1335,20 +1345,6 @@ skip:
 	mutex_exit(&sc->sc_rxq.r_mtx);
 }
 
-/*
- * Reverse order of bits - http://aggregate.org/MAGIC/#Bit%20Reversal
- */
-static uint32_t
-bitrev32(uint32_t x)
-{
-	x = (((x & 0xaaaaaaaa) >> 1) | ((x & 0x55555555) << 1));
-	x = (((x & 0xcccccccc) >> 2) | ((x & 0x33333333) << 2));
-	x = (((x & 0xf0f0f0f0) >> 4) | ((x & 0x0f0f0f0f) << 4));
-	x = (((x & 0xff00ff00) >> 8) | ((x & 0x00ff00ff) << 8));
-
-	return (x >> 16) | (x << 16);
-}
-
 static void
 dwc_gmac_setmulti(struct dwc_gmac_softc *sc)
 {
@@ -1387,9 +1383,7 @@ dwc_gmac_setmulti(struct dwc_gmac_softc *sc)
 			goto special_filter;
 		}
 
-		h = bitrev32(
-			~ether_crc32_le(enm->enm_addrlo, ETHER_ADDR_LEN)
-		    ) >> 26;
+		h = ~ether_crc32_be(enm->enm_addrlo, ETHER_ADDR_LEN) >> 26;
 		hashes[h >> 5] |= (1 << (h & 0x1f));
 
 		mcnt++;
@@ -1651,7 +1645,7 @@ dwc_gmac_dump_tx_desc(struct dwc_gmac_softc *sc)
 		aprint_normal("#%d (%08lx): status: %08x cntl: %08x "
 		    "data: %08x next: %08x\n",
 		    i, sc->sc_txq.t_physaddr +
-			i*sizeof(struct dwc_gmac_dev_dmadesc),
+			i * sizeof(struct dwc_gmac_dev_dmadesc),
 		    le32toh(desc->ddesc_status0), le32toh(desc->ddesc_cntl1),
 		    le32toh(desc->ddesc_data), le32toh(desc->ddesc_next));
 	}
@@ -1670,7 +1664,7 @@ dwc_gmac_dump_rx_desc(struct dwc_gmac_softc *sc)
 		aprint_normal("#%d (%08lx): status: %08x cntl: %08x "
 		    "data: %08x next: %08x\n",
 		    i, sc->sc_rxq.r_physaddr +
-			i*sizeof(struct dwc_gmac_dev_dmadesc),
+			i * sizeof(struct dwc_gmac_dev_dmadesc),
 		    le32toh(desc->ddesc_status0), le32toh(desc->ddesc_cntl1),
 		    le32toh(desc->ddesc_data), le32toh(desc->ddesc_next));
 	}

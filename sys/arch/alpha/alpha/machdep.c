@@ -1,4 +1,4 @@
-/* $NetBSD: machdep.c,v 1.377 2023/12/20 20:35:37 andvar Exp $ */
+/* $NetBSD: machdep.c,v 1.379 2024/03/31 17:13:29 thorpej Exp $ */
 
 /*-
  * Copyright (c) 1998, 1999, 2000, 2019, 2020 The NetBSD Foundation, Inc.
@@ -69,7 +69,7 @@
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
 
-__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.377 2023/12/20 20:35:37 andvar Exp $");
+__KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.379 2024/03/31 17:13:29 thorpej Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -1058,11 +1058,6 @@ cpu_reboot(int howto, char *bootstr)
 	if ((boothowto & RB_NOSYNC) == 0 && waittime < 0) {
 		waittime = 0;
 		vfs_shutdown();
-		/*
-		 * If we've been adjusting the clock, the todr
-		 * will be out of synch; adjust it now.
-		 */
-		resettodr();
 	}
 
 	/* Disable interrupts. */
@@ -1657,6 +1652,16 @@ SYSCTL_SETUP(sysctl_machdep_setup, "sysctl machdep subtree setup")
 		       CTLTYPE_INT, "fp_complete_debug", NULL,
 		       NULL, 0, &alpha_fp_complete_debug, 0,
 		       CTL_MACHDEP, CPU_FP_COMPLETE_DEBUG, CTL_EOL);
+	sysctl_createv(clog, 0, NULL, NULL,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_QUAD, "rpb_type", NULL,
+		       NULL, 0, &hwrpb->rpb_type, 0,
+		       CTL_MACHDEP, CPU_RPB_TYPE, CTL_EOL);
+	sysctl_createv(clog, 0, NULL, NULL,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_QUAD, "rpb_variation", NULL,
+		       NULL, 0, &hwrpb->rpb_variation, 0,
+		       CTL_MACHDEP, CPU_RPB_VARIATION, CTL_EOL);
 }
 
 /*

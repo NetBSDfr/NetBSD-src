@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.lib.mk,v 1.394 2023/06/03 21:24:57 lukem Exp $
+#	$NetBSD: bsd.lib.mk,v 1.401 2024/04/09 22:37:23 christos Exp $
 #	@(#)bsd.lib.mk	8.3 (Berkeley) 4/22/94
 
 .include <bsd.init.mk>
@@ -16,9 +16,10 @@ LIBISCXX?=	no
 .if ${LIBISMODULE} != "no"
 _LIB_PREFIX?=	# empty
 MKDEBUGLIB:=	no
-MKPICINSTALL:=	no
 MKPROFILE:=	no
-MKSTATICLIB:=	no
+MKPICINSTALL:=	no
+MAKESTATICLIB?=	no
+MAKELINKLIB?=	yes
 _LINTINSTALL?=	no
 .else
 _LIB_PREFIX?=	lib
@@ -26,17 +27,21 @@ _LIB_PREFIX?=	lib
 
 .if ${LIBISPRIVATE} != "no"
 MKDEBUGLIB:=	no
+MKPROFILE:=	no
 MKPICINSTALL:=	no
 . if defined(NOSTATICLIB) && ${MKPICLIB} != "no"
-MKSTATICLIB:=	no
+MAKESTATICLIB?=	no
 . elif ${LIBISPRIVATE} != "pic"
 MKPIC:=		no
 . endif
-MKPROFILE:=	no
+MAKELINKLIB?=	no
 _LINTINSTALL?=	no
 .endif
 
 _LINTINSTALL?=	${MKLINT}
+LINKINSTALL?=	${MAKELINKLIB}
+MAKELINKLIB?=	${MKLINKLIB}
+MAKESTATICLIB?=	${MKSTATICLIB}
 
 ##### Basic targets
 .PHONY:		checkver libinstall
@@ -420,9 +425,11 @@ _DEST.LINT:=${DESTDIR}${LINTLIBDIR}
 _DEST.DEBUG:=${DESTDIR}${DEBUGDIR}${LIBDIR}
 _DEST.ODEBUG:=${DESTDIR}${DEBUGDIR}${_LIBSODIR}
 
+_BUILDSTATICLIB= ${MKPIC} == "no" || (defined(LDSTATIC) && ${LDSTATIC} != "") \
+    || ${MAKELINKLIB} != "no" || ${MAKESTATICLIB} != "no"
+
 .if defined(LIB)							# {
-.if (${MKPIC} == "no" || (defined(LDSTATIC) && ${LDSTATIC} != "") \
-	|| ${MKLINKLIB} != "no") && ${MKSTATICLIB} != "no"
+.if ${_BUILDSTATICLIB}
 _LIBS=${_LIB.a}
 .else
 _LIBS=
@@ -477,8 +484,7 @@ _LIBS+=${_LIB.ln}
 .endif
 
 ALLOBJS=
-.if (${MKPIC} == "no" || (defined(LDSTATIC) && ${LDSTATIC} != "") \
-	|| ${MKLINKLIB} != "no") && ${MKSTATICLIB} != "no"
+.if ${_BUILDSTATICLIB}
 ALLOBJS+=${STOBJS}
 .endif
 ALLOBJS+=${POBJS} ${SOBJS}
@@ -648,6 +654,42 @@ ${_LIB.so.full}: ${_MAINLIBDEPS}
 	${HOST_LN} -sf ${_LIB.so.full} ${_LIB.so}.tmp
 	${MV} ${_LIB.so}.tmp ${_LIB.so}
 
+# If there's a file listing expected symbols, fail if the diff from it
+# to the actual symbols is nonempty, and show the diff in that case.
+.if exists(${.CURDIR}/${LIB}.${MACHINE_ARCH}.expsym)
+LIB_EXPSYM?=	${LIB}.${MACHINE_ARCH}.expsym
+.elif exists(${.CURDIR}/${LIB}.expsym)
+LIB_EXPSYM?=	${LIB}.expsym
+.endif
+
+.if !empty(LIB_EXPSYM) && ${MKPIC} != "no"
+realall: ${_LIB.so.full}.diffsym
+${_LIB.so.full}.diffsym: ${LIB_EXPSYM} ${_LIB.so.full}.actsym
+	${_MKTARGET_CREATE}
+	if diff -u ${.ALLSRC} >${.TARGET}.tmp; then \
+		${MV} ${.TARGET}.tmp ${.TARGET}; \
+	else \
+		ret=$$?; \
+		cat ${.TARGET}.tmp; \
+		echo ${_LIB.so.full}: error: \
+			actual symbols differ from expected symbols >&2; \
+		exit $$ret; \
+	fi
+${_LIB.so.full}.actsym: ${_LIB.so.full}
+	${_MKTARGET_CREATE}
+	${NM} --dynamic --extern-only --defined-only --with-symbol-versions \
+		${.ALLSRC} \
+	| cut -d' ' -f3 | LANG=C sort -u >${.TARGET}.tmp
+	${MV} ${.TARGET}.tmp ${.TARGET}
+CLEANFILES+=	${_LIB.so.full}.actsym
+CLEANFILES+=	${_LIB.so.full}.actsym.tmp
+CLEANFILES+=	${_LIB.so.full}.diffsym
+CLEANFILES+=	${_LIB.so.full}.diffsym.tmp
+update-symbols: .PHONY
+update-symbols: ${_LIB.so.full}.actsym
+	cp ${.ALLSRC} ${.CURDIR}/${LIB_EXPSYM}
+.endif
+
 .if !empty(LOBJS)							# {
 LLIBS?=		-lc
 ${_LIB.ln}: ${LOBJS}
@@ -695,7 +737,7 @@ LIBCLEANFILES5+= ${_LIB.ln} ${LOBJS}
 # Make sure it gets defined, in case MKPIC==no && MKLINKLIB==no
 libinstall::
 
-.if ${MKLINKLIB} != "no" && ${MKSTATICLIB} != "no"
+.if ${MAKELINKLIB} != "no" && ${MAKESTATICLIB} != "no" && ${LINKINSTALL} != "no"
 libinstall:: ${_DEST.LIB}/${_LIB.a}
 .PRECIOUS: ${_DEST.LIB}/${_LIB.a}
 
@@ -802,7 +844,7 @@ ${_DEST.OBJ}/${_LIB.so.full}: ${_LIB.so.full}
 	    ${_DEST.LIB}/${_LIB.so.major}
 .endif
 .endif
-.if ${MKLINKLIB} != "no"
+.if ${MAKELINKLIB} != "no" && ${LINKINSTALL} != "no"
 	${INSTALL_SYMLINK}  ${_LIB.so.full} ${_DEST.OBJ}/${_LIB.so}
 .if ${_LIBSODIR} != ${LIBDIR}
 	${INSTALL_SYMLINK} -l r ${_DEST.OBJ}/${_LIB.so.full} \

@@ -1,4 +1,4 @@
-/*	$NetBSD: init.c,v 1.259 2024/02/08 20:45:20 rillig Exp $	*/
+/*	$NetBSD: init.c,v 1.268 2024/03/30 17:12:26 rillig Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: init.c,v 1.259 2024/02/08 20:45:20 rillig Exp $");
+__RCSID("$NetBSD: init.c,v 1.268 2024/03/30 17:12:26 rillig Exp $");
 #endif
 
 #include <stdlib.h>
@@ -105,12 +105,7 @@ typedef struct brace_level {
 	struct brace_level *bl_enclosing;
 } brace_level;
 
-/*
- * An ongoing initialization.
- *
- * In most cases there is only ever a single initialization at a time.  See
- * pointer_to_compound_literal in msg_171.c for a real-life counterexample.
- */
+/* An ongoing initialization. */
 typedef struct initialization {
 	/* The symbol that is to be initialized. */
 	sym_t		*in_sym;
@@ -173,13 +168,6 @@ can_init_character_array(const type_t *ltp, const tnode_t *rn)
 	    : lst == WCHAR_TSPEC;
 }
 
-/*
- * C11 6.7.9p9 seems to say that all unnamed members are skipped. C11 6.7.2.1p8
- * suggests an exception to that rule, and together with C11 6.7.2.1p13, it
- * says that the members from an anonymous struct/union member are "considered
- * to be members of the containing structure or union", thereby preventing that
- * the containing structure or union has only unnamed members.
- */
 static const sym_t *
 skip_unnamed(const sym_t *m)
 {
@@ -195,27 +183,21 @@ first_named_member(const type_t *tp)
 {
 
 	lint_assert(is_struct_or_union(tp->t_tspec));
-	return skip_unnamed(tp->t_sou->sou_first_member);
+	return skip_unnamed(tp->u.sou->sou_first_member);
 }
 
-/*
- * C99 6.7.8p22 says that the type of an array of unknown size becomes known
- * at the end of its initializer list.
- */
 static void
 update_type_of_array_of_unknown_size(sym_t *sym, size_t size)
 {
 
 	type_t *tp = block_dup_type(sym->s_type);
-	tp->t_dim = (int)size;
+	tp->u.dimension = (int)size;
 	tp->t_incomplete_array = false;
 	sym->s_type = tp;
 	debug_step("completed array type is '%s'", type_name(sym->s_type));
 	outsym(sym, sym->s_scl, sym->s_def);
 }
 
-
-/* In traditional C, bit-fields can be initialized only by integer constants. */
 static void
 check_bit_field_init(const tnode_t *ln, tspec_t lt, tspec_t rt)
 {
@@ -223,10 +205,9 @@ check_bit_field_init(const tnode_t *ln, tspec_t lt, tspec_t rt)
 	if (!allow_c90 &&
 	    is_integer(lt) &&
 	    ln->tn_type->t_bitfield &&
-	    !is_integer(rt)) {
-		/* bit-field initialization is illegal in traditional C */
+	    !is_integer(rt))
+		/* bit-field initializer must be an integer in ... */
 		warning(186);
-	}
 }
 
 static void
@@ -272,31 +253,23 @@ check_init_expr(const type_t *ltp, sym_t *lsym, tnode_t *rn)
 	ln->tn_op = NAME;
 	ln->tn_type = lutp;
 	ln->tn_lvalue = true;
-	ln->tn_sym = lsym;
+	ln->u.sym = lsym;
 
 	rn = cconv(rn);
-
-	tspec_t lt = ln->tn_type->t_tspec;
-	tspec_t rt = rn->tn_type->t_tspec;
 
 	debug_step("typeok '%s', '%s'",
 	    type_name(ln->tn_type), type_name(rn->tn_type));
 	if (!typeok(INIT, 0, ln, rn))
 		return;
 
-	/*
-	 * Preserve the tree memory. This is necessary because otherwise expr()
-	 * would free it.
-	 */
 	memory_pool saved_mem = expr_save_memory();
 	expr(rn, true, false, true, false);
 	expr_restore_memory(saved_mem);
 
+	tspec_t lt = ln->tn_type->t_tspec;
+	tspec_t rt = rn->tn_type->t_tspec;
 	check_bit_field_init(ln, lt, rt);
 
-	/*
-	 * XXX: Is it correct to do this conversion _after_ the typeok above?
-	 */
 	if (lt != rt || (ltp->t_bitfield && rn->tn_op == CON))
 		rn = convert(INIT, 0, unconst_cast(ltp), rn);
 
@@ -327,7 +300,8 @@ designator_type(const designator *dr, const type_t *tp)
 			    "designator '.member' is only for struct/union");
 		}
 		if (!tp->t_incomplete_array)
-			lint_assert(dr->dr_subscript < (size_t)tp->t_dim);
+			lint_assert(
+			    dr->dr_subscript < (size_t)tp->u.dimension);
 		return tp->t_subt;
 	default:
 		if (dr->dr_kind != DK_SCALAR)
@@ -515,7 +489,6 @@ brace_level_advance(brace_level *bl, size_t *max_subscript)
 		(void)designation_descend(dn, bl->bl_type);
 
 	designator *dr = designation_last(dn);
-	/* TODO: try to switch on dr->dr_kind instead */
 	switch (tp->t_tspec) {
 	case STRUCT:
 		lint_assert(dr->dr_member != NULL);
@@ -533,7 +506,7 @@ brace_level_advance(brace_level *bl, size_t *max_subscript)
 		    dr->dr_subscript > *max_subscript)
 			*max_subscript = dr->dr_subscript;
 		if (!tp->t_incomplete_array &&
-		    dr->dr_subscript >= (size_t)tp->t_dim)
+		    dr->dr_subscript >= (size_t)tp->u.dimension)
 			dr->dr_done = true;
 		break;
 	default:
@@ -555,7 +528,7 @@ warn_too_many_initializers(designator_kind kind, const type_t *tp)
 		lint_assert(tp->t_tspec == ARRAY);
 		lint_assert(!tp->t_incomplete_array);
 		/* too many array initializers, expected %d */
-		error(173, tp->t_dim);
+		error(173, tp->u.dimension);
 	} else
 		/* too many initializers */
 		error(174);
@@ -594,12 +567,7 @@ brace_level_pop_final(brace_level *bl, size_t *max_subscript)
 	}
 }
 
-/*
- * Make the designation point to the sub-object to be initialized next.
- * Initially or after a previous expression, the designation is not advanced
- * yet since the place to stop depends on the next expression, especially for
- * string literals.
- */
+/* Make the designation point to the sub-object to be initialized next. */
 static bool
 brace_level_goto(brace_level *bl, const tnode_t *rn, size_t *max_subscript)
 {
@@ -646,7 +614,6 @@ initialization_free(initialization *in)
 {
 	brace_level *bl, *next;
 
-	/* TODO: lint_assert(in->in_brace_level == NULL) */
 	for (bl = in->in_brace_level; bl != NULL; bl = next) {
 		next = bl->bl_enclosing;
 		brace_level_free(bl);
@@ -717,7 +684,7 @@ initialization_lbrace(initialization *in)
 		/* initialization of union is illegal in traditional C */
 		warning(238);
 
-	if (is_struct_or_union(tp->t_tspec) && tp->t_sou->sou_incomplete) {
+	if (is_struct_or_union(tp->t_tspec) && tp->u.sou->sou_incomplete) {
 		/* initialization of incomplete type '%s' */
 		error(175, type_name(tp));
 		in->in_err = true;
@@ -804,7 +771,7 @@ initialization_add_designator_member(initialization *in, const char *name)
 	return;
 
 proceed:;
-	const sym_t *member = find_member(tp->t_sou, name);
+	const sym_t *member = find_member(tp->u.sou, name);
 	if (member == NULL) {
 		/* type '%s' does not have member '%s' */
 		error(101, type_name(tp), name);
@@ -833,9 +800,9 @@ initialization_add_designator_subscript(initialization *in, size_t subscript)
 		return;
 	}
 
-	if (!tp->t_incomplete_array && subscript >= (size_t)tp->t_dim) {
-		/* array subscript cannot be > %d: %ld */
-		error(168, tp->t_dim - 1, (long)subscript);
+	if (!tp->t_incomplete_array && subscript >= (size_t)tp->u.dimension) {
+		/* array subscript %ju cannot be > %d */
+		error(168, (uintmax_t)subscript, tp->u.dimension - 1);
 		subscript = 0;	/* suppress further errors */
 	}
 
@@ -884,16 +851,16 @@ initialization_init_array_from_string(initialization *in, tnode_t *tn)
 	if (!can_init_character_array(tp, tn))
 		return false;
 
-	size_t len = tn->tn_string->len;
-	if (tn->tn_string->data != NULL) {
-		quoted_iterator it = { .start = 0 };
-		for (len = 0; quoted_next(tn->tn_string, &it); len++)
+	size_t len = tn->u.str_literals->len;
+	if (tn->u.str_literals->data != NULL) {
+		quoted_iterator it = { .end = 0 };
+		for (len = 0; quoted_next(tn->u.str_literals, &it); len++)
 			continue;
 	}
 
-	if (!tp->t_incomplete_array && (size_t)tp->t_dim < len)
-		/* string literal too long (%lu) for target array (%lu) */
-		warning(187, (unsigned long)len, (unsigned long)tp->t_dim);
+	if (!tp->t_incomplete_array && (size_t)tp->u.dimension < len)
+		/* string literal too long (%ju) for target array (%ju) */
+		warning(187, (uintmax_t)len, (uintmax_t)tp->u.dimension);
 
 	brace_level *bl = in->in_brace_level;
 	if (bl != NULL && bl->bl_designation.dn_len == 0)

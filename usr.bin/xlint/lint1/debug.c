@@ -1,4 +1,4 @@
-/* $NetBSD: debug.c,v 1.71 2024/02/05 23:11:22 rillig Exp $ */
+/* $NetBSD: debug.c,v 1.75 2024/03/31 20:28:45 rillig Exp $ */
 
 /*-
  * Copyright (c) 2021 The NetBSD Foundation, Inc.
@@ -35,7 +35,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: debug.c,v 1.71 2024/02/05 23:11:22 rillig Exp $");
+__RCSID("$NetBSD: debug.c,v 1.75 2024/03/31 20:28:45 rillig Exp $");
 #endif
 
 #include <stdlib.h>
@@ -156,10 +156,10 @@ debug_type_details(const type_t *tp)
 	if (is_struct_or_union(tp->t_tspec)) {
 		debug_indent_inc();
 		debug_step("size %u bits, align %u bits, %s",
-		    tp->t_sou->sou_size_in_bits, tp->t_sou->sou_align_in_bits,
-		    tp->t_sou->sou_incomplete ? "incomplete" : "complete");
+		    tp->u.sou->sou_size_in_bits, tp->u.sou->sou_align_in_bits,
+		    tp->u.sou->sou_incomplete ? "incomplete" : "complete");
 
-		for (const sym_t *mem = tp->t_sou->sou_first_member;
+		for (const sym_t *mem = tp->u.sou->sou_first_member;
 		    mem != NULL; mem = mem->s_next) {
 			debug_sym("", mem, "\n");
 			debug_type_details(mem->s_type);
@@ -168,7 +168,7 @@ debug_type_details(const type_t *tp)
 	}
 	if (tp->t_is_enum) {
 		debug_indent_inc();
-		for (const sym_t *en = tp->t_enum->en_first_enumerator;
+		for (const sym_t *en = tp->u.enumer->en_first_enumerator;
 		    en != NULL; en = en->s_next) {
 			debug_sym("", en, "\n");
 		}
@@ -198,8 +198,8 @@ debug_node(const tnode_t *tn) // NOLINT(misc-no-recursion)
 	    op == CVT && tn->tn_cast ? "cast" : op_name(op));
 	if (op == NAME)
 		debug_printf(" '%s' with %s",
-		    tn->tn_sym->s_name,
-		    scl_name(tn->tn_sym->s_scl));
+		    tn->u.sym->s_name,
+		    scl_name(tn->u.sym->s_scl));
 	else
 		debug_printf(" type");
 	debug_printf(" '%s'", type_name(tn->tn_type));
@@ -216,42 +216,38 @@ debug_node(const tnode_t *tn) // NOLINT(misc-no-recursion)
 		break;
 	case CON:
 		if (is_floating(tn->tn_type->t_tspec))
-			debug_printf(", value %Lg", tn->tn_val.u.floating);
+			debug_printf(", value %Lg", tn->u.value.u.floating);
 		else if (is_uinteger(tn->tn_type->t_tspec))
 			debug_printf(", value %llu",
-			    (unsigned long long)tn->tn_val.u.integer);
+			    (unsigned long long)tn->u.value.u.integer);
 		else if (is_integer(tn->tn_type->t_tspec))
 			debug_printf(", value %lld",
-			    (long long)tn->tn_val.u.integer);
+			    (long long)tn->u.value.u.integer);
 		else {
 			lint_assert(tn->tn_type->t_tspec == BOOL);
 			debug_printf(", value %s",
-			    tn->tn_val.u.integer != 0 ? "true" : "false");
+			    tn->u.value.u.integer != 0 ? "true" : "false");
 		}
-		if (tn->tn_val.v_unsigned_since_c90)
+		if (tn->u.value.v_unsigned_since_c90)
 			debug_printf(", unsigned_since_c90");
-		if (tn->tn_val.v_char_constant)
+		if (tn->u.value.v_char_constant)
 			debug_printf(", char_constant");
 		debug_printf("\n");
 		break;
 	case STRING:
-		if (tn->tn_string->data != NULL)
-			debug_printf(", %s\n", tn->tn_string->data);
+		if (tn->u.str_literals->data != NULL)
+			debug_printf(", %s\n", tn->u.str_literals->data);
 		else
-			debug_printf(", length %zu\n", tn->tn_string->len);
+			debug_printf(", length %zu\n", tn->u.str_literals->len);
 		break;
 	case CALL:
-	case ICALL:
 		debug_printf("\n");
 
 		debug_indent_inc();
-		const function_call *call = tn->tn_call;
+		const function_call *call = tn->u.call;
 		debug_node(call->func);
-		if (call->args != NULL) {
-			for (size_t i = 0; i < call->args_len; i++)
-				debug_node(call->args[i]);
-		} else
-			debug_step("error in arguments");
+		for (size_t i = 0, n = call->args_len; i < n; i++)
+			debug_node(call->args[i]);
 		debug_indent_dec();
 		break;
 	default:
@@ -259,14 +255,13 @@ debug_node(const tnode_t *tn) // NOLINT(misc-no-recursion)
 
 		debug_indent_inc();
 		lint_assert(has_operands(tn));
-		lint_assert(tn->tn_left != NULL);
-		debug_node(tn->tn_left);
+		lint_assert(tn->u.ops.left != NULL);
+		debug_node(tn->u.ops.left);
 		if (op != INCBEF && op != INCAFT
-		    && op != DECBEF && op != DECAFT
-		    && op != CALL && op != ICALL)
-			lint_assert(is_binary(tn) == (tn->tn_right != NULL));
-		if (tn->tn_right != NULL)
-			debug_node(tn->tn_right);
+		    && op != DECBEF && op != DECAFT)
+			lint_assert(is_binary(tn) == (tn->u.ops.right != NULL));
+		if (tn->u.ops.right != NULL)
+			debug_node(tn->u.ops.right);
 		debug_indent_dec();
 	}
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: err.c,v 1.225 2024/02/06 22:47:21 rillig Exp $	*/
+/*	$NetBSD: err.c,v 1.239 2024/03/30 17:23:13 rillig Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -37,7 +37,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: err.c,v 1.225 2024/02/06 22:47:21 rillig Exp $");
+__RCSID("$NetBSD: err.c,v 1.239 2024/03/30 17:23:13 rillig Exp $");
 #endif
 
 #include <limits.h>
@@ -196,7 +196,7 @@ static const char *const msgs[] = {
 	"unknown operand size, op '%s'",				// 138
 	"division by 0",						// 139
 	"modulus by 0",							// 140
-	"operator '%s' produces integer overflow",			// 141
+	"'%s' overflows '%s'",						// 141
 	"operator '%s' produces floating point overflow",		// 142
 	"cannot take size/alignment of incomplete type",		// 143
 	"cannot take size/alignment of function type '%s'",		// 144
@@ -222,8 +222,8 @@ static const char *const msgs[] = {
 	"assignment of negative constant to unsigned type",		// 164
 	"constant truncated by assignment",				// 165
 	"precision lost in bit-field assignment",			// 166
-	"array subscript cannot be negative: %ld",			// 167
-	"array subscript cannot be > %d: %ld",				// 168
+	"array subscript %jd cannot be negative",			// 167
+	"array subscript %ju cannot be > %d",				// 168
 	"precedence confusion possible: parenthesize!",			// 169
 	"first operand of '?' must have scalar type",			// 170
 	"cannot assign to '%s' from '%s'",				// 171
@@ -241,8 +241,8 @@ static const char *const msgs[] = {
 	"illegal combination of %s '%s' and %s '%s'",			// 183
 	"illegal combination of '%s' and '%s'",				// 184
 	"cannot initialize '%s' from '%s'",				// 185
-	"bit-field initialization is illegal in traditional C",		// 186
-	"string literal too long (%lu) for target array (%lu)",		// 187
+	"bit-field initializer must be an integer in traditional C",	// 186
+	"string literal too long (%ju) for target array (%ju)",		// 187
 	"no automatic aggregate initialization in traditional C",	// 188
 	"",			/* no longer used */			// 189
 	"empty array declaration for '%s'",				// 190
@@ -254,8 +254,8 @@ static const char *const msgs[] = {
 	"case label affected by conversion",				// 196
 	"non-constant case expression",					// 197
 	"non-integral case expression",					// 198
-	"duplicate case '%ld' in switch",				// 199
-	"duplicate case '%lu' in switch",				// 200
+	"duplicate case '%jd' in switch",				// 199
+	"duplicate case '%ju' in switch",				// 200
 	"default outside switch",					// 201
 	"duplicate default in switch",					// 202
 	"case label must be of type 'int' in traditional C",		// 203
@@ -412,6 +412,28 @@ static const char *const msgs[] = {
 	"'_Static_assert' requires C11 or later",			// 354
 	"'_Static_assert' without message requires C23 or later",	// 355
 	"short octal escape '%.*s' followed by digit '%c'",		// 356
+	"hex escape '%.*s' mixes uppercase and lowercase digits",	// 357
+	"hex escape '%.*s' has more than 2 digits",			// 358
+	"missing new-style '\\177' or old-style number base",		// 359
+	"missing new-style number base after '\\177'",			// 360
+	"number base '%.*s' is %ju, must be 8, 10 or 16",		// 361
+	"conversion '%.*s' should not be escaped",			// 362
+	"non-printing character '%.*s' in description '%.*s'",		// 363
+	"missing bit position after '%.*s'",				// 364
+	"missing field width after '%.*s'",				// 365
+	"missing '\\0' at the end of '%.*s'",				// 366
+	"empty description in '%.*s'",					// 367
+	"missing comparison value after conversion '%.*s'",		// 368
+	"bit position '%.*s' in '%.*s' should be escaped as octal or hex", // 369
+	"field width '%.*s' in '%.*s' should be escaped as octal or hex", // 370
+	"bit position '%.*s' (%ju) in '%.*s' out of range %u..%u",	// 371
+	"field width '%.*s' (%ju) in '%.*s' out of range 0..64",	// 372
+	"bit field end %ju in '%.*s' out of range 0..64",		// 373
+	"unknown conversion '%.*s', must be one of 'bfF=:*'",		// 374
+	"comparison value '%.*s' (%ju) exceeds maximum field value %ju", // 375
+	"'%.*s' overlaps earlier '%.*s' on bit %u",			// 376
+	"redundant '\\0' at the end of the format",			// 377
+	"conversion '%.*s' is unreachable by input value",		// 378
 };
 
 static bool is_suppressed[sizeof(msgs) / sizeof(msgs[0])];
@@ -427,7 +449,7 @@ suppress_messages(const char *p)
 {
 	char *end;
 
-	for (; ch_isdigit(*p); p = end + 1) {
+	for (; isdigit((unsigned char)*p); p = end + 1) {
 		unsigned long id = strtoul(p, &end, 10);
 		if ((*end != '\0' && *end != ',') ||
 		    id >= sizeof(msgs) / sizeof(msgs[0]) ||
@@ -717,7 +739,8 @@ static const char *queries[] = {
 	"implicit conversion from integer 0 to pointer '%s'",		// Q15
 	"'%s' was declared 'static', now non-'static'",			// Q16
 	"invisible character U+%04X in %s",				// Q17
-	"const automatic variable '%s'",						// Q18
+	"const automatic variable '%s'",				// Q18
+	"implicit conversion from integer '%s' to floating point '%s'",	// Q19
 };
 
 bool any_query_enabled;		/* for optimizing non-query scenarios */
@@ -746,7 +769,7 @@ enable_queries(const char *p)
 {
 	char *end;
 
-	for (; ch_isdigit(*p); p = end + 1) {
+	for (; isdigit((unsigned char)*p); p = end + 1) {
 		unsigned long id = strtoul(p, &end, 10);
 		if ((*end != '\0' && *end != ',') ||
 		    id >= sizeof(queries) / sizeof(queries[0]) ||

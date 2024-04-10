@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.2 2022/05/01 17:25:19 jkoshy Exp $
+#	$NetBSD: Makefile,v 1.7 2024/04/01 18:33:23 riastradh Exp $
 
 HOSTLIB=dwarf
 
@@ -77,7 +77,7 @@ CPPFLAGS+=	-I${.CURDIR}/../../compat
 CPPFLAGS+=	-I${.CURDIR}/../../common
 CPPFLAGS+=	-I${LIBDWARF_OBJDIR}/../common
 CPPFLAGS+=	-I${LIBDWARF_DIR} -I${LIBELF_DIR} -I${COMMON_DIR}
-CPPFLAGS+=	-I${TOOLDIR}/include -I${TOOLDIR}/include/nbinclude
+CPPFLAGS+=	-I${TOOLDIR}/include
 
 BUILD_OSTYPE!=  uname -s
 

@@ -20,17 +20,14 @@
 #include "math.h"
 #include "math_private.h"
 
-#ifdef __HAVE_LONG_DOUBLE
 __weak_alias(tanhl, _tanhl)
+
+#ifdef __HAVE_LONG_DOUBLE
 /*
  * See s_tanh.c for complete comments.
  *
  * Converted to long double by Bruce D. Evans.
  */
-
-#ifdef __i386__
-#include <ieeefp.h>
-#endif
 
 #if LDBL_MANT_DIG == 64
 #include "../ld80/k_expl.h"
@@ -182,5 +179,10 @@ tanhl(long double x)
 	RETURNI(s*z);
 }
 #else
-__weak_alias(tanhl, tanh)
+
+long double
+tanhl(long double x)
+{
+	return tanh(x);
+}
 #endif

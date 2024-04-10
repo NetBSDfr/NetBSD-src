@@ -31,17 +31,18 @@
 __FBSDID("$FreeBSD: head/lib/msun/src/s_sincosl.c 319047 2017-05-28 06:13:38Z mmel $");
 #endif
 #if defined(LIBM_SCCS) && !defined(lint)
-__RCSID("$NetBSD: s_sincosl.c,v 1.2 2022/08/27 17:15:52 christos Exp $");
+__RCSID("$NetBSD: s_sincosl.c,v 1.4 2024/04/03 18:53:42 christos Exp $");
 #endif
 
 #include "namespace.h"
 #include <float.h>
-#ifdef __i386__
-#include <ieeefp.h>
-#endif
 
 #include "math.h"
 #include "math_private.h"
+
+#ifdef __weak_alias
+__weak_alias(sincosl,_sincosl)
+#endif
 
 #ifdef __HAVE_LONG_DOUBLE
 
@@ -53,10 +54,6 @@ __RCSID("$NetBSD: s_sincosl.c,v 1.2 2022/08/27 17:15:52 christos Exp $");
 #include "../ld128/e_rem_pio2l.h"
 #else
 #error "Unsupported long double format"
-#endif
-
-#ifdef __weak_alias
-__weak_alias(sincosl,_sincosl)
 #endif
 
 void
@@ -115,4 +112,16 @@ sincosl(long double x, long double *sn, long double *cs)
 
 	RETURNV();
 }
+
+#else
+
+void
+sincosl(long double x, long double *sn, long double *cs)
+{
+	double snn, css;
+	sincos(x, &snn, &css); 
+	*sn = snn;
+	*cs = css;
+}
+
 #endif

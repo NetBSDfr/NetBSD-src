@@ -1,4 +1,4 @@
-/*	$NetBSD: lagg.c,v 1.4 2023/12/06 05:57:39 yamaguchi Exp $	*/
+/*	$NetBSD: lagg.c,v 1.8 2024/04/09 08:53:08 yamaguchi Exp $	*/
 
 /*
  * Copyright (c) 2021 Internet Initiative Japan Inc.
@@ -28,7 +28,7 @@
 
 #include <sys/cdefs.h>
 #if !defined(lint)
-__RCSID("$NetBSD: lagg.c,v 1.4 2023/12/06 05:57:39 yamaguchi Exp $");
+__RCSID("$NetBSD: lagg.c,v 1.8 2024/04/09 08:53:08 yamaguchi Exp $");
 #endif /* !defined(lint) */
 
 #include <sys/param.h>
@@ -279,7 +279,7 @@ getlagg(prop_dictionary_t env)
 
 		if (errno != ENOBUFS)
 			break;
-		nports = req->lrq_nports + 3; /* 3: additional space */
+		nports = req->lrq_nports;
 	}
 
 	if (req != NULL) {
@@ -393,11 +393,13 @@ setlaggproto(prop_dictionary_t env, prop_dictionary_t oenv)
 static int
 setlaggport(prop_dictionary_t env, prop_dictionary_t oenv __unused)
 {
-	struct lagg_req req;
+	struct lagg_req *req;
 	struct laggreqport *rp;
 	const char *ifname;
 	enum lagg_ioctl ioc;
 	int64_t lpcmd, pri;
+	int rv;
+	size_t sz;
 
 	if (!prop_dictionary_get_string(env, "laggport", &ifname)) {
 		if (lagg_debug)
@@ -406,9 +408,15 @@ setlaggport(prop_dictionary_t env, prop_dictionary_t oenv __unused)
 		return -1;
 	}
 
-	memset(&req, 0, sizeof(req));
-	req.lrq_nports = 1;
-	rp = &req.lrq_reqports[0];
+	sz = sizeof(*req) + sizeof(req->lrq_reqports[0]) * 1;
+	req = calloc(1, sz);
+	if (req == NULL) {
+		errno = ENOBUFS;
+		return -1;
+	}
+
+	req->lrq_nports = 1;
+	rp = &req->lrq_reqports[0];
 	strlcpy(rp->rp_portname, ifname, sizeof(rp->rp_portname));
 	ioc = LAGGIOC_NOCMD;
 
@@ -426,16 +434,17 @@ setlaggport(prop_dictionary_t env, prop_dictionary_t oenv __unused)
 	}
 
 	if (ioc != LAGGIOC_NOCMD) {
-		req.lrq_ioctl = ioc;
-		if (indirect_ioctl(env, SIOCSLAGG, &req) == -1) {
-			if (lagg_debug) {
-				warn("cmd=%d", ioc);
-			}
-			return -1;
-		}
+		req->lrq_ioctl = ioc;
+		rv = indirect_ioctl(env, SIOCSLAGG, req);
+		if (lagg_debug && rv == -1)
+			warn("cmd=%d", ioc);
+	} else {
+		rv = 0;
 	}
 
-	return 0;
+	free(req);
+
+	return rv;
 }
 
 static int

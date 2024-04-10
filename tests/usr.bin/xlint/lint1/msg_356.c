@@ -1,13 +1,13 @@
-/*	$NetBSD: msg_356.c,v 1.1 2024/02/03 20:10:11 rillig Exp $	*/
+/*	$NetBSD: msg_356.c,v 1.3 2024/03/25 22:37:43 rillig Exp $	*/
 # 3 "msg_356.c"
 
-// Test for message 356: short octal escape '%.*s' followed by digit '%c' [356]
+// Test for message: short octal escape '%.*s' followed by digit '%c' [356]
 
 /* lint1-extra-flags: -X 351 */
 
 // When counting backwards in octal, the number before \040 is not \039 but
-// \037. This mistake sometimes happens while encoding the bit numbers for
-// snprintb(3) format directives.
+// \037. This mistake sometimes happens when encoding the bit numbers for
+// snprintb(3) format conversions.
 
 char snprintb_fmt[] = "\020"
     "\0040bit32"		// 3-digit octal escapes are fine

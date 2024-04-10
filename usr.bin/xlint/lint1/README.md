@@ -1,4 +1,4 @@
-[//]: # ($NetBSD: README.md,v 1.15 2024/02/05 23:11:22 rillig Exp $)
+[//]: # ($NetBSD: README.md,v 1.18 2024/03/31 20:28:45 rillig Exp $)
 
 # Introduction
 
@@ -7,9 +7,9 @@ Lint1 analyzes a single translation unit of C code.
 * It reads the output of the C preprocessor, retaining the comments.
 * The lexer in `scan.l` and `lex.c` splits the input into tokens.
 * The parser in `cgram.y` creates types and expressions from the tokens.
-* It checks declarations in `decl.c`.
-* It checks initializations in `init.c`.
-* It checks types and expressions in `tree.c`.
+* The checks for declarations are in `decl.c`.
+* The checks for initializations are in `init.c`.
+* The checks for types and expressions are in `tree.c`.
 
 To see how a specific lint message is triggered, read the corresponding unit
 test in `tests/usr.bin/xlint/lint1/msg_???.c`.
@@ -48,10 +48,11 @@ or just informational depends on several things:
 
 * The language level, with its possible values:
     * traditional C (`-t`)
-    * migration from traditional C and C90 (default)
+    * migration from traditional C to C90 (default)
     * C90 (`-s`)
     * C99 (`-S`)
     * C11 (`-Ac11`)
+    * C23 (`-Ac23`)
 * In GCC mode (`-g`), lint allows several GNU extensions,
   reducing the amount of printed messages.
 * In strict bool mode (`-T`), lint issues errors when `bool` is mixed with
@@ -108,15 +109,14 @@ Each node has an operator that defines which other members may be accessed.
 The operators and their properties are defined in `oper.c`.
 Some examples for operators:
 
-| Operator | Meaning                                    |
-|----------|--------------------------------------------|
-| CON      | compile-time constant in `tn_val`          |
-| NAME     | references the identifier in `tn_sym`      |
-| UPLUS    | the unary operator `+tn_left`              |
-| PLUS     | the binary operator `tn_left + tn_right`   |
-| CALL     | a direct function call                     |
-| ICALL    | an indirect function call                  |
-| CVT      | an implicit conversion or an explicit cast |
+| Operator | Meaning                                        |
+|----------|------------------------------------------------|
+| CON      | compile-time constant in `u.value`             |
+| NAME     | references the identifier in `u.sym`           |
+| UPLUS    | the unary operator `+u.ops.left`               |
+| PLUS     | the binary operator `u.ops.left + u.ops.right` |
+| CALL     | a function call                                |
+| CVT      | an implicit conversion or an explicit cast     |
 
 As an example, the expression `strcmp(names[i], "name")` has this internal
 structure:

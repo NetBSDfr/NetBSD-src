@@ -22,8 +22,9 @@
 #include "math.h"
 #include "math_private.h"
 
-#ifdef __HAVE_LONG_DOUBLE
 __weak_alias(acoshl, _acoshl)
+
+#ifdef __HAVE_LONG_DOUBLE
 
 /*
  * See e_acosh.c for complete comments.
@@ -31,10 +32,6 @@ __weak_alias(acoshl, _acoshl)
  * Converted to long double by David Schultz <das@FreeBSD.ORG> and
  * Bruce D. Evans.
  */
-
-#ifdef __i386__
-#include <ieeefp.h>
-#endif
 
 /* EXP_LARGE is the threshold above which we use acosh(x) ~= log(2x). */
 #if LDBL_MANT_DIG == 64
@@ -92,6 +89,9 @@ acoshl(long double x)
 	}
 }
 #else
-
-__weak_alias(acoshl, acosh)
+long double
+acoshl(long double x)
+{
+	return acosh(x);
+}
 #endif

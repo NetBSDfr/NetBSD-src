@@ -1,4 +1,4 @@
-/*	$NetBSD: s_tanl.c,v 1.1 2024/01/21 18:53:19 christos Exp $	*/
+/*	$NetBSD: s_tanl.c,v 1.3 2024/04/03 18:53:42 christos Exp $	*/
 
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: s_tanl.c,v 1.1 2024/01/21 18:53:19 christos Exp $");
+__RCSID("$NetBSD: s_tanl.c,v 1.3 2024/04/03 18:53:42 christos Exp $");
 
 /*
  * Limited testing on pseudorandom numbers drawn within [0:4e8] shows
@@ -38,18 +38,15 @@ __RCSID("$NetBSD: s_tanl.c,v 1.1 2024/01/21 18:53:19 christos Exp $");
  */
 #include "namespace.h"
 #include <float.h>
-#ifdef __i386__
-#include <ieeefp.h>
-#endif
 
 #include "math.h"
 #include "math_private.h"
 
-#ifdef __HAVE_LONG_DOUBLE
-
 #ifdef __weak_alias
 __weak_alias(tanl, _tanl)
 #endif
+
+#ifdef __HAVE_LONG_DOUBLE
 
 #if LDBL_MANT_DIG == 64
 #include "../ld80/e_rem_pio2l.h"
@@ -109,8 +106,10 @@ tanl(long double x)
 
 #else
 
-#ifdef __weak_alias
-__weak_alias(tanl, tan)
-#endif
+long double
+tanl(long double x)
+{
+	return tan(x);
+}
 
 #endif

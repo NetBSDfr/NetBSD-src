@@ -1,4 +1,4 @@
-/*	$NetBSD: gzip.c,v 1.122 2024/02/03 22:40:29 mrg Exp $	*/
+/*	$NetBSD: gzip.c,v 1.125 2024/04/02 12:42:35 christos Exp $	*/
 
 /*
  * Copyright (c) 1997-2024 Matthew R. Green
@@ -26,11 +26,15 @@
  * SUCH DAMAGE.
  */
 
+#if HAVE_NBTOOL_CONFIG_H
+#include "nbtool_config.h"
+#endif
+
 #include <sys/cdefs.h>
 #ifndef lint
 __COPYRIGHT("@(#) Copyright (c) 1997-2024 Matthew R. Green. "
 	    "All rights reserved.");
-__RCSID("$NetBSD: gzip.c,v 1.122 2024/02/03 22:40:29 mrg Exp $");
+__RCSID("$NetBSD: gzip.c,v 1.125 2024/04/02 12:42:35 christos Exp $");
 #endif /* not lint */
 
 /*
@@ -188,7 +192,9 @@ static	int	qflag;			/* quiet mode */
 static	int	rflag;			/* recursive mode */
 static	int	tflag;			/* test */
 static	int	vflag;			/* verbose mode */
+#ifdef SIGINFO
 static	sig_atomic_t print_info = 0;
+#endif
 #else
 #define		qflag	0
 #define		tflag	0
@@ -240,7 +246,11 @@ static	void	infile_set(const char *newinfile, off_t total);
 static	off_t	infile_total;		/* total expected to read/write */
 static	off_t	infile_current;		/* current read/write */
 
+#ifdef SIGINFO
 static	void	check_siginfo(void);
+#else
+#define check_siginfo() /* nothing */
+#endif
 static	off_t	cat_fd(unsigned char *, size_t, off_t *, int fd);
 static	void	prepend_gzip(char *, int *, char ***);
 static	void	handle_dir(char *);
@@ -337,7 +347,7 @@ main(int argc, char **argv)
 		dflag = cflag = 1;
 
 #ifdef SMALL
-#define OPT_LIST "123456789cdhlV"
+#define OPT_LIST "123456789cdhlVn"
 #else
 #define OPT_LIST "123456789cdfhklNnqrS:tVv"
 #endif
@@ -402,6 +412,9 @@ main(int argc, char **argv)
 			break;
 		case 'v':
 			vflag = 1;
+			break;
+#else
+		case 'n':
 			break;
 #endif
 		default:
@@ -1113,6 +1126,7 @@ copymodes(int fd, const struct stat *sbp, const char *file)
 	if (fchmod(fd, sb.st_mode) < 0)
 		maybe_warn("couldn't fchmod: %s", file);
 
+#ifdef TIMESPEC_TO_TIMEVAL
 	TIMESPEC_TO_TIMEVAL(&times[0], &sb.st_atimespec);
 	TIMESPEC_TO_TIMEVAL(&times[1], &sb.st_mtimespec);
 	if (futimes(fd, times) < 0)
@@ -1121,6 +1135,7 @@ copymodes(int fd, const struct stat *sbp, const char *file)
 	/* finally, only try flags if they exist already */
         if (sb.st_flags != 0 && fchflags(fd, sb.st_flags) < 0)
 		maybe_warn("couldn't fchflags: %s", file);
+#endif
 }
 #endif
 
@@ -1208,18 +1223,22 @@ unlink_input(const char *file, const struct stat *sb)
 	unlink(file);
 }
 
+#ifdef SIGINFO
 static void
 got_siginfo(int signo)
 {
 
 	print_info = 1;
 }
+#endif
 
 static void
 setup_signals(void)
 {
 
+#ifdef SIGINFO
 	signal(SIGINFO, got_siginfo);
+#endif
 }
 
 static	void
@@ -1704,7 +1723,7 @@ file_uncompress(char *file, char *outfile, size_t outsize)
 	return -1;
 }
 
-#ifndef SMALL
+#ifndef check_siginfo
 static void
 check_siginfo(void)
 {
@@ -1743,6 +1762,7 @@ check_siginfo(void)
 out:
 	print_info = 0;
 }
+#endif
 
 static off_t
 cat_fd(unsigned char * prepend, size_t count, off_t *gsizep, int fd)
@@ -1780,7 +1800,6 @@ cat_fd(unsigned char * prepend, size_t count, off_t *gsizep, int fd)
 		*gsizep = in_tot;
 	return (in_tot);
 }
-#endif
 
 static void
 handle_stdin(void)

@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.own.mk,v 1.1363 2024/01/20 08:09:13 skrll Exp $
+#	$NetBSD: bsd.own.mk,v 1.1367 2024/04/07 14:40:34 tsutsui Exp $
 
 # This needs to be before bsd.init.mk
 .if defined(BSD_MK_COMPAT_FILE)
@@ -1336,6 +1336,21 @@ MKLLVMRT.i386=		yes
 MKLLVMRT.aarch64=	yes
 .endif
 
+# Just-in-time compiler for bpf, npf acceleration
+MKSLJIT.aarch64=	yes
+MKSLJIT.i386=		yes
+MKSLJIT.sparc=		yes
+#MKSLJIT.sparc64=	yes	# not suppored in sljit (yet?)
+MKSLJIT.x86_64=		yes
+#MKSLJIT.powerpc=	yes	# XXX
+#MKSLJIT.powerpc64=	yes	# XXX
+#MKSLJIT.mipsel=	yes	# XXX
+#MKSLJIT.mipseb=	yes	# XXX
+#MKSLJIT.mips64el=	yes	# XXX
+#MKSLJIT.mips64eb=	yes	# XXX
+#MKSLJIT.riscv32=	yes	# not until we update sljit
+#MKSLJIT.riscv64=	yes	# not until we update sljit
+
 # compat with old names
 MKDEBUGKERNEL?=${MKKDEBUG:Uno}
 MKDEBUGTOOLS?=${MKTOOLSDEBUG:Uno}
@@ -1390,12 +1405,6 @@ _MKVARS.no= \
 .for var in ${_MKVARS.no}
 ${var}?=	${${var}.${MACHINE_ARCH}:U${${var}.${MACHINE}:Uno}}
 .endfor
-
-.if ${MACHINE_ARCH} == "i386" || \
-    ${MACHINE_ARCH} == "x86_64" || \
-    ${MACHINE_ARCH} == "sparc"
-MKSLJIT=	yes
-.endif
 
 #
 # Which platforms build the xorg-server drivers (as opposed
@@ -1612,7 +1621,11 @@ USE_XZ_SETS?= no
 TOOL_GZIP=		${TOOL_PIGZ}
 GZIP_N_FLAG?=		-nT
 .else
+.if ${USETOOLS} == "yes"
+TOOL_GZIP=		${TOOLDIR}/bin/${_TOOL_PREFIX}gzip
+.else
 TOOL_GZIP=		gzip
+.endif
 GZIP_N_FLAG?=		-n
 .endif
 TOOL_GZIP_N=		${TOOL_GZIP} ${GZIP_N_FLAG}
@@ -1661,8 +1674,7 @@ X11SRCDIR.${_proto}proto?=		${X11SRCDIRMIT}/${_proto}proto/dist
 .if \
     ${MACHINE} == "alpha"	|| \
     ${MACHINE} == "netwinder"	|| \
-    ${MACHINE} == "sgimips"	|| \
-    ${MACHINE} == "vax"
+    ${MACHINE} == "sgimips"
 HAVE_XORG_SERVER_VER?=110
 .else
 HAVE_XORG_SERVER_VER?=120

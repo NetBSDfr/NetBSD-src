@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.x11.mk,v 1.151 2023/10/25 04:37:59 mrg Exp $
+#	$NetBSD: bsd.x11.mk,v 1.153 2024/04/07 14:36:23 tsutsui Exp $
 
 .include <bsd.init.mk>
 
@@ -83,8 +83,7 @@ X11FLAGS.OS_DEFINES=	-DDDXOSINIT -DSERVER_LOCK -DDDXOSFATALERROR \
 
 .if !(${MACHINE} == "acorn32"	|| \
     ${MACHINE} == "sun3"	|| \
-    ${MACHINE} == "x68k"	|| \
-    ${MACHINE} == "vax")
+    ${MACHINE} == "x68k")
 #	EXT_DEFINES
 X11FLAGS.EXTENSION+=	-DXF86VIDMODE
 
@@ -145,7 +144,7 @@ __XKBDEFRULES__=	'"xorg"'
 XLOCALE.DEFINES=	-DXLOCALEDIR=\"${X11LIBDIR}/locale\" \
 			-DXLOCALELIBDIR=\"${X11LIBDIR}/locale\"
 
-PRINT_PACKAGE_VERSION=	awk '/^PACKAGE_VERSION=/ {			\
+PRINT_PACKAGE_VERSION=	${TOOL_AWK} '/^PACKAGE_VERSION=/ {		\
 				match($$1, "([0-9]+\\.)+[0-9]+");	\
 				version = substr($$1, RSTART, RLENGTH);	\
 			} END { print version }'
