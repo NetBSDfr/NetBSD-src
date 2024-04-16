@@ -1,4 +1,4 @@
-$NetBSD: UPDATING,v 1.345 2024/02/09 22:08:30 andvar Exp $
+$NetBSD: UPDATING,v 1.347 2024/04/11 06:20:29 nia Exp $
 
 This file (UPDATING) is intended to be a brief reference to recent
 changes that might cause problems in the build process, and a guide for
@@ -18,6 +18,15 @@ See also: BUILDING, build.sh, Makefile.
 
 Recent changes:
 ^^^^^^^^^^^^^^^
+
+20240410:
+	Update builds may require manually deleting
+	$DESTDIR/var/run/named (and, potentially,
+	$DESTDIR/var/run/lwresd) in order to avoid checkflist failure.
+
+20240409:
+	32-bit compatibility libraries were moved into the base32
+	and debug32 sets.  HTML man pages were moved into the manhtml set.
 
 20230828:
 	If:

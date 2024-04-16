@@ -1,4 +1,4 @@
-/*	$NetBSD: snprintb.c,v 1.45 2024/04/01 08:53:42 rillig Exp $	*/
+/*	$NetBSD: snprintb.c,v 1.48 2024/04/07 15:20:16 rillig Exp $	*/
 
 /*-
  * Copyright (c) 2002, 2024 The NetBSD Foundation, Inc.
@@ -35,7 +35,7 @@
 
 #  include <sys/cdefs.h>
 #  if defined(LIBC_SCCS)
-__RCSID("$NetBSD: snprintb.c,v 1.45 2024/04/01 08:53:42 rillig Exp $");
+__RCSID("$NetBSD: snprintb.c,v 1.48 2024/04/07 15:20:16 rillig Exp $");
 #  endif
 
 #  include <sys/types.h>
@@ -46,7 +46,7 @@ __RCSID("$NetBSD: snprintb.c,v 1.45 2024/04/01 08:53:42 rillig Exp $");
 #  include <errno.h>
 # else /* ! _KERNEL */
 #  include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: snprintb.c,v 1.45 2024/04/01 08:53:42 rillig Exp $");
+__KERNEL_RCSID(0, "$NetBSD: snprintb.c,v 1.48 2024/04/07 15:20:16 rillig Exp $");
 #  include <sys/param.h>
 #  include <sys/inttypes.h>
 #  include <sys/systm.h>
@@ -133,15 +133,17 @@ old_style(state *s)
 	while (*s->bitfmt != '\0') {
 		const char *cur_bitfmt = s->bitfmt;
 		uint8_t bit = *s->bitfmt;
-		if (bit > ' ')
+		if (bit > 32)
+			return -1;
+		if ((uint8_t)cur_bitfmt[1] <= 32)
 			return -1;
 		if (s->val & (1U << (bit - 1))) {
 			store_delimiter(s);
-			while ((uint8_t)*++s->bitfmt > ' ')
+			while ((uint8_t)*++s->bitfmt > 32)
 				store(s, *s->bitfmt);
 			maybe_wrap_line(s, cur_bitfmt);
 		} else
-			while ((uint8_t)*++s->bitfmt > ' ')
+			while ((uint8_t)*++s->bitfmt > 32)
 				continue;
 	}
 	return 0;
@@ -150,7 +152,8 @@ old_style(state *s)
 static int
 new_style(state *s)
 {
-	uint64_t field = s->val;
+	uint8_t field_kind = 0;	// 0 or 'f' or 'F'
+	uint64_t field = 0;	// valid if field_kind != '\0'
 	int matched = 1;
 	const char *prev_bitfmt = s->bitfmt;
 	while (*s->bitfmt != '\0') {
@@ -158,9 +161,12 @@ new_style(state *s)
 		uint8_t kind = cur_bitfmt[0];
 		switch (kind) {
 		case 'b':
+			field_kind = 0;
 			prev_bitfmt = cur_bitfmt;
 			uint8_t b_bit = cur_bitfmt[1];
 			if (b_bit >= 64)
+				return -1;
+			if (cur_bitfmt[2] == '\0')
 				return -1;
 			s->bitfmt += 2;
 			if (((s->val >> b_bit) & 1) == 0)
@@ -172,6 +178,7 @@ new_style(state *s)
 			break;
 		case 'f':
 		case 'F':
+			field_kind = kind;
 			prev_bitfmt = cur_bitfmt;
 			matched = 0;
 			uint8_t f_lsb = cur_bitfmt[1];
@@ -179,6 +186,8 @@ new_style(state *s)
 				return -1;
 			uint8_t f_width = cur_bitfmt[2];
 			if (f_width > 64)
+				return -1;
+			if (kind == 'f' && cur_bitfmt[3] == '\0')
 				return -1;
 			field = s->val >> f_lsb;
 			if (f_width < 64)
@@ -196,7 +205,13 @@ new_style(state *s)
 		case '=':
 		case ':':
 			s->bitfmt += 2;
+			if (kind == '=' && field_kind != 'f')
+				return -1;
+			if (kind == ':' && field_kind != 'F')
+				return -1;
 			uint8_t cmp = cur_bitfmt[1];
+			if (cur_bitfmt[2] == '\0')
+				return -1;
 			if (field != cmp)
 				goto skip_description;
 			matched = 1;
@@ -207,6 +222,11 @@ new_style(state *s)
 			maybe_wrap_line(s, prev_bitfmt);
 			break;
 		case '*':
+			if (field_kind == 0)
+				return -1;
+			field_kind = 0;
+			if (cur_bitfmt[1] == '\0')
+				return -1;
 			s->bitfmt++;
 			if (matched)
 				goto skip_description;

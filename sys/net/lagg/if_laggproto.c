@@ -1,4 +1,4 @@
-/*	$NetBSD: if_laggproto.c,v 1.8 2023/11/28 05:28:37 yamaguchi Exp $	*/
+/*	$NetBSD: if_laggproto.c,v 1.15 2024/04/05 06:51:41 yamaguchi Exp $	*/
 
 /*-
  * SPDX-License-Identifier: BSD-2-Clause-NetBSD
@@ -29,7 +29,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_laggproto.c,v 1.8 2023/11/28 05:28:37 yamaguchi Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_laggproto.c,v 1.15 2024/04/05 06:51:41 yamaguchi Exp $");
 
 #include <sys/param.h>
 #include <sys/types.h>
@@ -65,9 +65,8 @@ struct lagg_proto_softc {
  * Locking notes:
  * - Items of struct lagg_proto_softc is protected by
  *   psc_lock (an adaptive mutex)
- * - psc_ports is protected by pserialize (psc_psz)
- *   - Updates of psc_ports is serialized by sc_lock in
- *     struct lagg_softc
+ * - psc_ports is protected by pselialize (psc_psz) and
+ *   it updates exclusively by LAGG_PROTO_LOCK.
  * - Other locking notes are described in if_laggproto.h
  */
 
@@ -133,7 +132,6 @@ lagg_portmap_next(struct lagg_portmaps *maps)
 	size_t i;
 
 	i = atomic_load_consume(&maps->maps_activepmap);
-	i &= 0x1;
 	i ^= 0x1;
 
 	return &maps->maps_pmap[i];
@@ -208,6 +206,7 @@ lagg_proto_free(struct lagg_proto_softc *psc)
 	pserialize_destroy(psc->psc_psz);
 	mutex_destroy(&psc->psc_lock);
 	lagg_workq_destroy(psc->psc_workq);
+	PSLIST_DESTROY(&psc->psc_ports);
 
 	if (psc->psc_ctxsiz > 0)
 		kmem_free(psc->psc_ctx, psc->psc_ctxsiz);
@@ -321,8 +320,12 @@ lagg_proto_remove_port(struct lagg_proto_softc *psc,
 
 	LAGG_PROTO_LOCK(psc);
 	PSLIST_WRITER_REMOVE(pport, lpp_entry);
-	pserialize_perform(psc->psc_psz);
 	LAGG_PROTO_UNLOCK(psc);
+	pserialize_perform(psc->psc_psz);
+
+	/* re-initialize for reuse */
+	PSLIST_ENTRY_DESTROY(pport, lpp_entry);
+	PSLIST_ENTRY_INIT(pport, lpp_entry);
 }
 
 void
@@ -365,6 +368,8 @@ lagg_common_stopport(struct lagg_proto_softc *psc, struct lagg_port *lp)
 
 		pport->lpp_active = false;
 	}
+
+	lagg_workq_add(psc->psc_workq, &psc->psc_work_linkspeed);
 }
 static void
 lagg_common_linkstate(struct lagg_proto_softc *psc, struct lagg_port *lp)
@@ -646,8 +651,8 @@ lagg_lb_startport(struct lagg_proto_softc *psc, struct lagg_port *lp)
 	pm_next->pm_nports = n;
 
 	lagg_portmap_switch(&lb->lb_pmaps);
-	pserialize_perform(psc->psc_psz);
 	LAGG_PROTO_UNLOCK(psc);
+	pserialize_perform(psc->psc_psz);
 }
 
 void
@@ -672,9 +677,11 @@ lagg_lb_stopport(struct lagg_proto_softc *psc, struct lagg_port *lp)
 		n++;
 	}
 
+	pm_next->pm_nports = n;
+
 	lagg_portmap_switch(&lb->lb_pmaps);
-	pserialize_perform(psc->psc_psz);
 	LAGG_PROTO_UNLOCK(psc);
+	pserialize_perform(psc->psc_psz);
 
 	lagg_common_stopport(psc, lp);
 }
@@ -691,14 +698,18 @@ lagg_lb_transmit(struct lagg_proto_softc *psc, struct mbuf *m)
 	int s;
 
 	lb = psc->psc_ctx;
-	hash  = lagg_hashmbuf(psc->psc_softc, m);
+	hash = lagg_hashmbuf(psc->psc_softc, m);
 
 	s = pserialize_read_enter();
 
 	pm = lagg_portmap_active(&lb->lb_pmaps);
-	hash %= pm->pm_nports;
-	lp0 = pm->pm_ports[hash];
-	lp = lagg_link_active(psc, lp0->lp_proto_ctx, &psref);
+	if (__predict_true(pm->pm_nports != 0)) {
+		hash %= pm->pm_nports;
+		lp0 = pm->pm_ports[hash];
+		lp = lagg_link_active(psc, lp0->lp_proto_ctx, &psref);
+	} else {
+		lp = NULL;
+	}
 
 	pserialize_read_exit(s);
 
@@ -743,21 +754,18 @@ lagg_lb_linkspeed_work(struct lagg_work *_lw __unused, void *xpsc)
 	struct lagg_proto_softc *psc = xpsc;
 	struct lagg_proto_port *pport;
 	uint64_t linkspeed, l;
-	int s;
 
 	linkspeed = 0;
 
-	s = pserialize_read_enter();
+	LAGG_PROTO_LOCK(psc); /* acquired to refer lpp_linkspeed */
 	PSLIST_READER_FOREACH(pport, &psc->psc_ports,
 	    struct lagg_proto_port, lpp_entry) {
 		if (pport->lpp_active) {
-			LAGG_PROTO_LOCK(psc);
 			l = pport->lpp_linkspeed;
-			LAGG_PROTO_UNLOCK(psc);
 			linkspeed = MAX(linkspeed, l);
 		}
 	}
-	pserialize_read_exit(s);
+	LAGG_PROTO_UNLOCK(psc);
 
 	LAGG_LOCK(psc->psc_softc);
 	lagg_set_linkspeed(psc->psc_softc, linkspeed);
