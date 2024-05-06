@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.342 2024/01/07 02:07:44 sjg Exp $
+# $NetBSD: Makefile,v 1.344 2024/04/30 16:41:32 sjg Exp $
 #
 # Unit tests for make(1)
 #
@@ -559,7 +559,7 @@ SED_CMDS.suff-transform-debug+=	${STD_SED_CMDS.dg1}
 SED_CMDS.var-op-shell+=		${STD_SED_CMDS.shell}
 SED_CMDS.var-op-shell+=		-e '/command/s,No such.*,not found,'
 SED_CMDS.vardebug+=		-e 's,${.SHELL},</path/to/shell>,'
-SED_CMDS.varmod-mtime+=		-e "s,': .*,': <ENOENT>,"
+SED_CMDS.varmod-mtime+=		-e "s,\(.*\)': .*,\1': <ENOENT>,"
 SED_CMDS.varmod-subst-regex+=	${STD_SED_CMDS.regex}
 SED_CMDS.varparse-errors+=	${STD_SED_CMDS.timestamp}
 SED_CMDS.varname-dot-make-meta-ignore_filter+= ${SED_CMDS.meta-ignore}
@@ -589,8 +589,9 @@ unexport-env.rawout: export.mk
 
 # In tests that use the debugging option -dd, ignore debugging output that is
 # only logged in -DCLEANUP mode.
-STD_SED_CMDS.dd=		-e '/^OpenDirs_Done:/d'
-STD_SED_CMDS.dd+=		-e '/^CachedDir /d'
+STD_SED_CMDS.dd=	-e '/^OpenDirs_Done:/d'
+STD_SED_CMDS.dd+=	-e '/^CachedDir /d'
+STD_SED_CMDS.dd+=	-e 's,  ${DEFSYSPATH:U/usr/share/mk} ,  <defsyspath> ,'
 
 # Omit details such as process IDs from the output of the -dg1 option.
 STD_SED_CMDS.dg1=	-e 's,${.CURDIR}$$,<curdir>,'

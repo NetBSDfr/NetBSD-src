@@ -1,4 +1,4 @@
-#	$NetBSD: NetBSD.dist.tests,v 1.203 2024/03/14 21:00:32 rillig Exp $
+#	$NetBSD: NetBSD.dist.tests,v 1.205 2024/04/28 14:39:22 rillig Exp $
 
 ./usr/libdata/debug/usr/tests
 ./usr/libdata/debug/usr/tests/atf
@@ -26,6 +26,7 @@
 ./usr/libdata/debug/usr/tests/dev/sysmon
 ./usr/libdata/debug/usr/tests/dev/usb
 ./usr/libdata/debug/usr/tests/fs
+./usr/libdata/debug/usr/tests/fs/cd9660
 ./usr/libdata/debug/usr/tests/fs/ffs
 ./usr/libdata/debug/usr/tests/fs/fifofs
 ./usr/libdata/debug/usr/tests/fs/hfs
@@ -131,6 +132,7 @@
 ./usr/libdata/debug/usr/tests/lib/librumphijack
 ./usr/libdata/debug/usr/tests/lib/libskey
 ./usr/libdata/debug/usr/tests/lib/libsljit
+./usr/libdata/debug/usr/tests/lib/libstdc++
 ./usr/libdata/debug/usr/tests/lib/libtre
 ./usr/libdata/debug/usr/tests/lib/libusbhid
 ./usr/libdata/debug/usr/tests/lib/libutil
@@ -345,6 +347,7 @@
 ./usr/tests/lib/librumphijack
 ./usr/tests/lib/libskey
 ./usr/tests/lib/libsljit
+./usr/tests/lib/libstdc++
 ./usr/tests/lib/libtre
 ./usr/tests/lib/libtre/data
 ./usr/tests/lib/libusbhid

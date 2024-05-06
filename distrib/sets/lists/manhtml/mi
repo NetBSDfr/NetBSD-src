@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.1 2024/04/09 15:17:24 nia Exp $
+# $NetBSD: mi,v 1.3 2024/05/04 19:10:04 reed Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -286,8 +286,10 @@
 ./usr/share/man/html1/midiplay.html		man-audio-htmlman	html
 ./usr/share/man/html1/midirecord.html		man-audio-htmlman	html
 ./usr/share/man/html1/mixerctl.html		man-audio-htmlman	html
+./usr/share/man/html1/mkcsmapper.html		man-util-htmlman	html
 ./usr/share/man/html1/mkdep.html		man-c-htmlman		html
 ./usr/share/man/html1/mkdir.html		man-util-htmlman	html
+./usr/share/man/html1/mkesdb.html		man-util-htmlman	html
 ./usr/share/man/html1/mkfifo.html		man-sysutil-htmlman	html
 ./usr/share/man/html1/mkfilters.html		man-ipf-htmlman		ipfilter,html
 ./usr/share/man/html1/mklocale.html		man-util-htmlman	html
@@ -1201,7 +1203,7 @@
 ./usr/share/man/html4/i386/spic.html		man-sys-htmlman		html
 ./usr/share/man/html4/i386/vald.html		man-obsolete		obsolete
 ./usr/share/man/html4/i386/vesafb.html		man-obsolete		obsolete
-./usr/share/man/html4/i386/viac7temp.html	man-sys-htmlman		html
+./usr/share/man/html4/i386/viac7temp.html	man-obsolete		obsolete
 ./usr/share/man/html4/i915drm.html		man-sys-htmlman		html
 ./usr/share/man/html4/iavc.html			man-obsolete		obsolete
 ./usr/share/man/html4/iavf.html			man-sys-htmlman		html
@@ -1961,6 +1963,7 @@
 ./usr/share/man/html4/x86/tco.html		man-sys-htmlman		html
 ./usr/share/man/html4/x86/tprof_amdpmi.html	man-obsolete		obsolete
 ./usr/share/man/html4/x86/tprof_pmi.html	man-obsolete		obsolete
+./usr/share/man/html4/x86/viac7temp.html	man-sys-htmlman		html
 ./usr/share/man/html4/x86/vmt.html		man-obsolete		obsolete
 ./usr/share/man/html4/x86/vmx.html		man-obsolete		obsolete
 ./usr/share/man/html4/xbd.html			man-sys-htmlman		html

@@ -1,4 +1,4 @@
-/*	$NetBSD: msg.mi.en,v 1.49 2024/04/09 15:17:24 nia Exp $	*/
+/*	$NetBSD: msg.mi.en,v 1.51 2024/04/25 11:25:08 hannken Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -809,8 +809,8 @@ message cur_distsets
 }
 
 message cur_distsets_header
-{   Distribution set         Selected
-   ------------------------ --------
+{   Distribution set                   Selected
+   ---------------------------------- --------
 }
 
 message set_base
@@ -818,6 +818,9 @@ message set_base
 
 message set_base32
 {Base 32-bit compatibility libraries}
+
+message set_base64
+{Base 64-bit compatibility libraries}
 
 message set_system
 {Configuration files (/etc)}
@@ -896,6 +899,9 @@ message set_debug
 
 message set_debug32
 {Debug symbols (32-bit)}
+
+message set_debug64
+{Debug symbols (64-bit)}
 
 message set_xdebug
 {X11 debug symbols}

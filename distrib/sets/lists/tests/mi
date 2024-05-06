@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.1311 2024/03/15 15:32:07 riastradh Exp $
+# $NetBSD: mi,v 1.1315 2024/05/05 02:53:01 riastradh Exp $
 #
 # Note: don't delete entries from here - mark them as "obsolete" instead.
 #
@@ -35,6 +35,7 @@
 ./usr/libdata/debug/usr/tests/dev/sysmon		tests-fs-debug		compattestfile,atf
 ./usr/libdata/debug/usr/tests/dev/usb			tests-fs-debug		compattestfile,atf
 ./usr/libdata/debug/usr/tests/fs			tests-fs-debug		compattestfile,atf
+./usr/libdata/debug/usr/tests/fs/cd9660			tests-fs-debug		compattestfile,atf
 ./usr/libdata/debug/usr/tests/fs/ffs			tests-fs-debug		compattestfile,atf
 ./usr/libdata/debug/usr/tests/fs/fifofs			tests-fs-debug		compattestfile,atf
 ./usr/libdata/debug/usr/tests/fs/hfs			tests-fs-debug		compattestfile,atf
@@ -151,6 +152,7 @@
 ./usr/libdata/debug/usr/tests/lib/librumphijack		tests-lib-debug		compattestfile,atf
 ./usr/libdata/debug/usr/tests/lib/libskey		tests-lib-debug		compattestfile,atf
 ./usr/libdata/debug/usr/tests/lib/libsljit		tests-lib-debug		compattestfile,atf
+./usr/libdata/debug/usr/tests/lib/libstdc++		tests-lib-debug		compattestfile,atf
 ./usr/libdata/debug/usr/tests/lib/libtre		tests-lib-debug		compattestfile,atf
 ./usr/libdata/debug/usr/tests/lib/libusbhid		tests-lib-debug		compattestfile,atf
 ./usr/libdata/debug/usr/tests/lib/libutil		tests-lib-debug		compattestfile,atf
@@ -1563,7 +1565,9 @@
 ./usr/tests/fs/cd9660					tests-fs-tests		compattestfile,atf
 ./usr/tests/fs/cd9660/Atffile				tests-fs-tests		atf,rump
 ./usr/tests/fs/cd9660/Kyuafile				tests-fs-tests		atf,rump,kyua
-./usr/tests/fs/cd9660/pr_48787.image.bz2		tests-fs-tests		atf,rump
+./usr/tests/fs/cd9660/h_hexdump_r			tests-fs-tests		atf,rump
+./usr/tests/fs/cd9660/pr_48787.image.bz2		tests-obsolete		obsolete
+./usr/tests/fs/cd9660/pr_48787.image.hex		tests-fs-tests		atf,rump
 ./usr/tests/fs/cd9660/t_high_ino_big_file		tests-fs-tests		atf,rump
 ./usr/tests/fs/ffs					tests-fs-tests		compattestfile,atf
 ./usr/tests/fs/ffs/Atffile				tests-fs-tests		atf,rump
@@ -2347,6 +2351,7 @@
 ./usr/tests/kernel/t_pty				tests-kernel-tests	compattestfile,atf
 ./usr/tests/kernel/t_rnd				tests-kernel-tests	atf,rump
 ./usr/tests/kernel/t_sigaction				tests-obsolete		obsolete
+./usr/tests/kernel/t_signal_and_sp			tests-kernel-tests	compattestfile,atf
 ./usr/tests/kernel/t_simplehook				tests-kernel-tests	atf,rump
 ./usr/tests/kernel/t_subr_prf				tests-kernel-tests	compattestfile,atf
 ./usr/tests/kernel/t_sysctl				tests-kernel-tests	compattestfile,atf
@@ -3941,6 +3946,7 @@
 ./usr/tests/lib/libm/t_libm				tests-obsolete		obsolete
 ./usr/tests/lib/libm/t_log				tests-lib-tests		compattestfile,atf
 ./usr/tests/lib/libm/t_modf				tests-lib-tests		compattestfile,atf
+./usr/tests/lib/libm/t_next				tests-lib-tests		compattestfile,atf
 ./usr/tests/lib/libm/t_pow				tests-lib-tests		compattestfile,atf
 ./usr/tests/lib/libm/t_precision			tests-lib-tests		compattestfile,atf
 ./usr/tests/lib/libm/t_round				tests-lib-tests		compattestfile,atf
@@ -4090,6 +4096,11 @@
 ./usr/tests/lib/libsljit/Kyuafile			tests-lib-tests		compattestfile,atf,sljit,kyua
 ./usr/tests/lib/libsljit/h_sljit			tests-lib-tests		compattestfile,atf,sljit
 ./usr/tests/lib/libsljit/t_sljit			tests-lib-tests		compattestfile,atf,sljit
+./usr/tests/lib/libstdc++				tests-lib-tests		compattestfile,atf
+./usr/tests/lib/libstdc++/Atffile			tests-lib-tests		compattestfile,atf
+./usr/tests/lib/libstdc++/Kyuafile			tests-lib-tests		compattestfile,atf,kyua
+./usr/tests/lib/libstdc++/h_cin_nosync			tests-lib-tests		compattestfile,atf
+./usr/tests/lib/libstdc++/t_sync_with_stdio		tests-lib-tests		compattestfile,atf
 ./usr/tests/lib/libtre					tests-lib-tests		compattestfile,atf
 ./usr/tests/lib/libtre/Atffile				tests-lib-tests		compattestfile,atf
 ./usr/tests/lib/libtre/Kyuafile				tests-lib-tests		compattestfile,atf,kyua

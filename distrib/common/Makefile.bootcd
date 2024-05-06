@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.bootcd,v 1.44 2020/10/11 14:10:04 jmcneill Exp $
+#	$NetBSD: Makefile.bootcd,v 1.48 2024/04/25 11:56:51 nia Exp $
 #
 # Makefile snipped to create a CD/DVD ISO
 #
@@ -53,13 +53,31 @@ CDROMS_RELEASEDIR?=	${MACHINE}/installation/cdrom
 CDROMS_RELEASEDIR?=	images
 .endif
 .if defined(CDRELEASE_NOISOS)
-CDRELEASE_EXCLUDE=	-s ',./installation/cdrom.*,,gp'
+CDRELEASE_EXCLUDE+=	-s ',./installation/cdrom.*,,gp'
+.endif
+.if defined(CDRELEASE_NOCOMPAT)
+.  for sufx in tgz tar.xz
+CDRELEASE_EXCLUDE+=	-s ',./binary/sets/base32.${sufx},,gp'
+CDRELEASE_EXCLUDE+=	-s ',./binary/sets/base64.${sufx},,gp'
+.  endfor
 .endif
 .if defined(CDRELEASE_NODEBUG)
-CDRELEASE_EXCLUDE+=	-s ',./binary/sets/debug.tgz,,gp'
-CDRELEASE_EXCLUDE+=	-s ',./binary/sets/xdebug.tgz,,gp'
-CDRELEASE_EXCLUDE+=	-s ',./binary/sets/debug.tar.xz,,gp'
-CDRELEASE_EXCLUDE+=	-s ',./binary/sets/xdebug.tar.xz,,gp'
+.  for sufx in tgz tar.xz
+CDRELEASE_EXCLUDE+=	-s ',./binary/sets/debug.${sufx},,gp'
+CDRELEASE_EXCLUDE+=	-s ',./binary/sets/debug32.${sufx},,gp'
+CDRELEASE_EXCLUDE+=	-s ',./binary/sets/debug64.${sufx},,gp'
+CDRELEASE_EXCLUDE+=	-s ',./binary/sets/xdebug.${sufx},,gp'
+.  endfor
+.endif
+.if defined(CDRELEASE_NOHTML)
+.  for sufx in tgz tar.xz
+CDRELEASE_EXCLUDE+=	-s ',./binary/sets/manhtml.${sufx},,gp'
+.  endfor
+.endif
+.if defined(CDRELEASE_NOTESTS)
+.  for sufx in tgz tar.xz
+CDRELEASE_EXCLUDE+=	-s ',./binary/sets/tests.${sufx},,gp'
+.  endfor
 .endif
 .if !defined(CDRELEASE_LIVEIMAGE)
 CDRELEASE_EXCLUDE+=	-s ',./installation/liveimage.*,,gp'
@@ -105,6 +123,8 @@ ECHO?=		echo
 
 .if ${CDRELEASE} == false
 CDIMAGE=	${CDBASE}.iso
+.elif ${CDBASE:M*dvd}
+CDIMAGE=	NetBSD-${DISTRIBVER}-${CDBASE:S/dvd$//}-dvd.iso
 .else
 CDIMAGE=	NetBSD-${DISTRIBVER}-${CDBASE:S/cd$//}.iso
 .endif

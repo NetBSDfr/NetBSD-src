@@ -1,4 +1,4 @@
-#  $NetBSD: Makefile,v 1.227 2024/03/26 20:12:47 rillig Exp $
+#  $NetBSD: Makefile,v 1.231 2024/05/05 22:52:19 riastradh Exp $
 #
 #  @(#)Makefile 5.1beta 93/09/24
 #
@@ -82,7 +82,6 @@ COPTS+=	-mfloat-ieee -mieee-with-inexact -mfp-trap-mode=sui -mtrap-precision=i
 .if ${MKSOFTFLOAT} == "no"
 COMMON_SRCS+= fenv.c
 .endif
-COMMON_SRCS+= s_rintl.c
 .for f in fenv.c lrint.S lrintf.S s_fabsf.S s_fma.S s_fmaf.S
 COPTS.$f +=	-mfpu=vfp
 .endfor
@@ -98,7 +97,7 @@ COMMON_SRCS += fenv.c
 
 .elif (${LIBC_MACHINE_ARCH} == "hppa")
 .PATH.c: ${.CURDIR}/arch/hppa
-COMMON_SRCS+= fenv.c s_rintl.c
+COMMON_SRCS+= fenv.c
 
 .elif (${LIBC_MACHINE_ARCH} == "sparc")
 .PATH: ${.CURDIR}/arch/sparc
@@ -131,8 +130,10 @@ ARCH_SRCS = e_acos.S e_asin.S e_atan2.S e_exp.S e_expf.S e_fmod.S e_log.S \
 	    s_atanf.S s_ceil.S s_ceilf.S s_copysign.S s_copysignf.S \
 	    s_finite.S s_finitef.S s_floor.S s_floorf.S \
 	    s_log1p.S s_log1pf.S s_logb.S s_logbf.S s_logbl.S \
-	    s_rint.S s_rintf.S s_scalbn.S s_scalbnf.S s_significand.S \
-	    s_significandf.S lrint.S
+	    s_rint.S s_rintf.S s_rintl.S \
+	    s_scalbn.S s_scalbnf.S \
+	    s_significand.S s_significandf.S \
+	    lrint.S
 # do not pick up the i387 asm version for the following functions;
 # it is incorrect
 .for f in cos cosf modf ilogb ilogbl ilogbf sin sinf tan tanf
@@ -205,9 +206,9 @@ ARCH_SRCS += s_fma.S s_fmaf.S
 .if ${MKSOFTFLOAT} == "no"
 COMMON_SRCS += fenv.c
 .endif
-COMMON_SRCS+= s_rintl.c
 .if ${MACHINE_MIPS64} && (!defined(CPUFLAGS) || empty(CPUFLAGS:M-mabi=32))
 COMMON_SRCS+= s_nexttoward.c
+COMMON_SRCS+= s_rintl.c
 .endif
 COMMON_SRCS+= s_fma.c s_fmaf.c s_fmal.c
 

@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.own.mk,v 1.1367 2024/04/07 14:40:34 tsutsui Exp $
+#	$NetBSD: bsd.own.mk,v 1.1373 2024/04/28 08:01:04 nia Exp $
 
 # This needs to be before bsd.init.mk
 .if defined(BSD_MK_COMPAT_FILE)
@@ -1301,7 +1301,6 @@ MKRADEONFIRMWARE.x86_64=	yes
 MKRADEONFIRMWARE.i386=		yes
 MKRADEONFIRMWARE.aarch64=	yes
 MKAMDGPUFIRMWARE.x86_64=	yes
-MKAMDGPUFIRMWARE.i386=		yes
 
 # Only install the tegra firmware on evbarm.
 MKTEGRAFIRMWARE.evbarm=		yes
@@ -1320,7 +1319,23 @@ MKDTB.earmv7hfeb=		yes
 MKDTB.riscv32=			yes
 MKDTB.riscv64=			yes
 
-HAVE_MESA_VER?=	19
+# During transition from xorg-server 1.10 to 1.20
+.if \
+    ${MACHINE} == "alpha"	|| \
+    ${MACHINE} == "netwinder"	|| \
+    ${MACHINE} == "sgimips"
+HAVE_XORG_SERVER_VER?=110
+.else
+HAVE_XORG_SERVER_VER?=120
+.endif
+
+# Newer Mesa does not build with old X server
+# VAX build triggers a gcc internal error
+.if ${HAVE_XORG_SERVER_VER} != "120" || ${MACHINE} == "vax"
+HAVE_MESA_VER=19
+.endif
+
+HAVE_MESA_VER?=	21
 .if ${HAVE_MESA_VER} == 19
 EXTERNAL_MESALIB_DIR?=	MesaLib.old
 .elif ${HAVE_MESA_VER} == 21
@@ -1607,7 +1622,6 @@ ${var}?= no
 # format if USE_PIGZGZIP is enabled.
 .if ${USE_PIGZGZIP} == "no" && \
     (${MACHINE} == "amd64" || \
-     ${MACHINE} == "sparc64" || \
      ${MACHINE_ARCH:Maarch64*})
 USE_XZ_SETS?= yes
 .else
@@ -1669,16 +1683,6 @@ X11SRCDIR.${_lib}?=		${X11SRCDIRMIT}/lib${_lib}/dist
 	xcb- xorg
 X11SRCDIR.${_proto}proto?=		${X11SRCDIRMIT}/${_proto}proto/dist
 .endfor
-
-# During transition from xorg-server 1.10 to 1.20
-.if \
-    ${MACHINE} == "alpha"	|| \
-    ${MACHINE} == "netwinder"	|| \
-    ${MACHINE} == "sgimips"
-HAVE_XORG_SERVER_VER?=110
-.else
-HAVE_XORG_SERVER_VER?=120
-.endif
 
 .if ${HAVE_XORG_SERVER_VER} == "120"
 XORG_SERVER_SUBDIR?=xorg-server

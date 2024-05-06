@@ -1,4 +1,4 @@
-/*	$NetBSD: util.c,v 1.75 2024/04/09 15:17:24 nia Exp $	*/
+/*	$NetBSD: util.c,v 1.77 2024/04/25 11:25:08 hannken Exp $	*/
 
 /*
  * Copyright 1997 Piermont Information Systems Inc.
@@ -125,6 +125,9 @@ distinfo dist_list[] = {
 #ifdef HAVE_BASE32
 	{"base32",		SET_BASE32,		false, MSG_set_base32, NULL},
 #endif
+#ifdef HAVE_BASE64
+	{"base64",		SET_BASE64,		false, MSG_set_base64, NULL},
+#endif
 #ifdef HAVE_DTB
 	{"dtb",			SET_DTB,		false, MSG_set_dtb, NULL},
 #endif
@@ -169,6 +172,9 @@ distinfo dist_list[] = {
 	{"debug",		SET_DEBUG,		false, MSG_set_debug, NULL},
 #ifdef HAVE_DEBUG32
 	{"debug32",		SET_DEBUG32,		false, MSG_set_debug32, NULL},
+#endif
+#ifdef HAVE_DEBUG64
+	{"debug64",		SET_DEBUG64,		false, MSG_set_debug64, NULL},
 #endif
 	{"xdebug",		SET_X11_DEBUG,		false, MSG_set_xdebug, NULL},
 	{NULL,			SET_GROUP_END,		false, NULL, NULL},
@@ -240,7 +246,7 @@ init_set_status(int flags)
 	i = strlen(msg_all); if (i > len) {len = i; longest = msg_all; }
 	i = strlen(msg_some); if (i > len) {len = i; longest = msg_some; }
 	i = strlen(msg_none); if (i > len) {len = i; longest = msg_none; }
-	select_menu_width = snprintf(NULL, 0, "%-30s %s", "", longest);
+	select_menu_width = snprintf(NULL, 0, "%-40s %s", "", longest);
 
 	/* Give the md code a chance to choose the right kernel, etc. */
 	md_init_set_status(flags);
@@ -864,7 +870,7 @@ set_label(menudesc *menu, int opt, void *arg)
 		}
 	}
 
-	wprintw(menu->mw, "%-30s %s", msg_string(desc), selected);
+	wprintw(menu->mw, "%-40s %s", msg_string(desc), selected);
 }
 
 static int set_sublist(menudesc *menu, void *arg);
