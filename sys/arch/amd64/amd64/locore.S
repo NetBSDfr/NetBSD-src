@@ -386,6 +386,12 @@ END(biosextmem)
 	.type	_C_LABEL(lwp0uarea), @object
 LABEL(lwp0uarea)	.quad	0
 END(lwp0uarea)
+	.type	_C_LABEL(starttsc_lo), @object
+LABEL(starttsc_lo)		.long	0	/* low part of rdtsc */
+END(starttsc_lo)
+	.type	_C_LABEL(starttsc_hi), @object
+LABEL(starttsc_hi)		.long	0	/* high part of rdtsc */
+END(starttsc_hi)
 
 #ifndef XENPV
 	.globl	gdt64_lo
@@ -1037,6 +1043,10 @@ END(start)
 /* entry point for Xen PVH */
 	.code32
 ENTRY(start_genpvh)
+	/* record boot start cycle count */
+	rdtsc
+	movl	%eax, RELOC(starttsc_lo)
+	movl	%edx, RELOC(starttsc_hi)
 	/* Xen doesn't start us with a valid gdt */
 	movl    $RELOC(gdtdesc32), %eax
 	lgdt    (%eax)
