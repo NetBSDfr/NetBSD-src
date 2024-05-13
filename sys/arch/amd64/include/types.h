@@ -101,6 +101,7 @@ typedef	unsigned char		__cpu_simple_lock_nv_t;
 #define	__HAVE_MM_MD_DIRECT_MAPPED_PHYS
 #define	__HAVE_UCAS_FULL
 #define	__HAVE_BUS_SPACE_8
+#define	__HAVE_BOOTCYCLECOUNT
 
 #ifdef _KERNEL_OPT
 #define	__HAVE_RAS

@@ -232,6 +232,10 @@ extern void *_binary_splash_image_end;
 
 #include <sys/userconf.h>
 
+#ifdef BOOTCYCLETIME
+#include <sys/bootcyclecount.h>
+#endif
+
 extern time_t rootfstime;
 
 #ifndef curlwp
@@ -271,6 +275,9 @@ main(void)
 #endif
 	CPU_INFO_ITERATOR cii;
 	struct cpu_info *ci;
+#ifdef BOOTCYCLETIME
+	extern uint64_t bootccount;
+#endif
 
 #ifdef DIAGNOSTIC
 	/*
@@ -747,6 +754,11 @@ main(void)
 	cv_broadcast(&lbolt);
 	mutex_exit(&proc_lock);
 
+#ifdef BOOTCYCLETIME
+	bootcyclecount();
+	printf_nolog("boot: %lums (entry tsc: %lu)\n",
+		bootccount * 1000 / bootcyclecountfreq(), bootccount);
+#endif
 	/* The scheduler is an infinite loop. */
 	uvm_scheduler();
 	/* NOTREACHED */

@@ -1378,6 +1378,9 @@ const_sysctl(struct sysctllog **clog, const char *name, int type,
 SYSCTL_SETUP(sysctl_machdep_setup, "sysctl machdep subtree setup")
 {
 	extern uint64_t tsc_freq;
+#ifdef BOOTCYCLETIME
+	extern uint64_t bootccount;
+#endif
 #ifndef XENPV
 	extern int tsc_user_enabled;
 #endif
@@ -1424,6 +1427,13 @@ SYSCTL_SETUP(sysctl_machdep_setup, "sysctl machdep subtree setup")
 		       CTLTYPE_QUAD, "tsc_freq", NULL,
 		       NULL, 0, &tsc_freq, 0,
 		       CTL_MACHDEP, CTL_CREATE, CTL_EOL);
+#ifdef BOOTCYCLETIME
+	sysctl_createv(clog, 0, NULL, NULL,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_QUAD, "bootccount", NULL,
+		       NULL, 0, &bootccount, 0,
+		       CTL_MACHDEP, CTL_CREATE, CTL_EOL);
+#endif
 	sysctl_createv(clog, 0, NULL, NULL,
 		       CTLFLAG_PERMANENT,
 		       CTLTYPE_INT, "pae",

@@ -134,5 +134,6 @@ typedef __register_t	register_t;
 #define	__HAVE_COMMON___TLS_GET_ADDR
 #define	__HAVE_UCAS_FULL
 #define	__HAVE_RAS
+#define	__HAVE_BOOTCYCLECOUNT
 
 #endif	/* _I386_MACHTYPES_H_ */

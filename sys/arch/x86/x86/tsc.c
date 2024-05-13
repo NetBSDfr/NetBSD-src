@@ -39,6 +39,9 @@ __KERNEL_RCSID(0, "$NetBSD: tsc.c,v 1.61 2024/10/03 12:29:07 riastradh Exp $");
 #include <sys/cpu.h>
 #include <sys/xcall.h>
 #include <sys/lock.h>
+#ifdef BOOTCYCLETIME
+#include <sys/bootcyclecount.h>
+#endif
 
 #include <machine/cpu_counter.h>
 #include <machine/cpuvar.h>
@@ -57,6 +60,9 @@ static void	tsc_delay(unsigned int);
 
 static uint64_t	tsc_dummy_cacheline __cacheline_aligned;
 uint64_t	tsc_freq __read_mostly;	/* exported for sysctl */
+#ifdef BOOTCYCLETIME
+uint64_t	bootccount __read_mostly;	/* exported for sysctl */
+#endif
 static int64_t	tsc_drift_max = 1000;	/* max cycles */
 static int64_t	tsc_drift_observed;
 uint64_t	(*rdtsc)(void) = rdtsc_cpuid;
@@ -466,3 +472,19 @@ tsc_tc_reset(void)
 	LIST_FOREACH(l, &alllwp, l_list)
 		l->l_md.md_tsc = 0;
 }
+
+#ifdef BOOTCYCLETIME
+/* Returns cycle count since entrypoint */
+void
+bootcyclecount(void)
+{
+	bootccount = rdtsc() - ((uint64_t)starttsc_hi << 32 | starttsc_lo);
+}
+
+uint64_t
+bootcyclecountfreq(void)
+{
+	KASSERT(CPU_IS_PRIMARY(curcpu()));
+	return curcpu()->ci_data.cpu_cc_freq;
+}
+#endif
