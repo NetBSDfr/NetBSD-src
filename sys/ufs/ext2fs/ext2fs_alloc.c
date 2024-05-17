@@ -1,4 +1,4 @@
-/*	$NetBSD: ext2fs_alloc.c,v 1.56 2023/08/26 22:08:22 christos Exp $	*/
+/*	$NetBSD: ext2fs_alloc.c,v 1.58 2024/05/14 19:00:44 andvar Exp $	*/
 
 /*
  * Copyright (c) 1982, 1986, 1989, 1993
@@ -60,7 +60,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ext2fs_alloc.c,v 1.56 2023/08/26 22:08:22 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ext2fs_alloc.c,v 1.58 2024/05/14 19:00:44 andvar Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -240,7 +240,7 @@ ext2fs_dirpref(struct m_ext2fs *fs)
  * If no blocks have been allocated in the first section, the policy is to
  * request a block in the same cylinder group as the inode that describes
  * the file. Otherwise, the policy is to try to allocate the blocks
- * contigously. The two fields of the ext2 inode extension (see
+ * contiguously. The two fields of the ext2 inode extension (see
  * ufs/ufs/inode.h) help this.
  */
 daddr_t
@@ -252,8 +252,8 @@ ext2fs_blkpref(struct inode *ip, daddr_t lbn, int indx,
 
 	fs = ip->i_e2fs;
 	/*
-	 * if we are doing contigous lbn allocation, try to alloc blocks
-	 * contigously on disk
+	 * if we are doing contiguous lbn allocation, try to alloc blocks
+	 * contiguously on disk
 	 */
 
 	if ( ip->i_e2fs_last_blk && lbn == ip->i_e2fs_last_lblk + 1) {
@@ -381,7 +381,7 @@ ext2fs_alloccg(struct inode *ip, int cg, daddr_t bpref, int size)
 	/*
 	 * no blocks in the requested cylinder, so take next
 	 * available one in this cylinder group.
-	 * first try to get 8 contigous blocks, then fall back to a single
+	 * first try to get 8 contiguous blocks, then fall back to a single
 	 * block.
 	 */
 	if (bpref)

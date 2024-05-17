@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.612 2024/03/10 02:53:37 sjg Exp $	*/
+/*	$NetBSD: main.c,v 1.615 2024/05/07 18:26:22 sjg Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -111,7 +111,7 @@
 #include "trace.h"
 
 /*	"@(#)main.c	8.3 (Berkeley) 3/19/94"	*/
-MAKE_RCSID("$NetBSD: main.c,v 1.612 2024/03/10 02:53:37 sjg Exp $");
+MAKE_RCSID("$NetBSD: main.c,v 1.615 2024/05/07 18:26:22 sjg Exp $");
 #if defined(MAKE_NATIVE)
 __COPYRIGHT("@(#) Copyright (c) 1988, 1989, 1990, 1993 "
 	    "The Regents of the University of California.  "
@@ -1156,6 +1156,8 @@ InitDefSysIncPath(char *syspath)
 	else
 		syspath = bmake_strdup(syspath);
 
+	/* do NOT search .CURDIR first for .include <makefile> */
+	SearchPath_Add(defSysIncPath, ".DOTLAST");
 	for (start = syspath; *start != '\0'; start = p) {
 		for (p = start; *p != '\0' && *p != ':'; p++)
 			continue;
@@ -1199,7 +1201,7 @@ ReadBuiltinRules(void)
 		Fatal("%s: cannot open %s.",
 		    progname, (const char *)sysMkFiles.first->datum);
 
-	Lst_DoneCall(&sysMkFiles, free);
+	Lst_DoneFree(&sysMkFiles);
 }
 
 static void
@@ -1387,7 +1389,7 @@ main_Init(int argc, char **argv)
 	Global_Set(".MAKEOVERRIDES", "");
 	Global_Set("MFLAGS", "");
 	Global_Set(".ALLTARGETS", "");
-	Var_Set(SCOPE_CMDLINE, ".MAKE.LEVEL.ENV", MAKE_LEVEL_ENV);
+	Global_Set_ReadOnly(".MAKE.LEVEL.ENV", MAKE_LEVEL_ENV);
 
 	/* Set some other useful variables. */
 	{
@@ -1564,9 +1566,9 @@ static void
 main_CleanUp(void)
 {
 #ifdef CLEANUP
-	Lst_DoneCall(&opts.variables, free);
-	Lst_DoneCall(&opts.makefiles, free);
-	Lst_DoneCall(&opts.create, free);
+	Lst_DoneFree(&opts.variables);
+	Lst_DoneFree(&opts.makefiles);
+	Lst_DoneFree(&opts.create);
 #endif
 
 	if (DEBUG(GRAPH2))

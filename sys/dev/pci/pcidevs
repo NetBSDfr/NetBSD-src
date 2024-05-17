@@ -1,4 +1,4 @@
-$NetBSD: pcidevs,v 1.1504 2024/04/06 09:10:11 andvar Exp $
+$NetBSD: pcidevs,v 1.1506 2024/05/12 23:30:07 msaitoh Exp $
 
 /*
  * Copyright (c) 1995, 1996 Christopher G. Demetriou
@@ -7476,6 +7476,9 @@ product INTEL RPL_IGD_6		0xa7a0	Raptor Lake Graphics (96 or 80EU)
 product INTEL RPL_IGD_7		0xa7a1	Raptor Lake Graphics (96 or 80EU)
 product INTEL RPL_IGD_8		0xa7a8	Raptor Lake Graphics (64 or 48EU)
 product INTEL RPL_IGD_9		0xa7a9	Raptor Lake Graphics (64 or 48EU)
+product INTEL RPL_IGD_10	0xa7aa	Raptor Lake Graphics (96 or 80EU)
+product INTEL RPL_IGD_11	0xa7ac	Raptor Lake Graphics (96 or 80EU)
+product INTEL RPL_IGD_12	0xa7ad	Raptor Lake Graphics (64EU)
 product INTEL 21152		0xb152	S21152BB PCI-PCI Bridge
 product INTEL 21154		0xb154	S21152BA,S21154AE/BE PCI-PCI Bridge
 product INTEL 21555		0xb555	21555 Non-Transparent PCI-PCI Bridge
@@ -7856,8 +7859,10 @@ product PHILIPS SAA7135HL	0x7135	SAA7135HL PCI A/V Broadcast Decoder
 product PHILIPS SAA7146AH	0x7146	SAA7146AH PCI Multimedia Bridge
 
 /* Phison products */
-product PHISON PS5000		0x5000 PS5000
-product PHISON PS5016		0x5016 PS5016
+product PHISON PS5000		0x5000	PS5000
+product PHISON PS5016		0x5016	PS5016
+product PHISON PS5021		0x5021	PS5021
+product PHISON PS5026		0x5026	PS5026
 
 /* NCR/Symbios Logic products */
 product SYMBIOS 810			0x0001	53c810

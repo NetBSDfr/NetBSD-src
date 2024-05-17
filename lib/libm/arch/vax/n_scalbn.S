@@ -30,7 +30,7 @@
 #include <machine/asm.h>
 #include <sys/errno.h>
 
-RCSID("$NetBSD: n_scalbn.S,v 1.6 2022/04/04 19:33:44 andvar Exp $")
+RCSID("$NetBSD: n_scalbn.S,v 1.8 2024/05/07 15:15:31 riastradh Exp $")
 
 WEAK_ALIAS(scalbn,_scalbn)
 WEAK_ALIAS(scalbnl,_scalbnl)
@@ -43,8 +43,9 @@ ENTRY(_scalbnf, 0)
 	cvtfd	4(%ap), %r0
 	movl	8(%ap), %r2
 	jr	1f
+END(_scalbnf)
 
-ALTENTRY(_scalbnl)
+STRONG_ALIAS(_scalbnl, _scalbn)
 ENTRY(_scalbn, 0)
 	movd	4(%ap), %r0
 	movl	12(%ap), %r2
@@ -82,3 +83,4 @@ copysign:
 	bisw2	$0x8000, %r0		/* preserve sign-bit */
 5:
 	ret
+END(_scalbn)

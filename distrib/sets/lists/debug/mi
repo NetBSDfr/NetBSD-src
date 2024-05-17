@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.431 2024/04/09 15:17:23 nia Exp $
+# $NetBSD: mi,v 1.435 2024/05/05 02:53:01 riastradh Exp $
 ./etc/mtree/set.debug                           comp-sys-root
 ./usr/lib					comp-sys-usr		compatdir
 ./usr/lib/i18n/libBIG5_g.a			comp-c-debuglib		debuglib
@@ -1681,6 +1681,7 @@
 ./usr/libdata/debug/usr/tests/dev/scsipi/t_cd.debug			tests-fs-debug		debug,atf,rump
 ./usr/libdata/debug/usr/tests/dev/sysmon/t_swwdog.debug			tests-fs-debug		debug,atf,rump
 ./usr/libdata/debug/usr/tests/dev/usb/t_hid.debug			tests-fs-debug		debug,atf,rump
+./usr/libdata/debug/usr/tests/fs/cd9660/h_hexdump_r.debug		tests-fs-debug		debug,atf,rump
 ./usr/libdata/debug/usr/tests/fs/ffs/h_ffs_server.debug			tests-fs-debug		debug,atf,rump
 ./usr/libdata/debug/usr/tests/fs/ffs/h_quota2_server.debug		tests-obsolete		obsolete,compattestfile
 ./usr/libdata/debug/usr/tests/fs/ffs/h_quota2_tests.debug		tests-fs-debug		debug,atf,rump
@@ -1821,6 +1822,7 @@
 ./usr/libdata/debug/usr/tests/kernel/t_pty.debug			tests-kernel-tests	debug,atf,compattestfile
 ./usr/libdata/debug/usr/tests/kernel/t_rnd.debug			tests-kernel-tests	debug,atf,rump
 ./usr/libdata/debug/usr/tests/kernel/t_sigaction.debug			tests-obsolete		obsolete,compattestfile
+./usr/libdata/debug/usr/tests/kernel/t_signal_and_sp.debug		tests-kernel-tests	debug,atf,compattestfile
 ./usr/libdata/debug/usr/tests/kernel/t_subr_prf.debug			tests-kernel-tests	debug,atf,compattestfile
 ./usr/libdata/debug/usr/tests/kernel/t_sysctl.debug			tests-kernel-tests	debug,atf,compattestfile
 ./usr/libdata/debug/usr/tests/kernel/t_sysv.debug			tests-kernel-tests	debug,atf,compattestfile
@@ -2318,6 +2320,7 @@
 ./usr/libdata/debug/usr/tests/lib/libm/t_libm.debug			tests-obsolete		obsolete,compattestfile
 ./usr/libdata/debug/usr/tests/lib/libm/t_log.debug			tests-lib-debug		debug,atf,compattestfile
 ./usr/libdata/debug/usr/tests/lib/libm/t_modf.debug			tests-lib-debug		debug,atf,compattestfile
+./usr/libdata/debug/usr/tests/lib/libm/t_next.debug			tests-lib-debug		debug,atf,compattestfile
 ./usr/libdata/debug/usr/tests/lib/libm/t_pow.debug			tests-lib-debug		debug,atf,compattestfile
 ./usr/libdata/debug/usr/tests/lib/libm/t_precision.debug		tests-lib-debug		debug,atf,compattestfile
 ./usr/libdata/debug/usr/tests/lib/libm/t_round.debug			tests-lib-debug		debug,atf,compattestfile
@@ -2389,6 +2392,7 @@
 ./usr/libdata/debug/usr/tests/lib/librumphijack/h_netget.debug			tests-lib-debug		debug,atf,rump
 ./usr/libdata/debug/usr/tests/lib/libskey/t_algorithms.debug		tests-lib-debug		debug,atf,skey,compattestfile
 ./usr/libdata/debug/usr/tests/lib/libsljit/h_sljit.debug		tests-lib-debug		debug,atf,sljit,compattestfile
+./usr/libdata/debug/usr/tests/lib/libstdc++/h_cin_nosync.debug			tests-lib-tests		compattestfile,atf
 ./usr/libdata/debug/usr/tests/lib/libtre/h_regex_att.debug		tests-obsolete		obsolete,compattestfile
 ./usr/libdata/debug/usr/tests/lib/libtre/t_exhaust.debug		tests-lib-debug		debug,atf,compattestfile
 ./usr/libdata/debug/usr/tests/lib/libtre/t_regex_att.debug		tests-lib-debug		debug,atf,compattestfile

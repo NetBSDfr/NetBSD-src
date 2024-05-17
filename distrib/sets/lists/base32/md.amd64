@@ -1,4 +1,4 @@
-# $NetBSD: md.amd64,v 1.1 2024/04/09 15:17:23 nia Exp $
+# $NetBSD: md.amd64,v 1.8 2024/05/06 05:27:46 mrg Exp $
 ./lib/i386					base-compat-shlib	compat
 ./lib/i386/npf					base-compat-shlib	compat,npf
 ./lib/i386/npf/ext_log.so			base-compat-shlib	compat,npf
@@ -88,8 +88,10 @@
 ./usr/lib/i386/libarchive.so.5			base-compat-shlib	compat
 ./usr/lib/i386/libarchive.so.5.0		base-compat-shlib	compat
 ./usr/lib/i386/libasan.so			base-compat-shlib	compat,gcc,cxx
-./usr/lib/i386/libasan.so.5			base-compat-shlib	compat,gcc,cxx
-./usr/lib/i386/libasan.so.5.0			base-compat-shlib	compat,gcc,cxx
+./usr/lib/i386/libasan.so.5			base-compat-shlib	compat,gcc=10,cxx
+./usr/lib/i386/libasan.so.5.0			base-compat-shlib	compat,gcc=10,cxx
+./usr/lib/i386/libasan.so.6			base-compat-shlib	compat,gcc=12,cxx
+./usr/lib/i386/libasan.so.6.0			base-compat-shlib	compat,gcc=12,cxx
 ./usr/lib/i386/libasn1.so			base-compat-shlib	compat,kerberos
 ./usr/lib/i386/libasn1.so.10			base-compat-shlib	compat,kerberos
 ./usr/lib/i386/libasn1.so.10.0			base-compat-shlib	compat,kerberos
@@ -122,6 +124,9 @@
 ./usr/lib/i386/libbz2.so			base-compat-shlib	compat
 ./usr/lib/i386/libbz2.so.1			base-compat-shlib	compat
 ./usr/lib/i386/libbz2.so.1.1			base-compat-shlib	compat
+./usr/lib/i386/libc++.so			base-compat-shlib	compat,libcxx
+./usr/lib/i386/libc++.so.1			base-compat-shlib	compat,libcxx
+./usr/lib/i386/libc++.so.1.0			base-compat-shlib	compat,libcxx
 ./usr/lib/i386/libc.so				base-compat-shlib	compat
 ./usr/lib/i386/libc.so.12			base-compat-shlib	compat
 ./usr/lib/i386/libc.so.12.221			base-compat-shlib	compat
@@ -137,9 +142,9 @@
 ./usr/lib/i386/libcrypto.so			base-compat-shlib	compat
 ./usr/lib/i386/libcrypto.so.15			base-compat-shlib	compat
 ./usr/lib/i386/libcrypto.so.15.0		base-compat-shlib	compat
-./usr/lib/i386/libctf.so			base-compat-shlib	compat
-./usr/lib/i386/libctf.so.3			base-compat-shlib	compat
-./usr/lib/i386/libctf.so.3.0			base-compat-shlib	compat
+./usr/lib/i386/libctf.so			base-compat-shlib	compat,ctf
+./usr/lib/i386/libctf.so.3			base-compat-shlib	compat,ctf
+./usr/lib/i386/libctf.so.3.0			base-compat-shlib	compat,ctf
 ./usr/lib/i386/libcurses.so			base-compat-shlib	compat
 ./usr/lib/i386/libcurses.so.9			base-compat-shlib	compat
 ./usr/lib/i386/libcurses.so.9.1			base-compat-shlib	compat
@@ -202,7 +207,8 @@
 ./usr/lib/i386/libgnumalloc.so.1.0		base-compat-shlib	compat
 ./usr/lib/i386/libgomp.so			base-compat-shlib	compat,gcc
 ./usr/lib/i386/libgomp.so.2			base-compat-shlib	compat,gcc
-./usr/lib/i386/libgomp.so.2.1			base-compat-shlib	compat,gcc
+./usr/lib/i386/libgomp.so.2.1			base-compat-shlib	compat,gcc=10
+./usr/lib/i386/libgomp.so.2.2			base-compat-shlib	compat,gcc=12
 ./usr/lib/i386/libgssapi.so			base-compat-shlib	compat,kerberos
 ./usr/lib/i386/libgssapi.so.12			base-compat-shlib	compat,kerberos
 ./usr/lib/i386/libgssapi.so.12.0		base-compat-shlib	compat,kerberos
@@ -277,8 +283,10 @@
 ./usr/lib/i386/libldap_r.so.6			base-compat-shlib	compat,ldap
 ./usr/lib/i386/libldap_r.so.6.0			base-compat-shlib	compat,ldap
 ./usr/lib/i386/liblsan.so			base-compat-shlib	compat,cxx,gcc
-./usr/lib/i386/liblsan.so.2			base-compat-shlib	compat,cxx,gcc
-./usr/lib/i386/liblsan.so.2.0			base-compat-shlib	compat,cxx,gcc
+./usr/lib/i386/liblsan.so.2			base-compat-shlib	compat,cxx,gcc=10
+./usr/lib/i386/liblsan.so.2.0			base-compat-shlib	compat,cxx,gcc=10
+./usr/lib/i386/liblsan.so.3			base-compat-shlib	compat,cxx,gcc=12
+./usr/lib/i386/liblsan.so.3.0			base-compat-shlib	compat,cxx,gcc=12
 ./usr/lib/i386/liblua.so			base-compat-shlib	compat
 ./usr/lib/i386/liblua.so.6			base-compat-shlib	compat
 ./usr/lib/i386/liblua.so.6.1			base-compat-shlib	compat
@@ -321,12 +329,12 @@
 ./usr/lib/i386/libossaudio.so			base-compat-shlib	compat
 ./usr/lib/i386/libossaudio.so.1			base-compat-shlib	compat
 ./usr/lib/i386/libossaudio.so.1.1		base-compat-shlib	compat
-./usr/lib/i386/libp2k.so			base-compat-shlib	compat
-./usr/lib/i386/libp2k.so.2			base-compat-shlib	compat
-./usr/lib/i386/libp2k.so.2.0			base-compat-shlib	compat
-./usr/lib/i386/libpam.so			base-compat-shlib	compat
-./usr/lib/i386/libpam.so.4			base-compat-shlib	compat
-./usr/lib/i386/libpam.so.4.1			base-compat-shlib	compat
+./usr/lib/i386/libp2k.so			base-compat-shlib	compat,rump
+./usr/lib/i386/libp2k.so.2			base-compat-shlib	compat,rump
+./usr/lib/i386/libp2k.so.2.0			base-compat-shlib	compat,rump
+./usr/lib/i386/libpam.so			base-compat-shlib	compat,pam
+./usr/lib/i386/libpam.so.4			base-compat-shlib	compat,pam
+./usr/lib/i386/libpam.so.4.1			base-compat-shlib	compat,pam
 ./usr/lib/i386/libpanel.so			base-compat-shlib	compat
 ./usr/lib/i386/libpanel.so.3			base-compat-shlib	compat
 ./usr/lib/i386/libpanel.so.3.0			base-compat-shlib	compat
@@ -425,7 +433,8 @@
 ./usr/lib/i386/libssl.so.15.0			base-compat-shlib	compat
 ./usr/lib/i386/libstdc++.so			base-compat-shlib	compat,gcc,cxx,libstdcxx
 ./usr/lib/i386/libstdc++.so.9			base-compat-shlib	compat,gcc,cxx,libstdcxx
-./usr/lib/i386/libstdc++.so.9.0			base-compat-shlib	compat,gcc,cxx,libstdcxx
+./usr/lib/i386/libstdc++.so.9.0			base-compat-shlib	compat,gcc=10,cxx,libstdcxx
+./usr/lib/i386/libstdc++.so.9.1			base-compat-shlib	compat,gcc=12,cxx,libstdcxx
 ./usr/lib/i386/libtermcap.so			base-compat-shlib	compat
 ./usr/lib/i386/libtermcap.so.0			base-compat-shlib	compat
 ./usr/lib/i386/libtermcap.so.0.6		base-compat-shlib	compat
@@ -439,11 +448,13 @@
 ./usr/lib/i386/libtre.so.0			base-compat-shlib	compat
 ./usr/lib/i386/libtre.so.0.8			base-compat-shlib	compat
 ./usr/lib/i386/libubsan.so			base-compat-shlib	compat,gcc,cxx
-./usr/lib/i386/libubsan.so.4			base-compat-shlib	compat,gcc,cxx
-./usr/lib/i386/libubsan.so.4.0			base-compat-shlib	compat,gcc,cxx
-./usr/lib/i386/libukfs.so			base-compat-shlib	compat
-./usr/lib/i386/libukfs.so.1			base-compat-shlib	compat
-./usr/lib/i386/libukfs.so.1.0			base-compat-shlib	compat
+./usr/lib/i386/libubsan.so.4			base-compat-shlib	compat,gcc=10,cxx
+./usr/lib/i386/libubsan.so.4.0			base-compat-shlib	compat,gcc=10,cxx
+./usr/lib/i386/libubsan.so.5			base-compat-shlib	compat,gcc=12,cxx
+./usr/lib/i386/libubsan.so.5.0			base-compat-shlib	compat,gcc=12,cxx
+./usr/lib/i386/libukfs.so			base-compat-shlib	compat,rump
+./usr/lib/i386/libukfs.so.1			base-compat-shlib	compat,rump
+./usr/lib/i386/libukfs.so.1.0			base-compat-shlib	compat,rump
 ./usr/lib/i386/libumem.so			base-compat-shlib	compat,zfs
 ./usr/lib/i386/libumem.so.0			base-compat-shlib	compat,zfs
 ./usr/lib/i386/libumem.so.0.0			base-compat-shlib	compat,zfs
@@ -485,6 +496,8 @@
 ./usr/lib/i386/lua/5.4/netpgp.so		base-compat-shlib	compat
 ./usr/lib/i386/lua/5.4/sqlite.so		base-compat-shlib	compat
 ./usr/lib/i386/lua/5.4/syslog.so		base-compat-shlib	compat
+./usr/lib/i386/named				base-compat-shlib	compat
+./usr/lib/i386/named/filter-aaaa.so.0		base-compat-shlib	compat
 ./usr/lib/i386/openssl				base-crypto-usr		compat
 ./usr/lib/i386/openssl/engines			base-crypto-usr		compat
 ./usr/lib/i386/openssl/engines/dasync.so	base-crypto-usr		compat,pic,openssl=30
@@ -522,4 +535,6 @@
 ./usr/libdata/debug/lib/i386/npf		base-compat-shlib	compat
 ./usr/libdata/debug/usr/lib/i386		base-compat-shlib	compat
 ./usr/libdata/debug/usr/lib/i386/i18n		base-compat-shlib	compat
+./usr/libdata/debug/usr/lib/i386/named		base-compat-shlib	compat
+./usr/libdata/debug/usr/lib/i386/security	base-compat-shlib	compat
 ./usr/libexec/ld.elf_so-i386			base-sys-shlib		compat,pic

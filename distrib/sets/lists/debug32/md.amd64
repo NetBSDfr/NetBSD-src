@@ -1,4 +1,4 @@
-# $NetBSD: md.amd64,v 1.1 2024/04/09 15:17:23 nia Exp $
+# $NetBSD: md.amd64,v 1.9 2024/04/30 18:34:19 martin Exp $
 ./usr/lib/i386/i18n/libBIG5_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/i386/i18n/libDECHanyu_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/i386/i18n/libEUCTW_g.a			comp-c-debuglib	debuglib,compat
@@ -29,13 +29,14 @@
 ./usr/lib/i386/libatf-c++_g.a			comp-c-debuglib	debuglib,compat,atf
 ./usr/lib/i386/libatf-c_g.a			comp-c-debuglib	debuglib,compat,atf
 ./usr/lib/i386/libavl_g.a			comp-c-debuglib	debuglib,compat,zfs
-./usr/lib/i386/libbfd_g.a	comp-sys-debug		debug,compat
+./usr/lib/i386/libbfd_g.a			comp-c-debuglib	debuglib,compat,binutils
 ./usr/lib/i386/libbind9_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/i386/libblocklist_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/i386/libbluetooth_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/i386/libbozohttpd_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/i386/libbsdmalloc_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/i386/libbz2_g.a			comp-c-debuglib	debuglib,compat
+./usr/lib/i386/libc++_g.a		comp-c-debuglib	debuglib,compat,libcxx
 ./usr/lib/i386/libc_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/i386/libcbor_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/i386/libcom_err_g.a			comp-c-debuglib	debuglib,compat
@@ -62,9 +63,9 @@
 ./usr/lib/i386/libfido2_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/i386/libfl_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/i386/libform_g.a			comp-c-debuglib	debuglib,compat
-./usr/lib/i386/libgcc_eh_g.a 			comp-sys-debug	debug,compat,gcc
+./usr/lib/i386/libgcc_eh_g.a 			comp-c-debuglib	debuglib,compat,gcc
 ./usr/lib/i386/libgcc_g.a			comp-c-debuglib	debuglib,compat,gcc
-./usr/lib/i386/libgcc_s_g.a			comp-sys-debug	debug,compat,gcc
+./usr/lib/i386/libgcc_s_g.a			comp-c-debuglib	debuglib,compat,gcc
 ./usr/lib/i386/libgcov_g.a			comp-c-debuglib	debuglib,compat,gcc
 ./usr/lib/i386/libgnuctf_g.a			comp-c-debuglib	debuglib,compat,binutils
 ./usr/lib/i386/libgnumalloc_g.a			comp-c-debuglib	debuglib,compat
@@ -197,19 +198,20 @@
 ./usr/libdata/debug/usr/lib/i386/libatf-c++.so.2.0.debug	comp-sys-debug	debug,compat,atf
 ./usr/libdata/debug/usr/lib/i386/libatf-c.so.0.0.debug	comp-sys-debug	debug,compat,atf
 ./usr/libdata/debug/usr/lib/i386/libavl.so.0.0.debug	comp-sys-debug	debug,compat,zfs
-./usr/libdata/debug/usr/lib/i386/libbfd.so.18.0.debug	comp-sys-debug	debug,compat
+./usr/libdata/debug/usr/lib/i386/libbfd.so.18.0.debug	comp-sys-debug	debug,compat,binutils=239
 ./usr/libdata/debug/usr/lib/i386/libbind9.so.21.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/i386/libblocklist.so.0.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/i386/libbluetooth.so.4.2.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/i386/libbozohttpd.so.1.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/i386/libbsdmalloc.so.0.1.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/i386/libbz2.so.1.1.debug	comp-sys-debug	debug,compat
+./usr/libdata/debug/usr/lib/i386/libc++.so.1.0.debug	comp-sys-debug	debug,compat,libcxx
 ./usr/libdata/debug/usr/lib/i386/libc.so.12.221.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/i386/libcbor.so.0.5.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/i386/libcom_err.so.8.0.debug	comp-sys-debug	debug,compat,kerberos
 ./usr/libdata/debug/usr/lib/i386/libcrypt.so.1.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/i386/libcrypto.so.15.0.debug	comp-sys-debug	debug,compat
-./usr/libdata/debug/usr/lib/i386/libctf.so.3.0.debug
+./usr/libdata/debug/usr/lib/i386/libctf.so.3.0.debug	comp-sys-debug	debug,compat,ctf
 ./usr/libdata/debug/usr/lib/i386/libcurses.so.9.1.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/i386/libdes.so.15.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/i386/libdevmapper.so.1.0.debug	comp-sys-debug	debug,compat,lvm
@@ -322,6 +324,7 @@
 ./usr/libdata/debug/usr/lib/i386/libzfs.so.0.0.debug	comp-sys-debug	debug,compat,zfs
 ./usr/libdata/debug/usr/lib/i386/libzfs_core.so.0.0.debug	comp-sys-debug	debug,compat,zfs
 ./usr/libdata/debug/usr/lib/i386/libzpool.so.0.0.debug	comp-sys-debug	debug,compat,zfs
+./usr/libdata/debug/usr/lib/i386/named/filter-aaaa.so.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/i386/security/pam_afslog.so.4.debug	comp-sys-debug	debug,compat,pam
 ./usr/libdata/debug/usr/lib/i386/security/pam_chroot.so.4.debug	comp-sys-debug	debug,compat,pam
 ./usr/libdata/debug/usr/lib/i386/security/pam_deny.so.4.debug	comp-sys-debug	debug,compat,pam

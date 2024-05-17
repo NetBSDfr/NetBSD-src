@@ -1,4 +1,4 @@
-/* $NetBSD: debug.c,v 1.75 2024/03/31 20:28:45 rillig Exp $ */
+/* $NetBSD: debug.c,v 1.79 2024/05/11 16:12:28 rillig Exp $ */
 
 /*-
  * Copyright (c) 2021 The NetBSD Foundation, Inc.
@@ -35,7 +35,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: debug.c,v 1.75 2024/03/31 20:28:45 rillig Exp $");
+__RCSID("$NetBSD: debug.c,v 1.79 2024/05/11 16:12:28 rillig Exp $");
 #endif
 
 #include <stdlib.h>
@@ -155,8 +155,12 @@ debug_type_details(const type_t *tp)
 
 	if (is_struct_or_union(tp->t_tspec)) {
 		debug_indent_inc();
-		debug_step("size %u bits, align %u bits, %s",
-		    tp->u.sou->sou_size_in_bits, tp->u.sou->sou_align_in_bits,
+		unsigned int size_in_bits = tp->u.sou->sou_size_in_bits;
+		debug_printf("size %u", size_in_bits / CHAR_SIZE);
+		if (size_in_bits % CHAR_SIZE > 0)
+			debug_printf("+%u", size_in_bits % CHAR_SIZE);
+		debug_step(", align %u, %s",
+		    tp->u.sou->sou_align,
 		    tp->u.sou->sou_incomplete ? "incomplete" : "complete");
 
 		for (const sym_t *mem = tp->u.sou->sou_first_member;
@@ -357,6 +361,18 @@ function_specifier_name(function_specifier spec)
 	return name[spec];
 }
 
+const char *
+named_constant_name(named_constant nc)
+{
+	static const char *const name[] = {
+	    "false",
+	    "true",
+	    "nullptr",
+	};
+
+	return name[nc];
+}
+
 static void
 debug_word(bool flag, const char *name)
 {
@@ -458,10 +474,14 @@ debug_decl_level(const decl_level *dl)
 	}
 	if (dl->d_redeclared_symbol != NULL)
 		debug_sym(" redeclared=(", dl->d_redeclared_symbol, ")");
-	if (dl->d_sou_size_in_bits != 0)
-		debug_printf(" size=%u", dl->d_sou_size_in_bits);
-	if (dl->d_sou_align_in_bits != 0)
-		debug_printf(" align=%u", dl->d_sou_align_in_bits);
+	if (dl->d_sou_size_in_bits > 0)
+		debug_printf(" size=%u", dl->d_sou_size_in_bits / CHAR_SIZE);
+	if (dl->d_sou_size_in_bits % CHAR_SIZE > 0)
+		debug_printf("+%u", dl->d_sou_size_in_bits % CHAR_SIZE);
+	if (dl->d_sou_align > 0)
+		debug_printf(" sou_align=%u", dl->d_sou_align);
+	if (dl->d_mem_align > 0)
+		debug_printf(" mem_align=%u", dl->d_mem_align);
 
 	debug_word(dl->d_qual.tq_const, "const");
 	debug_word(dl->d_qual.tq_restrict, "restrict");
@@ -506,4 +526,73 @@ debug_dcs_all(void)
 		debug_decl_level(dl);
 	}
 }
+
+static void
+debug_token(const token *tok)
+{
+	switch (tok->kind) {
+	case TK_IDENTIFIER:
+		debug_printf("%s", tok->u.identifier);
+		break;
+	case TK_CONSTANT:;
+		val_t c = tok->u.constant;
+		tspec_t t = c.v_tspec;
+		if (is_floating(t))
+			debug_printf("%Lg", c.u.floating);
+		else if (is_uinteger(t))
+			debug_printf("%llu", (unsigned long long)c.u.integer);
+		else if (is_integer(t))
+			debug_printf("%lld", (long long)c.u.integer);
+		else {
+			lint_assert(t == BOOL);
+			debug_printf("%s",
+			    c.u.integer != 0 ? "true" : "false");
+		}
+		break;
+	case TK_STRING_LITERALS:
+		debug_printf("%s", tok->u.string_literals.data);
+		break;
+	case TK_PUNCTUATOR:
+		debug_printf("%s", tok->u.punctuator);
+		break;
+	}
+}
+
+static void
+debug_balanced_token_sequence(const balanced_token_sequence *seq)
+{
+	const char *sep = "";
+	for (size_t i = 0, n = seq->len; i < n; i++) {
+		const balanced_token *tok = seq->tokens + i;
+		if (tok->kind != '\0') {
+			debug_printf("%s%c", sep, tok->kind);
+			debug_balanced_token_sequence(&tok->u.tokens);
+			debug_printf("%c", tok->kind == '(' ? ')'
+			    : tok->kind == '[' ? ']' : '}');
+		} else {
+			debug_printf("%s", sep);
+			debug_token(&tok->u.token);
+		}
+		sep = " ";
+	}
+}
+
+void
+debug_attribute_list(const attribute_list *list)
+{
+	for (size_t i = 0, n = list->len; i < n; i++) {
+		const attribute *attr = list->attrs + i;
+		debug_printf("attribute [[");
+		if (attr->prefix != NULL)
+			debug_printf("%s::", attr->prefix);
+		debug_printf("%s", attr->name);
+		if (attr->arg != NULL) {
+			debug_printf("(");
+			debug_balanced_token_sequence(attr->arg);
+			debug_printf(")");
+		}
+		debug_step("]]");
+	}
+}
+
 #endif

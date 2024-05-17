@@ -1,6 +1,15 @@
-# $NetBSD: shl.mi,v 1.103 2023/09/04 19:07:58 riastradh Exp $
+# $NetBSD: shl.mi,v 1.106 2024/05/10 12:21:49 riastradh Exp $
 #
-# Note: don't delete entries from here - mark them as "obsolete" instead.
+# Note:	Don't delete entries from here - mark them as "obsolete" instead,
+#	unless otherwise stated below.
+#
+# Note:	Do not mark "old" major and major.minor shared libraries as
+#	"obsolete"; just remove the entry, as third-party applications
+#	may be linked against the old major shared library, and
+#	that is a symlink to the old major.minor shared library.
+#	e.g., "lib<name>.so.<N>" and "lib<name>.so.<N>.<M>"
+#	Exceptions to this rule may include shared libraries that
+#	are dlopen()ed at run-time, such as extra locales, etc.
 #
 ./usr/X11R7/lib/X11/locale/lib/common/ximcp.so		obsolete	obsolete
 ./usr/X11R7/lib/X11/locale/lib/common/ximcp.so.2	obsolete	obsolete
@@ -142,9 +151,7 @@
 ./usr/X11R7/lib/libXxf86dga.so			xbase-libXxf86dga-lib		xorg,compatx11file
 ./usr/X11R7/lib/libXxf86dga.so.2		xbase-libXxf86dga-lib		xorg,compatx11file
 ./usr/X11R7/lib/libXxf86dga.so.2.0		xbase-libXxf86dga-lib		xorg,compatx11file
-./usr/X11R7/lib/libXxf86misc.so			xbase-libXxf86misc-lib		xorg,compatx11file
-./usr/X11R7/lib/libXxf86misc.so.2		xbase-libXxf86misc-lib		xorg,compatx11file
-./usr/X11R7/lib/libXxf86misc.so.2.0		xbase-libXxf86misc-lib		xorg,compatx11file
+./usr/X11R7/lib/libXxf86misc.so			xbase-obsolete		obsolete
 ./usr/X11R7/lib/libXxf86vm.so			xbase-libXxf86vm-lib		xorg,compatx11file
 ./usr/X11R7/lib/libXxf86vm.so.2			xbase-libXxf86vm-lib		xorg,compatx11file
 ./usr/X11R7/lib/libXxf86vm.so.2.0		xbase-libXxf86vm-lib		xorg,compatx11file

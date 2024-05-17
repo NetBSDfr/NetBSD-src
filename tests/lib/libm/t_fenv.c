@@ -1,4 +1,4 @@
-/* $NetBSD: t_fenv.c,v 1.16 2024/03/18 16:33:54 martin Exp $ */
+/* $NetBSD: t_fenv.c,v 1.18 2024/05/14 14:55:44 riastradh Exp $ */
 
 /*-
  * Copyright (c) 2014 The NetBSD Foundation, Inc.
@@ -29,7 +29,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: t_fenv.c,v 1.16 2024/03/18 16:33:54 martin Exp $");
+__RCSID("$NetBSD: t_fenv.c,v 1.18 2024/05/14 14:55:44 riastradh Exp $");
 
 #include <atf-c.h>
 
@@ -52,28 +52,37 @@ __RCSID("$NetBSD: t_fenv.c,v 1.16 2024/03/18 16:33:54 martin Exp $");
 
 #if (__arm__ && !__SOFTFP__) || __aarch64__
 	/*
-	 * Some NEON fpus  do not trap on IEEE 754 FP exceptions.
+	 * Some NEON fpus do not trap on IEEE 754 FP exceptions.
 	 * Skip these tests if running on them and compiled for
 	 * hard float.
 	 */
-#define	FPU_EXC_PREREQ()						\
-	if (0 == fpsetmask(fpsetmask(FP_X_INV)))			\
-		atf_tc_skip("FPU does not implement traps on FP exceptions");
+#define	FPU_EXC_PREREQ() do						      \
+{									      \
+	if (0 == fpsetmask(fpsetmask(FP_X_INV)))			      \
+		atf_tc_skip("FPU does not implement traps on FP exceptions"); \
+} while (0)
 
 	/*
 	 * Same as above: some don't allow configuring the rounding mode.
 	 */
-#define	FPU_RND_PREREQ()						\
-	if (0 == fpsetround(fpsetround(FP_RZ)))				\
-		atf_tc_skip("FPU does not implement configurable "	\
-		    "rounding modes");
+#define	FPU_RND_PREREQ() do						      \
+{									      \
+	if (0 == fpsetround(fpsetround(FP_RZ)))				      \
+		atf_tc_skip("FPU does not implement configurable "	      \
+		    "rounding modes");					      \
+} while (0)
+#endif
+
+#ifdef __riscv__
+#define	FPU_EXC_PREREQ()						      \
+	atf_tc_skip("RISC-V does not support floating-point exception traps")
 #endif
 
 #ifndef FPU_EXC_PREREQ
-#define	FPU_EXC_PREREQ()	/* nothing */
+#define	FPU_EXC_PREREQ()	__nothing
 #endif
 #ifndef FPU_RND_PREREQ
-#define	FPU_RND_PREREQ()	/* nothing */
+#define	FPU_RND_PREREQ()	__nothing
 #endif
 
 
@@ -341,6 +350,17 @@ ATF_TC_BODY(feenableexcept, tc)
 	    (int)fpgetmask(), (int)FP_X_INV);
 }
 
+/*
+ * Temporary workaround for PR 58253: powerpc has more fenv exception
+ * bits than it can handle.
+ */
+#if defined __powerpc__
+#define	FE_TRAP_EXCEPT							      \
+	(FE_DIVBYZERO|FE_INEXACT|FE_INVALID|FE_OVERFLOW|FE_UNDERFLOW)
+#else
+#define	FE_TRAP_EXCEPT	FE_ALL_EXCEPT
+#endif
+
 ATF_TC(fetestexcept_trap);
 ATF_TC_HEAD(fetestexcept_trap, tc)
 {
@@ -353,21 +373,21 @@ ATF_TC_BODY(fetestexcept_trap, tc)
 
 	FPU_EXC_PREREQ();
 
-	fedisableexcept(FE_ALL_EXCEPT);
+	fedisableexcept(FE_TRAP_EXCEPT);
 	ATF_CHECK_EQ_MSG((except = fegetexcept()), 0,
 	    "fegetexcept()=0x%x", except);
 
-	(void)fetestexcept(FE_ALL_EXCEPT);
+	(void)fetestexcept(FE_TRAP_EXCEPT);
 	ATF_CHECK_EQ_MSG((except = fegetexcept()), 0,
 	    "fegetexcept()=0x%x", except);
 
-	feenableexcept(FE_ALL_EXCEPT);
-	ATF_CHECK_EQ_MSG((except = fegetexcept()), FE_ALL_EXCEPT,
-	    "fegetexcept()=0x%x FE_ALL_EXCEPT=0x%x", except, FE_ALL_EXCEPT);
+	feenableexcept(FE_TRAP_EXCEPT);
+	ATF_CHECK_EQ_MSG((except = fegetexcept()), FE_TRAP_EXCEPT,
+	    "fegetexcept()=0x%x FE_TRAP_EXCEPT=0x%x", except, FE_TRAP_EXCEPT);
 
-	(void)fetestexcept(FE_ALL_EXCEPT);
-	ATF_CHECK_EQ_MSG((except = fegetexcept()), FE_ALL_EXCEPT,
-	    "fegetexcept()=0x%x FE_ALL_EXCEPT=0x%x", except, FE_ALL_EXCEPT);
+	(void)fetestexcept(FE_TRAP_EXCEPT);
+	ATF_CHECK_EQ_MSG((except = fegetexcept()), FE_TRAP_EXCEPT,
+	    "fegetexcept()=0x%x FE_ALL_EXCEPT=0x%x", except, FE_TRAP_EXCEPT);
 }
 
 ATF_TP_ADD_TCS(tp)

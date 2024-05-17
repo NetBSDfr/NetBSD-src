@@ -1,4 +1,4 @@
-/*	$NetBSD: c23.c,v 1.8 2024/01/28 08:17:27 rillig Exp $	*/
+/*	$NetBSD: c23.c,v 1.13 2024/05/11 16:12:28 rillig Exp $	*/
 # 3 "c23.c"
 
 // Tests for the option -Ac23, which allows features from C23 and all earlier
@@ -9,6 +9,61 @@
 //	msg_353.c		for empty initializer braces
 
 /* lint1-flags: -Ac23 -w -X 351 */
+
+
+int
+bool_is_predefined_in_c23(void)
+{
+	bool t = true;
+	bool f = false;
+	return (t == true ? 20 : 0) + (f == false ? 3 : 0);
+}
+
+int
+c99_bool_is_still_valid_in_c23(void)
+{
+	_Bool t = 1;
+	_Bool f = 0;
+	return (t == 1 ? 20 : 0) + (f == 0 ? 3 : 0);
+}
+
+
+bool
+null_pointer_constant(const char *p, double dbl)
+{
+	/* expect+1: error: operands of '!=' have incompatible types 'double' and 'pointer to void' [107] */
+	if (dbl != nullptr)
+		p++;
+	if (dbl > 0.0)
+		p++;
+	if (*p == '\0')
+		p = nullptr;
+	return p == nullptr;
+}
+
+
+void *
+storage_class_in_compound_literal(void)
+{
+	typedef struct node node;
+	struct node {
+		node *left;
+		int value;
+		node *right;
+	};
+
+	node *tree;
+	tree = &(static node){
+	    &(static node){
+		nullptr,
+		3,
+		nullptr,
+	    },
+	    5,
+	    nullptr,
+	};
+	return tree->left;
+}
 
 int
 empty_initializer_braces(void)
@@ -54,3 +109,57 @@ thread_local extern int extern_thread_local_2;
 static thread_local int static_thread_local_1;
 /* expect+1: warning: static variable 'static_thread_local_2' unused [226] */
 thread_local static int static_thread_local_2;
+
+
+int
+attributes(int i)
+{
+	// An attribute specifier list may be empty.
+	[[]]i++;
+
+	// There may be leading or trailing commas.
+	[[,]]i++;
+
+	// There may be arbitrary commas around or between the attributes.
+	[[,,,,,]]i++;
+
+	// An attribute may be a plain identifier without arguments.
+	[[identifier]]i++;
+
+	// The identifier may be prefixed with one additional identifier.
+	[[prefix::identifier]]i++;
+
+	// An attribute may have empty arguments.
+	[[identifier()]]i++;
+
+	// The arguments of an attribute may be arbitrary tokens.
+	[[identifier([])]]i++;
+
+	// The commas in this "argument list" are ordinary punctuator tokens,
+	// they do not separate any arguments.
+	// The structure of the attribute argument is:
+	//	1. empty balanced token sequence between '[' and ']'
+	//	2. token ','
+	//	3. empty balanced token sequence between '{' and '}'
+	//	4. token ','
+	//	5. empty balanced token sequence between '(' and ')'
+	[[identifier([], {}, ())]]i++;
+
+	// Inside an argument, parentheses may be nested.
+	[[identifier(((((())))))]]i++;
+	// Inside an argument, brackets may be nested.
+	[[identifier([[[[[]]]]])]]i++;
+	// Inside an argument, braces may be nested.
+	[[identifier({{{{{}}}}})]]i++;
+
+	// An attribute argument may contain arbitrary punctuation.
+	[[identifier(++++ ? ? ? : : :: )]]i++;
+
+	// An attribute argument may contain constants and string literals.
+	[[identifier(0, 0.0, "hello" " " "world")]]i++;
+
+	// There may be multiple attribute specifier sequences in a row.
+	[[]][[]][[]]i++;
+
+	return i;
+}

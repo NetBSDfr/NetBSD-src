@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile.bootcd,v 1.44 2020/10/11 14:10:04 jmcneill Exp $
+#	$NetBSD: Makefile.bootcd,v 1.55 2024/05/16 17:55:48 christos Exp $
 #
 # Makefile snipped to create a CD/DVD ISO
 #
@@ -53,13 +53,31 @@ CDROMS_RELEASEDIR?=	${MACHINE}/installation/cdrom
 CDROMS_RELEASEDIR?=	images
 .endif
 .if defined(CDRELEASE_NOISOS)
-CDRELEASE_EXCLUDE=	-s ',./installation/cdrom.*,,gp'
+CDRELEASE_EXCLUDE+=	-s ',./installation/cdrom.*,,gp'
+.endif
+.if defined(CDRELEASE_NOCOMPAT)
+.  for sufx in tgz tar.xz
+CDRELEASE_EXCLUDE+=	-s ',./binary/sets/base32.${sufx},,gp'
+CDRELEASE_EXCLUDE+=	-s ',./binary/sets/base64.${sufx},,gp'
+.  endfor
 .endif
 .if defined(CDRELEASE_NODEBUG)
-CDRELEASE_EXCLUDE+=	-s ',./binary/sets/debug.tgz,,gp'
-CDRELEASE_EXCLUDE+=	-s ',./binary/sets/xdebug.tgz,,gp'
-CDRELEASE_EXCLUDE+=	-s ',./binary/sets/debug.tar.xz,,gp'
-CDRELEASE_EXCLUDE+=	-s ',./binary/sets/xdebug.tar.xz,,gp'
+.  for sufx in tgz tar.xz
+CDRELEASE_EXCLUDE+=	-s ',./binary/sets/debug.${sufx},,gp'
+CDRELEASE_EXCLUDE+=	-s ',./binary/sets/debug32.${sufx},,gp'
+CDRELEASE_EXCLUDE+=	-s ',./binary/sets/debug64.${sufx},,gp'
+CDRELEASE_EXCLUDE+=	-s ',./binary/sets/xdebug.${sufx},,gp'
+.  endfor
+.endif
+.if defined(CDRELEASE_NOHTML)
+.  for sufx in tgz tar.xz
+CDRELEASE_EXCLUDE+=	-s ',./binary/sets/manhtml.${sufx},,gp'
+.  endfor
+.endif
+.if defined(CDRELEASE_NOTESTS)
+.  for sufx in tgz tar.xz
+CDRELEASE_EXCLUDE+=	-s ',./binary/sets/tests.${sufx},,gp'
+.  endfor
 .endif
 .if !defined(CDRELEASE_LIVEIMAGE)
 CDRELEASE_EXCLUDE+=	-s ',./installation/liveimage.*,,gp'
@@ -88,6 +106,7 @@ _CDMAKEFSOPTIONS=	rockridge,label=${ISO_VOLID},publisher=${PUBLISHER}
 MAKEFS_TIMESTAMP=-T "${MKREPRO_TIMESTAMP}"
 PAX_TIMESTAMP=--timestamp "${MKREPRO_TIMESTAMP}"
 .endif
+MAKESPEC=	${HOST_SH} ${NETBSDSRCDIR}/etc/makespec
 
 .if ${MKUNPRIVED} == "no"
 CD_METALOG.unpriv=
@@ -105,6 +124,8 @@ ECHO?=		echo
 
 .if ${CDRELEASE} == false
 CDIMAGE=	${CDBASE}.iso
+.elif ${CDBASE:M*dvd}
+CDIMAGE=	NetBSD-${DISTRIBVER}-${CDBASE:S/dvd$//}-dvd.iso
 .else
 CDIMAGE=	NetBSD-${DISTRIBVER}-${CDBASE:S/cd$//}.iso
 .endif
@@ -264,7 +285,7 @@ copy-releasedir:
 	fi;								\
 	${CDSETSCMD} ./maketars -i "${CUROBJDIR}/cdrom"			\
 	    ${CD_METALOG.unpriv} ${mtunpriv} -N ${NETBSDSRCDIR}/etc	\
-	    -F "${CUROBJDIR}/cdrom/etc/mtree"				\
+	    -xx -F "${CUROBJDIR}/cdrom/etc/mtree" 			\
 	    -d "${DESTDIR:S,^$,/,}" ${set}
 .endfor
 	if [ -d "${CUROBJDIR}/cdrom/var/spool/ftp/hidden" ]; then	\
@@ -301,9 +322,18 @@ image:
 .if defined(SPEC_EXTRA)
 	cat ${SPEC_EXTRA} >> ${WORKSPEC}
 .endif
-	if [ -s ${WORKSPEC} ]; then specarg="-F ${WORKSPEC}"; fi;	\
-	${TOOL_MAKEFS} -N ${NETBSDSRCDIR}/etc -t cd9660 $${specarg} 	\
-		${MAKEFS_TIMESTAMP} ${CDMAKEFSEXTRAOPTS} -o ${_CDMAKEFSOPTIONS:Q} ${CDIMAGE} cdrom
+	if [ ! -s ${WORKSPEC} ]; then \
+	    ${MAKESPEC} -d cdrom . > ${WORKSPEC}; \
+	else \
+	    for i in ${RELEASEMACHINEDIR} source ${CDEXTRA} ${CDBUILDEXTRA}; do\
+		if [ -n "$$i" ] && [ -e cdrom/$$i ]; then \
+		    ${MAKESPEC} -d cdrom $$i >> ${WORKSPEC}; \
+		fi; \
+	    done; \
+	fi
+	${TOOL_MAKEFS} -N ${NETBSDSRCDIR}/etc -t cd9660 -F ${WORKSPEC} -xx \
+	    ${MAKEFS_TIMESTAMP} ${CDMAKEFSEXTRAOPTS} -o ${_CDMAKEFSOPTIONS:Q} \
+	    ${CDIMAGE} cdrom
 
 .if ${CDRELEASE} == false
 release: prepare .WAIT prepare_md_post .WAIT copy-releasedir .WAIT image_md_pre .WAIT image .WAIT image_md_post

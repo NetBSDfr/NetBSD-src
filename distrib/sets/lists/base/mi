@@ -1,4 +1,4 @@
-# $NetBSD: mi,v 1.1342 2024/04/09 15:17:22 nia Exp $
+# $NetBSD: mi,v 1.1344 2024/04/13 08:50:18 nakayama Exp $
 #
 # Note:	Don't delete entries from here - mark them as "obsolete" instead,
 #	unless otherwise stated below.
@@ -1267,7 +1267,7 @@
 ./usr/libdata/debug/usr/lib/i18n		base-i18n-root
 ./usr/libdata/debug/usr/lib/named		base-sys-usr
 ./usr/libdata/debug/usr/lib/npf			base-obsolete		obsolete
-./usr/libdata/debug/usr/lib/security		base-sys-usr		compatfile
+./usr/libdata/debug/usr/lib/security		base-sys-usr
 ./usr/libdata/debug/usr/libexec			base-sys-usr
 ./usr/libdata/debug/usr/libexec/ching		base-sys-usr
 ./usr/libdata/debug/usr/libexec/lpr		base-sys-usr
@@ -6376,8 +6376,6 @@
 ./var/preserve					base-util-root
 ./var/quotas					base-util-root
 ./var/run					base-sys-root
-./var/run/lwresd				base-obsolete		obsolete
-./var/run/named					base-obsolete		obsolete
 ./var/rwho					base-netutil-root
 ./var/shm					base-sys-root
 ./var/spool					base-sys-root

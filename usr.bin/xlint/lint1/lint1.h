@@ -1,4 +1,4 @@
-/* $NetBSD: lint1.h,v 1.222 2024/03/31 20:28:45 rillig Exp $ */
+/* $NetBSD: lint1.h,v 1.227 2024/05/11 16:12:28 rillig Exp $ */
 
 /*
  * Copyright (c) 1996 Christopher G. Demetriou.  All Rights Reserved.
@@ -108,7 +108,7 @@ typedef struct sym sym_t;
  */
 typedef struct {
 	unsigned int sou_size_in_bits;
-	unsigned int sou_align_in_bits;
+	unsigned int sou_align;
 	bool	sou_incomplete:1;
 	sym_t	*sou_first_member;
 	sym_t	*sou_tag;
@@ -187,6 +187,12 @@ typedef enum {
 	FS_NORETURN,		/* since C11 */
 } function_specifier;
 
+typedef enum {
+	NC_FALSE,		/* since C23 */
+	NC_TRUE,		/* since C23 */
+	NC_NULLPTR,		/* since C23 */
+} named_constant;
+
 /* A type, variable, keyword; basically anything that has a name. */
 struct sym {
 	const char *s_name;
@@ -233,6 +239,8 @@ struct sym {
 				type_qualifiers sk_type_qualifier;
 				/* if T_FUNCTION_SPECIFIER */
 				function_specifier function_specifier;
+				/* if T_CON */
+				named_constant named_constant;
 			} u;
 		} s_keyword;
 		sym_t	*s_old_style_params;	/* parameters in an old-style
@@ -340,8 +348,10 @@ typedef struct decl_level {
 	unsigned int d_sou_size_in_bits;	/* size of the structure or
 						 * union being built, without
 						 * trailing padding */
-	unsigned int d_sou_align_in_bits;	/* alignment of the structure
-						 * or union being built */
+	unsigned int d_sou_align;	/* alignment of the structure
+					 * or union being built */
+	unsigned int d_mem_align;	/* alignment of the structure
+					 * or union member */
 	type_qualifiers d_qual;	/* in declaration specifiers */
 	bool	d_inline:1;	/* inline in declaration specifiers */
 	bool	d_multiple_storage_classes:1; /* reported in dcs_end_type */
@@ -502,6 +512,52 @@ typedef struct {
 	bool missing_hex_digits;
 	bool unescaped_newline;	/* stops iterating */
 } quoted_iterator;
+
+typedef enum {
+	TK_IDENTIFIER,
+	TK_CONSTANT,
+	TK_STRING_LITERALS,
+	TK_PUNCTUATOR,
+} token_kind;
+
+typedef struct token {
+	token_kind kind;
+	union {
+		const char *identifier;
+		val_t constant;
+		buffer string_literals;
+		const char *punctuator;
+	} u;
+} token;
+
+typedef struct balanced_token_sequence balanced_token_sequence;
+typedef struct balanced_token balanced_token;
+
+struct balanced_token_sequence {
+	balanced_token *tokens;
+	size_t len;
+	size_t cap;
+};
+
+struct balanced_token {
+	char kind;	// '\0', '(', '[', '{'
+	union {
+		token token;
+		balanced_token_sequence tokens;
+	} u;
+};
+
+typedef struct {
+	const char *prefix;
+	const char *name;
+	balanced_token_sequence *arg;
+} attribute;
+
+typedef struct {
+	attribute *attrs;
+	size_t len;
+	size_t cap;
+} attribute_list;
 
 #include "externs1.h"
 

@@ -1,4 +1,4 @@
-# $NetBSD: ad.riscv64,v 1.1 2024/04/09 15:17:23 nia Exp $
+# $NetBSD: ad.riscv64,v 1.6 2024/05/09 15:54:58 mrg Exp $
 ./usr/lib/rv32/i18n/libBIG5_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/rv32/i18n/libDECHanyu_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/rv32/i18n/libEUCTW_g.a			comp-c-debuglib	debuglib,compat
@@ -29,7 +29,7 @@
 ./usr/lib/rv32/libatf-c++_g.a			comp-c-debuglib	debuglib,compat,atf
 ./usr/lib/rv32/libatf-c_g.a			comp-c-debuglib	debuglib,compat,atf
 ./usr/lib/rv32/libavl_g.a			comp-c-debuglib	debuglib,compat,zfs
-./usr/lib/rv32/libbfd_g.a	comp-sys-debug		debug,compat
+./usr/lib/rv32/libbfd_g.a			comp-c-debuglib	debuglib,compat,binutils
 ./usr/lib/rv32/libbind9_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/rv32/libblocklist_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/rv32/libbluetooth_g.a			comp-c-debuglib	debuglib,compat
@@ -62,9 +62,9 @@
 ./usr/lib/rv32/libfido2_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/rv32/libfl_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/rv32/libform_g.a			comp-c-debuglib	debuglib,compat
-./usr/lib/rv32/libgcc_eh_g.a 			comp-sys-debug	debug,compat,gcc
+./usr/lib/rv32/libgcc_eh_g.a 			comp-c-debuglib	debuglib,compat,gcc
 ./usr/lib/rv32/libgcc_g.a			comp-c-debuglib	debuglib,compat,gcc
-./usr/lib/rv32/libgcc_s_g.a			comp-sys-debug	debug,compat,gcc
+./usr/lib/rv32/libgcc_s_g.a			comp-c-debuglib	debuglib,compat,gcc
 ./usr/lib/rv32/libgcov_g.a			comp-c-debuglib	debuglib,compat,gcc
 ./usr/lib/rv32/libgnuctf_g.a			comp-c-debuglib	debuglib,compat,binutils
 ./usr/lib/rv32/libgnumalloc_g.a			comp-c-debuglib	debuglib,compat
@@ -191,12 +191,13 @@
 ./usr/libdata/debug/usr/lib/rv32/i18n/libmapper_zone.so.5.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/rv32/libamu.so.5.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/rv32/libarchive.so.5.0.debug	comp-sys-debug	debug,compat
-./usr/libdata/debug/usr/lib/rv32/libasan.so.5.0.debug	comp-sys-debug	debug,compat
+./usr/libdata/debug/usr/lib/rv32/libasan.so.5.0.debug	comp-sys-debug	debug,compat,gcc=10
+./usr/libdata/debug/usr/lib/rv32/libasan.so.6.0.debug	comp-sys-debug	debug,compat,gcc=12
 ./usr/libdata/debug/usr/lib/rv32/libasn1.so.10.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/rv32/libatf-c++.so.2.0.debug	comp-sys-debug	debug,compat,atf
 ./usr/libdata/debug/usr/lib/rv32/libatf-c.so.0.0.debug	comp-sys-debug	debug,compat,atf
 ./usr/libdata/debug/usr/lib/rv32/libavl.so.0.0.debug	comp-sys-debug	debug,compat,zfs
-./usr/libdata/debug/usr/lib/rv32/libbfd.so.18.0.debug	comp-sys-debug	debug,compat
+./usr/libdata/debug/usr/lib/rv32/libbfd.so.18.0.debug	comp-sys-debug	debug,compat,binutils=239
 ./usr/libdata/debug/usr/lib/rv32/libbind9.so.21.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/rv32/libblocklist.so.0.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/rv32/libbluetooth.so.4.2.debug	comp-sys-debug	debug,compat
@@ -228,7 +229,8 @@
 ./usr/libdata/debug/usr/lib/rv32/libgcc_s.so.1.0.debug	comp-sys-debug	debug,compat,gcc
 ./usr/libdata/debug/usr/lib/rv32/libgnuctf.so.1.0.debug	comp-sys-debug	debug,compat,gcc
 ./usr/libdata/debug/usr/lib/rv32/libgnumalloc.so.1.0.debug	comp-sys-debug	debug,compat
-./usr/libdata/debug/usr/lib/rv32/libgomp.so.2.1.debug	comp-sys-debug	debug,compat,gcc
+./usr/libdata/debug/usr/lib/rv32/libgomp.so.2.1.debug	comp-sys-debug	debug,compat,gcc=10
+./usr/libdata/debug/usr/lib/rv32/libgomp.so.2.2.debug	comp-sys-debug	debug,compat,gcc=12
 ./usr/libdata/debug/usr/lib/rv32/libgssapi.so.12.0.debug	comp-sys-debug	debug,compat,kerberos
 ./usr/libdata/debug/usr/lib/rv32/libhdb.so.16.0.debug	comp-sys-debug	debug,compat,kerberos
 ./usr/libdata/debug/usr/lib/rv32/libheimbase.so.2.0.debug	comp-sys-debug	debug,compat,kerberos
@@ -252,7 +254,8 @@
 ./usr/libdata/debug/usr/lib/rv32/liblber.so.5.0.debug	comp-sys-debug	debug,compat,ldap
 ./usr/libdata/debug/usr/lib/rv32/libldap.so.6.0.debug	comp-sys-debug	debug,compat,ldap
 ./usr/libdata/debug/usr/lib/rv32/libldap_r.so.6.0.debug	comp-sys-debug	debug,compat,ldap
-./usr/libdata/debug/usr/lib/rv32/liblsan.so.2.0.debug	comp-sys-debug	debug,compat
+./usr/libdata/debug/usr/lib/rv32/liblsan.so.2.0.debug	comp-sys-debug	debug,compat,gcc=10
+./usr/libdata/debug/usr/lib/rv32/liblsan.so.3.0.debug	comp-sys-debug	debug,compat,gcc=12
 ./usr/libdata/debug/usr/lib/rv32/liblua.so.6.1.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/rv32/liblzf.so.1.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/rv32/liblzma.so.2.0.debug	comp-sys-debug	debug,compat
@@ -301,10 +304,12 @@
 ./usr/libdata/debug/usr/lib/rv32/libsqlite3.so.1.5.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/rv32/libssh.so.46.1.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/rv32/libssl.so.15.0.debug	comp-sys-debug	debug,compat
-./usr/libdata/debug/usr/lib/rv32/libstdc++.so.9.0.debug	comp-sys-debug	debug,compat
+./usr/libdata/debug/usr/lib/rv32/libstdc++.so.9.0.debug	comp-sys-debug	debug,compat,gcc=10
+./usr/libdata/debug/usr/lib/rv32/libstdc++.so.9.1.debug	comp-sys-debug	debug,compat,gcc=12
 ./usr/libdata/debug/usr/lib/rv32/libterminfo.so.2.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/rv32/libtre.so.0.8.debug	comp-sys-debug	debug,compat
-./usr/libdata/debug/usr/lib/rv32/libubsan.so.4.0.debug	comp-sys-debug	debug,compat
+./usr/libdata/debug/usr/lib/rv32/libubsan.so.4.0.debug	comp-sys-debug	debug,compat,gcc=10
+./usr/libdata/debug/usr/lib/rv32/libubsan.so.5.0.debug	comp-sys-debug	debug,compat,gcc=12
 ./usr/libdata/debug/usr/lib/rv32/libukfs.so.1.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/rv32/libumem.so.0.0.debug	comp-sys-debug	debug,compat,zfs
 ./usr/libdata/debug/usr/lib/rv32/libunbound.so.9.0.debug	comp-sys-debug	debug,compat,unbound
@@ -317,6 +322,7 @@
 ./usr/libdata/debug/usr/lib/rv32/libzfs.so.0.0.debug	comp-sys-debug	debug,compat,zfs
 ./usr/libdata/debug/usr/lib/rv32/libzfs_core.so.0.0.debug	comp-sys-debug	debug,compat,zfs
 ./usr/libdata/debug/usr/lib/rv32/libzpool.so.0.0.debug	comp-sys-debug	debug,compat,zfs
+./usr/libdata/debug/usr/lib/rv32/named/filter-aaaa.so.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/rv32/security/pam_afslog.so.4.debug	comp-sys-debug	debug,compat,pam
 ./usr/libdata/debug/usr/lib/rv32/security/pam_chroot.so.4.debug	comp-sys-debug	debug,compat,pam
 ./usr/libdata/debug/usr/lib/rv32/security/pam_deny.so.4.debug	comp-sys-debug	debug,compat,pam

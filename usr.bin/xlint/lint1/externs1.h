@@ -1,4 +1,4 @@
-/*	$NetBSD: externs1.h,v 1.221 2024/03/29 08:35:32 rillig Exp $	*/
+/*	$NetBSD: externs1.h,v 1.229 2024/05/12 18:00:58 rillig Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -46,7 +46,6 @@ extern bool eflag;
 extern bool hflag;
 extern bool pflag;
 extern bool rflag;
-extern bool uflag;
 extern bool vflag;
 extern bool wflag;
 extern bool yflag;
@@ -72,6 +71,7 @@ extern int yydebug;
 
 int yyerror(const char *);
 int yyparse(void);
+extern char *yytext;
 
 /*
  * lex.c
@@ -136,6 +136,7 @@ const char *scl_name(scl_t);
 const char *symbol_kind_name(symbol_kind);
 const char *type_qualifiers_string(type_qualifiers);
 const char *function_specifier_name(function_specifier);
+const char *named_constant_name(named_constant);
 void debug_dcs(void);
 void debug_dcs_all(void);
 void debug_node(const tnode_t *);
@@ -151,6 +152,7 @@ void debug_pop_indented(bool);
 void debug_enter_func(const char *);
 void debug_step(const char *fmt, ...) __printflike(1, 2);
 void debug_leave_func(const char *);
+void debug_attribute_list(const attribute_list *);
 #define	debug_enter()		debug_enter_func(__func__)
 #define	debug_leave()		debug_leave_func(__func__)
 #else
@@ -170,6 +172,7 @@ void debug_leave_func(const char *);
 #define	debug_enter()		debug_noop()
 #define	debug_step(...)		debug_noop()
 #define	debug_leave()		debug_noop()
+#define	debug_attribute_list(list) debug_noop()
 #endif
 
 /*
@@ -215,6 +218,7 @@ void dcs_add_function_specifier(function_specifier);
 void dcs_add_storage_class(scl_t);
 void dcs_add_type(type_t *);
 void dcs_add_qualifiers(type_qualifiers);
+void dcs_add_alignas(tnode_t *);
 void dcs_add_packed(void);
 void dcs_set_used(void);
 void begin_declaration_level(decl_level_kind);
@@ -223,7 +227,7 @@ void dcs_set_asm(void);
 void dcs_begin_type(void);
 void dcs_end_type(void);
 int length_in_bits(const type_t *, const char *);
-unsigned int alignment_in_bits(const type_t *);
+unsigned int alignment(const type_t *);
 sym_t *concat_symbols(sym_t *, sym_t *);
 void check_type(sym_t *);
 sym_t *declare_unnamed_member(void);
@@ -283,7 +287,7 @@ tnode_t *build_binary(tnode_t *, op_t, bool, tnode_t *);
 tnode_t *build_unary(op_t, bool, tnode_t *);
 tnode_t *build_member_access(tnode_t *, op_t, bool, sbuf_t *);
 tnode_t *cconv(tnode_t *);
-bool is_typeok_bool_compares_with_zero(const tnode_t *);
+bool is_typeok_bool_compares_with_zero(const tnode_t *, bool);
 bool typeok(op_t, int, const tnode_t *, const tnode_t *);
 tnode_t *promote(op_t, bool, tnode_t *);
 tnode_t *convert(op_t, int, type_t *, tnode_t *);
@@ -398,6 +402,7 @@ void lex_slash_slash_comment(void);
 void lex_unknown_character(int);
 int lex_input(void);
 bool quoted_next(const buffer *, quoted_iterator *);
+balanced_token_sequence lex_balanced(void);
 
 /*
  * ckbool.c
@@ -422,4 +427,4 @@ void check_getopt_end_switch(void);
 void check_getopt_end_while(void);
 
 /* cksnprintb.c */
-void check_snprintb(const tnode_t *);
+void check_snprintb(const function_call *);

@@ -1,4 +1,4 @@
-#  $NetBSD: Makefile,v 1.227 2024/03/26 20:12:47 rillig Exp $
+#  $NetBSD: Makefile,v 1.235 2024/05/14 14:34:35 riastradh Exp $
 #
 #  @(#)Makefile 5.1beta 93/09/24
 #
@@ -81,8 +81,8 @@ COPTS+=	-mfloat-ieee -mieee-with-inexact -mfp-trap-mode=sui -mtrap-precision=i
 .PATH.c: ${.CURDIR}/arch/arm
 .if ${MKSOFTFLOAT} == "no"
 COMMON_SRCS+= fenv.c
+LIB_EXPSYM=	${LIB}.armhf.expsym
 .endif
-COMMON_SRCS+= s_rintl.c
 .for f in fenv.c lrint.S lrintf.S s_fabsf.S s_fma.S s_fmaf.S
 COPTS.$f +=	-mfpu=vfp
 .endfor
@@ -98,7 +98,7 @@ COMMON_SRCS += fenv.c
 
 .elif (${LIBC_MACHINE_ARCH} == "hppa")
 .PATH.c: ${.CURDIR}/arch/hppa
-COMMON_SRCS+= fenv.c s_rintl.c
+COMMON_SRCS+= fenv.c
 
 .elif (${LIBC_MACHINE_ARCH} == "sparc")
 .PATH: ${.CURDIR}/arch/sparc
@@ -131,8 +131,10 @@ ARCH_SRCS = e_acos.S e_asin.S e_atan2.S e_exp.S e_expf.S e_fmod.S e_log.S \
 	    s_atanf.S s_ceil.S s_ceilf.S s_copysign.S s_copysignf.S \
 	    s_finite.S s_finitef.S s_floor.S s_floorf.S \
 	    s_log1p.S s_log1pf.S s_logb.S s_logbf.S s_logbl.S \
-	    s_rint.S s_rintf.S s_scalbn.S s_scalbnf.S s_significand.S \
-	    s_significandf.S lrint.S
+	    s_rint.S s_rintf.S s_rintl.S \
+	    s_scalbn.S s_scalbnf.S \
+	    s_significand.S s_significandf.S \
+	    lrint.S
 # do not pick up the i387 asm version for the following functions;
 # it is incorrect
 .for f in cos cosf modf ilogb ilogbl ilogbf sin sinf tan tanf
@@ -192,7 +194,7 @@ ARCH_SRCS += s_fmax.S s_fmaxf.S
 ARCH_SRCS += s_fmin.S s_fminf.S
 .endif
 
-.elif (${LIBC_MACHINE_ARCH} == "powerpc")
+.elif (${LIBC_MACHINE_CPU} == "powerpc")
 .PATH:	${.CURDIR}/arch/powerpc
 .if ${MKSOFTFLOAT} == "no"
 COMMON_SRCS += fenv.c
@@ -205,11 +207,25 @@ ARCH_SRCS += s_fma.S s_fmaf.S
 .if ${MKSOFTFLOAT} == "no"
 COMMON_SRCS += fenv.c
 .endif
-COMMON_SRCS+= s_rintl.c
 .if ${MACHINE_MIPS64} && (!defined(CPUFLAGS) || empty(CPUFLAGS:M-mabi=32))
 COMMON_SRCS+= s_nexttoward.c
+COMMON_SRCS+= s_rintl.c
 .endif
 COMMON_SRCS+= s_fma.c s_fmaf.c s_fmal.c
+
+.  if ${MKSOFTFLOAT} == "no"
+.    if ${MACHINE_MIPS64} && (!defined(CPUFLAGS) || empty(CPUFLAGS:M-mabi=32))
+LIB_EXPSYM=	m.mips64hf.expsym
+.    else
+LIB_EXPSYM=	m.mipshf.expsym
+.    endif
+.  else
+.    if ${MACHINE_MIPS64} && (!defined(CPUFLAGS) || empty(CPUFLAGS:M-mabi=32))
+LIB_EXPSYM=	m.mips64.expsym
+.    else
+LIB_EXPSYM=	m.mips.expsym
+.    endif
+.  endif
 
 .elif (${LIBC_MACHINE_CPU} == "sh3")
 .PATH:	${.CURDIR}/arch/sh3
@@ -343,8 +359,9 @@ COPTS.compat_cabsf.c=	${${ACTIVE_CC} == "gcc":? -fno-builtin-cabsf :}
 # math routines for non-IEEE architectures.
 NOIEEE_SRCS = n_asincos.c n_acosh.c n_asinh.c n_atan.c n_atanh.c n_atanhf.c \
 	n_cosh.c \
-	n_erf.c n_exp.c n_exp2.c n_exp2f.c n_exp__E.c n_expm1.c n_floor.c \
-	n_fmod.c n_gamma.c n_ilogb.c \
+	n_erf.c n_exp.c n_exp2.c n_exp2f.c n_exp__E.c n_expm1.c \
+	n_floor.c n_fmod.c n_frexpf.c n_frexpl.c \
+	n_gamma.c n_ilogb.c \
 	n_lgamma.c n_j0.c n_j1.c n_jn.c n_log.c n_log10.c n_log1p.c \
 	n_log2.c n_log__L.c n_pow.c n_sinh.c n_tanh.c \
 	n_sincos.c n_sincos1.c n_tan.c \

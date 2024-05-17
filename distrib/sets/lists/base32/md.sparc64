@@ -1,4 +1,4 @@
-# $NetBSD: md.sparc64,v 1.1 2024/04/09 15:17:23 nia Exp $
+# $NetBSD: md.sparc64,v 1.5 2024/05/06 08:38:51 mrg Exp $
 ./lib/sparc					base-compat-shlib	compat
 ./lib/sparc/npf					base-compat-shlib	compat,npf
 ./lib/sparc/npf/ext_log.so			base-compat-shlib	compat,npf
@@ -88,8 +88,10 @@
 ./usr/lib/sparc/libarchive.so.5			base-compat-shlib	compat
 ./usr/lib/sparc/libarchive.so.5.0		base-compat-shlib	compat
 ./usr/lib/sparc/libasan.so			base-compat-shlib	compat,gcc,cxx
-./usr/lib/sparc/libasan.so.5			base-compat-shlib	compat,gcc,cxx
-./usr/lib/sparc/libasan.so.5.0			base-compat-shlib	compat,gcc,cxx
+./usr/lib/sparc/libasan.so.5			base-compat-shlib	compat,gcc=10,cxx
+./usr/lib/sparc/libasan.so.5.0			base-compat-shlib	compat,gcc=10,cxx
+./usr/lib/sparc/libasan.so.6			base-compat-shlib	compat,gcc=12,cxx
+./usr/lib/sparc/libasan.so.6.0			base-compat-shlib	compat,gcc=12,cxx
 ./usr/lib/sparc/libasn1.so			base-compat-shlib	compat,kerberos
 ./usr/lib/sparc/libasn1.so.10			base-compat-shlib	compat,kerberos
 ./usr/lib/sparc/libasn1.so.10.0			base-compat-shlib	compat,kerberos
@@ -199,7 +201,8 @@
 ./usr/lib/sparc/libgnumalloc.so.1.0		base-compat-shlib	compat
 ./usr/lib/sparc/libgomp.so			base-compat-shlib	compat,gcc
 ./usr/lib/sparc/libgomp.so.2			base-compat-shlib	compat,gcc
-./usr/lib/sparc/libgomp.so.2.1			base-compat-shlib	compat,gcc
+./usr/lib/sparc/libgomp.so.2.1			base-compat-shlib	compat,gcc=10
+./usr/lib/sparc/libgomp.so.2.2			base-compat-shlib	compat,gcc=12
 ./usr/lib/sparc/libgssapi.so			base-compat-shlib	compat,kerberos
 ./usr/lib/sparc/libgssapi.so.12			base-compat-shlib	compat,kerberos
 ./usr/lib/sparc/libgssapi.so.12.0		base-compat-shlib	compat,kerberos
@@ -270,8 +273,10 @@
 ./usr/lib/sparc/libldap_r.so.6			base-compat-shlib	compat,ldap
 ./usr/lib/sparc/libldap_r.so.6.0		base-compat-shlib	compat,ldap
 ./usr/lib/sparc/liblsan.so			base-compat-shlib	compat,cxx,gcc
-./usr/lib/sparc/liblsan.so.2			base-compat-shlib	compat,cxx,gcc
-./usr/lib/sparc/liblsan.so.2.0			base-compat-shlib	compat,cxx,gcc
+./usr/lib/sparc/liblsan.so.2			base-compat-shlib	compat,cxx,gcc=10
+./usr/lib/sparc/liblsan.so.2.0			base-compat-shlib	compat,cxx,gcc=10
+./usr/lib/sparc/liblsan.so.3			base-compat-shlib	compat,cxx,gcc=12
+./usr/lib/sparc/liblsan.so.3.0			base-compat-shlib	compat,cxx,gcc=12
 ./usr/lib/sparc/liblua.so			base-compat-shlib	compat
 ./usr/lib/sparc/liblua.so.6			base-compat-shlib	compat
 ./usr/lib/sparc/liblua.so.6.1			base-compat-shlib	compat
@@ -314,12 +319,12 @@
 ./usr/lib/sparc/libossaudio.so			base-compat-shlib	compat
 ./usr/lib/sparc/libossaudio.so.1		base-compat-shlib	compat
 ./usr/lib/sparc/libossaudio.so.1.1		base-compat-shlib	compat
-./usr/lib/sparc/libp2k.so			base-compat-shlib	compat
-./usr/lib/sparc/libp2k.so.2			base-compat-shlib	compat
-./usr/lib/sparc/libp2k.so.2.0			base-compat-shlib	compat
-./usr/lib/sparc/libpam.so			base-compat-shlib	compat
-./usr/lib/sparc/libpam.so.4			base-compat-shlib	compat
-./usr/lib/sparc/libpam.so.4.1			base-compat-shlib	compat
+./usr/lib/sparc/libp2k.so			base-compat-shlib	compat,rump
+./usr/lib/sparc/libp2k.so.2			base-compat-shlib	compat,rump
+./usr/lib/sparc/libp2k.so.2.0			base-compat-shlib	compat,rump
+./usr/lib/sparc/libpam.so			base-compat-shlib	compat,pam
+./usr/lib/sparc/libpam.so.4			base-compat-shlib	compat,pam
+./usr/lib/sparc/libpam.so.4.1			base-compat-shlib	compat,pam
 ./usr/lib/sparc/libpanel.so			base-compat-shlib	compat
 ./usr/lib/sparc/libpanel.so.3			base-compat-shlib	compat
 ./usr/lib/sparc/libpanel.so.3.0			base-compat-shlib	compat
@@ -418,7 +423,8 @@
 ./usr/lib/sparc/libssl.so.15.0			base-compat-shlib	compat
 ./usr/lib/sparc/libstdc++.so			base-compat-shlib	compat,gcc,cxx,libstdcxx
 ./usr/lib/sparc/libstdc++.so.9			base-compat-shlib	compat,gcc,cxx,libstdcxx
-./usr/lib/sparc/libstdc++.so.9.0		base-compat-shlib	compat,gcc,cxx,libstdcxx
+./usr/lib/sparc/libstdc++.so.9.0		base-compat-shlib	compat,gcc=10,cxx,libstdcxx
+./usr/lib/sparc/libstdc++.so.9.1		base-compat-shlib	compat,gcc=12,cxx,libstdcxx
 ./usr/lib/sparc/libtermcap.so			base-compat-shlib	compat
 ./usr/lib/sparc/libtermcap.so.0			base-compat-shlib	compat
 ./usr/lib/sparc/libtermcap.so.0.6		base-compat-shlib	compat
@@ -432,11 +438,13 @@
 ./usr/lib/sparc/libtre.so.0			base-compat-shlib	compat
 ./usr/lib/sparc/libtre.so.0.8			base-compat-shlib	compat
 ./usr/lib/sparc/libubsan.so			base-compat-shlib	compat,gcc,cxx
-./usr/lib/sparc/libubsan.so.4			base-compat-shlib	compat,gcc,cxx
-./usr/lib/sparc/libubsan.so.4.0			base-compat-shlib	compat,gcc,cxx
-./usr/lib/sparc/libukfs.so			base-compat-shlib	compat
-./usr/lib/sparc/libukfs.so.1			base-compat-shlib	compat
-./usr/lib/sparc/libukfs.so.1.0			base-compat-shlib	compat
+./usr/lib/sparc/libubsan.so.4			base-compat-shlib	compat,gcc=10,cxx
+./usr/lib/sparc/libubsan.so.4.0			base-compat-shlib	compat,gcc=10,cxx
+./usr/lib/sparc/libubsan.so.5			base-compat-shlib	compat,gcc=12,cxx
+./usr/lib/sparc/libubsan.so.5.0			base-compat-shlib	compat,gcc=12,cxx
+./usr/lib/sparc/libukfs.so			base-compat-shlib	compat,rump
+./usr/lib/sparc/libukfs.so.1			base-compat-shlib	compat,rump
+./usr/lib/sparc/libukfs.so.1.0			base-compat-shlib	compat,rump
 ./usr/lib/sparc/libumem.so			base-compat-shlib	compat,zfs
 ./usr/lib/sparc/libumem.so.0			base-compat-shlib	compat,zfs
 ./usr/lib/sparc/libumem.so.0.0			base-compat-shlib	compat,zfs
@@ -478,6 +486,8 @@
 ./usr/lib/sparc/lua/5.4/netpgp.so		base-compat-shlib	compat
 ./usr/lib/sparc/lua/5.4/sqlite.so		base-compat-shlib	compat
 ./usr/lib/sparc/lua/5.4/syslog.so		base-compat-shlib	compat
+./usr/lib/sparc/named				base-compat-shlib	compat
+./usr/lib/sparc/named/filter-aaaa.so.0		base-compat-shlib	compat
 ./usr/lib/sparc/openssl				base-crypto-usr		compat
 ./usr/lib/sparc/openssl/engines			base-crypto-usr		compat
 ./usr/lib/sparc/openssl/engines/dasync.so	base-crypto-usr		compat,pic,openssl=30
@@ -515,4 +525,6 @@
 ./usr/libdata/debug/lib/sparc/npf		base-compat-shlib	compat
 ./usr/libdata/debug/usr/lib/sparc		base-compat-shlib	compat
 ./usr/libdata/debug/usr/lib/sparc/i18n		base-compat-shlib	compat
+./usr/libdata/debug/usr/lib/sparc/named		base-compat-shlib	compat
+./usr/libdata/debug/usr/lib/sparc/security	base-compat-shlib	compat
 ./usr/libexec/ld.elf_so-sparc			base-sys-shlib		compat,pic

@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.lib.mk,v 1.401 2024/04/09 22:37:23 christos Exp $
+#	$NetBSD: bsd.lib.mk,v 1.405 2024/05/08 20:38:55 riastradh Exp $
 #	@(#)bsd.lib.mk	8.3 (Berkeley) 4/22/94
 
 .include <bsd.init.mk>
@@ -425,11 +425,15 @@ _DEST.LINT:=${DESTDIR}${LINTLIBDIR}
 _DEST.DEBUG:=${DESTDIR}${DEBUGDIR}${LIBDIR}
 _DEST.ODEBUG:=${DESTDIR}${DEBUGDIR}${_LIBSODIR}
 
-_BUILDSTATICLIB= ${MKPIC} == "no" || (defined(LDSTATIC) && ${LDSTATIC} != "") \
+.if ${MKPIC} == "no" || (defined(LDSTATIC) && ${LDSTATIC} != "") \
     || ${MAKELINKLIB} != "no" || ${MAKESTATICLIB} != "no"
+_BUILDSTATICLIB=yes
+.else
+_BUILDSTATICLIB=no
+.endif
 
 .if defined(LIB)							# {
-.if ${_BUILDSTATICLIB}
+.if ${_BUILDSTATICLIB} != "no"
 _LIBS=${_LIB.a}
 .else
 _LIBS=
@@ -484,7 +488,7 @@ _LIBS+=${_LIB.ln}
 .endif
 
 ALLOBJS=
-.if ${_BUILDSTATICLIB}
+.if ${_BUILDSTATICLIB} != "no"
 ALLOBJS+=${STOBJS}
 .endif
 ALLOBJS+=${POBJS} ${SOBJS}
@@ -617,15 +621,15 @@ _MAINLIBDEPS=	${SOLIB} ${DPADD} ${DPLIBC} \
 .if defined(_LIB.so.debug)
 ${_LIB.so.debug}: ${_LIB.so.link}
 	${_MKTARGET_CREATE}
-	(  ${OBJCOPY} --only-keep-debug \
-		${_LIB.so.link} ${_LIB.so.debug} \
+	( ${OBJCOPY} --only-keep-debug --compress-debug-sections \
+	    ${_LIB.so.link} ${_LIB.so.debug} \
 	) || (rm -f ${.TARGET}; false)
 ${_LIB.so.full}: ${_LIB.so.link} ${_LIB.so.debug}
 	${_MKTARGET_CREATE}
 	(  ${OBJCOPY} --strip-debug -p -R .gnu_debuglink \
-		--add-gnu-debuglink=${_LIB.so.debug} \
-		${_LIB.so.link} ${_LIB.so.full}.tmp && \
-		${MV} ${_LIB.so.full}.tmp ${_LIB.so.full} \
+	    --add-gnu-debuglink=${_LIB.so.debug} \
+	    ${_LIB.so.link} ${_LIB.so.full}.tmp && \
+	    ${MV} ${_LIB.so.full}.tmp ${_LIB.so.full} \
 	) || (rm -f ${.TARGET}; false)
 ${_LIB.so.link}: ${_MAINLIBDEPS}
 .else # aka no MKDEBUG
@@ -656,8 +660,10 @@ ${_LIB.so.full}: ${_MAINLIBDEPS}
 
 # If there's a file listing expected symbols, fail if the diff from it
 # to the actual symbols is nonempty, and show the diff in that case.
-.if exists(${.CURDIR}/${LIB}.${MACHINE_ARCH}.expsym)
-LIB_EXPSYM?=	${LIB}.${MACHINE_ARCH}.expsym
+.if exists(${.CURDIR}/${LIB}.${LIBC_MACHINE_ARCH:U${MACHINE_ARCH}}.expsym)
+LIB_EXPSYM?=	${LIB}.${LIBC_MACHINE_ARCH:U${MACHINE_ARCH}}.expsym
+.elif exists(${.CURDIR}/${LIB}.${LIBC_MACHINE_CPU:U${MACHINE_CPU}}.expsym)
+LIB_EXPSYM?=	${LIB}.${LIBC_MACHINE_CPU:U${MACHINE_CPU}}.expsym
 .elif exists(${.CURDIR}/${LIB}.expsym)
 LIB_EXPSYM?=	${LIB}.expsym
 .endif

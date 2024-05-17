@@ -1,4 +1,4 @@
-/*	$NetBSD: flashctl.c,v 1.9 2023/01/08 16:01:49 rillig Exp $	*/
+/*	$NetBSD: flashctl.c,v 1.11 2024/05/13 20:38:05 rillig Exp $	*/
 
 /*-
  * Copyright (c) 2010 Department of Software Engineering,
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: flashctl.c,v 1.9 2023/01/08 16:01:49 rillig Exp $");
+__RCSID("$NetBSD: flashctl.c,v 1.11 2024/05/13 20:38:05 rillig Exp $");
 
 #include <sys/ioctl.h>
 #include <sys/flashio.h>

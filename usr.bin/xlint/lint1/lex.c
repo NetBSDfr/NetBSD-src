@@ -1,4 +1,4 @@
-/* $NetBSD: lex.c,v 1.223 2024/03/29 08:35:32 rillig Exp $ */
+/* $NetBSD: lex.c,v 1.228 2024/05/12 18:49:36 rillig Exp $ */
 
 /*
  * Copyright (c) 1996 Christopher G. Demetriou.  All Rights Reserved.
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: lex.c,v 1.223 2024/03/29 08:35:32 rillig Exp $");
+__RCSID("$NetBSD: lex.c,v 1.228 2024/05/12 18:49:36 rillig Exp $");
 #endif
 
 #include <ctype.h>
@@ -68,6 +68,8 @@ bool in_gcc_attribute;
 bool in_system_header;
 
 /*
+ * Define a keyword that cannot be overridden by identifiers.
+ *
  * Valid values for 'since' are 78, 90, 99, 11, 23.
  *
  * The C11 keywords are all taken from the reserved namespace.  They are added
@@ -95,6 +97,9 @@ bool in_system_header;
 	kwdef(name, T_TYPE, .u.kw_tspec = (tspec), since, 0, 1)
 #define kwdef_tqual(name, tqual,		since, gcc, deco) \
 	kwdef(name, T_QUAL, .u.kw_tqual = {.tqual = true}, since, gcc, deco)
+#define kwdef_const(name, named_constant,	since, gcc, deco) \
+	kwdef(name, T_NAMED_CONSTANT, \
+	    .u.kw_named_constant = (named_constant), since, gcc, deco)
 #define kwdef_keyword(name, token) \
 	kwdef(name, token, {false},		78, 0, 1)
 
@@ -110,6 +115,7 @@ static const struct keyword {
 		type_qualifiers kw_tqual;	/* if kw_token is T_QUAL */
 		function_specifier kw_fs;	/* if kw_token is
 						 * T_FUNCTION_SPECIFIER */
+		named_constant kw_named_constant;
 	} u;
 	bool	kw_added_in_c90:1;
 	bool	kw_added_in_c99_or_c11:1;
@@ -130,6 +136,7 @@ static const struct keyword {
 	kwdef_token(	"attribute",	T_ATTRIBUTE,		78,1,6),
 	kwdef_sclass(	"auto",		AUTO,			78,0,1),
 	kwdef_type(	"_Bool",	BOOL,			99),
+	kwdef_type(	"bool",		BOOL,			23),
 	kwdef_keyword(	"break",	T_BREAK),
 	kwdef_token(	"__builtin_offsetof", T_BUILTIN_OFFSETOF, 78,1,1),
 	kwdef_keyword(	"case",		T_CASE),
@@ -145,6 +152,7 @@ static const struct keyword {
 	kwdef_keyword(	"enum",		T_ENUM),
 	kwdef_token(	"__extension__",T_EXTENSION,		78,1,1),
 	kwdef_sclass(	"extern",	EXTERN,			78,0,1),
+	kwdef_const(	"false",	NC_FALSE,		23,0,1),
 	kwdef_type(	"float",	FLOAT,			78),
 	kwdef_keyword(	"for",		T_FOR),
 	kwdef_token(	"_Generic",	T_GENERIC,		11,0,1),
@@ -158,6 +166,7 @@ static const struct keyword {
 #endif
 	kwdef_type(	"long",		LONG,			78),
 	kwdef("_Noreturn", T_FUNCTION_SPECIFIER, .u.kw_fs = FS_NORETURN, 11,0,1),
+	kwdef_const(	"nullptr",	NC_NULLPTR,		23,0,1),
 	// XXX: __packed is GCC-specific.
 	kwdef_token(	"__packed",	T_PACKED,		78,0,1),
 	kwdef_token(	"__real__",	T_REAL,			78,1,1),
@@ -176,6 +185,7 @@ static const struct keyword {
 	kwdef_sclass(	"__thread",	THREAD_LOCAL,		78,1,1),
 	kwdef_sclass(	"_Thread_local", THREAD_LOCAL,		11,0,1),
 	kwdef_sclass(	"thread_local", THREAD_LOCAL,		23,0,1),
+	kwdef_const(	"true",		NC_TRUE,		23,0,1),
 	kwdef_sclass(	"typedef",	TYPEDEF,		78,0,1),
 	kwdef_token(	"typeof",	T_TYPEOF,		78,1,7),
 #ifdef INT128_SIZE
@@ -366,6 +376,8 @@ register_keyword(const struct keyword *kw, bool leading, bool trailing)
 		sym->u.s_keyword.u.sk_type_qualifier = kw->u.kw_tqual;
 	if (tok == T_FUNCTION_SPECIFIER)
 		sym->u.s_keyword.u.function_specifier = kw->u.kw_fs;
+	if (tok == T_NAMED_CONSTANT)
+		sym->u.s_keyword.u.named_constant = kw->u.kw_named_constant;
 
 	symtab_add(sym);
 }
@@ -445,6 +457,8 @@ lex_keyword(sym_t *sym)
 	if (tok == T_FUNCTION_SPECIFIER)
 		yylval.y_function_specifier =
 		    sym->u.s_keyword.u.function_specifier;
+	if (tok == T_NAMED_CONSTANT)
+		yylval.y_named_constant = sym->u.s_keyword.u.named_constant;
 	return tok;
 }
 
@@ -454,15 +468,15 @@ lex_keyword(sym_t *sym)
  * member, tag, ...).
  */
 extern int
-lex_name(const char *yytext, size_t yyleng)
+lex_name(const char *text, size_t len)
 {
 
-	sym_t *sym = symtab_search(yytext);
+	sym_t *sym = symtab_search(text);
 	if (sym != NULL && sym->s_keyword != NULL)
 		return lex_keyword(sym);
 
 	sbuf_t *sb = xmalloc(sizeof(*sb));
-	sb->sb_len = yyleng;
+	sb->sb_len = len;
 	sb->sb_sym = sym;
 	yylval.y_name = sb;
 
@@ -472,8 +486,8 @@ lex_name(const char *yytext, size_t yyleng)
 		return sym->s_scl == TYPEDEF ? T_TYPENAME : T_NAME;
 	}
 
-	char *name = block_zero_alloc(yyleng + 1, "string");
-	(void)memcpy(name, yytext, yyleng + 1);
+	char *name = block_zero_alloc(len + 1, "string");
+	(void)memcpy(name, text, len + 1);
 	sb->sb_name = name;
 	return T_NAME;
 }
@@ -533,10 +547,9 @@ integer_constant_type_unsigned(unsigned l, uint64_t ui, bool warned)
 }
 
 int
-lex_integer_constant(const char *yytext, size_t yyleng, int base)
+lex_integer_constant(const char *text, size_t len, int base)
 {
-	const char *cp = yytext;
-	size_t len = yyleng;
+	const char *cp = text;
 
 	/* skip 0[xX] or 0[bB] */
 	if (base == 16 || base == 2) {
@@ -613,10 +626,9 @@ convert_integer(int64_t si, tspec_t t, unsigned int bits)
 }
 
 int
-lex_floating_constant(const char *yytext, size_t yyleng)
+lex_floating_constant(const char *text, size_t len)
 {
-	const char *cp = yytext;
-	size_t len = yyleng;
+	const char *cp = text;
 
 	bool imaginary = cp[len - 1] == 'i';
 	if (imaginary)
@@ -884,7 +896,7 @@ check_quoted(const buffer *buf, bool complete, char delim)
 			warning(264);
 		else {
 			unsigned char ch = buf->data[it.end - 1];
-			if (isprint(ch))
+			if (ch_isprint(ch))
 				/* dubious escape \%c */
 				warning(79, ch);
 			else
@@ -1017,11 +1029,11 @@ parse_line_directive_flags(const char *p,
 	*is_system = false;
 
 	while (*p != '\0') {
-		while (isspace((unsigned char)*p))
+		while (ch_isspace(*p))
 			p++;
 
 		const char *word = p;
-		while (*p != '\0' && !isspace((unsigned char)*p))
+		while (*p != '\0' && !ch_isspace(*p))
 			p++;
 		size_t len = (size_t)(p - word);
 
@@ -1058,16 +1070,16 @@ set_csrc_pos(void)
  *	# lineno "filename" [GCC-flag...]
  */
 void
-lex_directive(const char *yytext)
+lex_directive(const char *text)
 {
-	const char *p = yytext + 1;	/* skip '#' */
+	const char *p = text + 1;	/* skip '#' */
 
 	while (*p == ' ' || *p == '\t')
 		p++;
 
-	if (!isdigit((unsigned char)*p)) {
+	if (!ch_isdigit(*p)) {
 		if (strncmp(p, "pragma", 6) == 0
-		    && isspace((unsigned char)p[6]))
+		    && ch_isspace(p[6]))
 			return;
 		goto error;
 	}
@@ -1152,19 +1164,19 @@ lex_comment(void)
 
 	bool seen_end_of_comment = false;
 
-	while (c = read_byte(), isspace(c))
+	while (c = read_byte(), isspace(c) != 0)
 		continue;
 
 	/* Read the potential keyword to keywd */
 	size_t l = 0;
 	while (c != EOF && l < sizeof(keywd) - 1 &&
-	    (isalpha(c) || isspace(c))) {
-		if (islower(c) && l > 0 && isupper((unsigned char)keywd[0]))
+	    (isalpha(c) != 0 || isspace(c) != 0)) {
+		if (islower(c) != 0 && l > 0 && ch_isupper(keywd[0]))
 			break;
 		keywd[l++] = (char)c;
 		c = read_byte();
 	}
-	while (l > 0 && isspace((unsigned char)keywd[l - 1]))
+	while (l > 0 && ch_isspace(keywd[l - 1]))
 		l--;
 	keywd[l] = '\0';
 
@@ -1176,14 +1188,14 @@ lex_comment(void)
 	goto skip_rest;
 
 found_keyword:
-	while (isspace(c))
+	while (isspace(c) != 0)
 		c = read_byte();
 
 	/* read the argument, if the keyword accepts one and there is one */
 	char arg[32];
 	l = 0;
 	if (keywtab[i].arg) {
-		while (isdigit(c) && l < sizeof(arg) - 1) {
+		while (isdigit(c) != 0 && l < sizeof(arg) - 1) {
 			arg[l++] = (char)c;
 			c = read_byte();
 		}
@@ -1191,7 +1203,7 @@ found_keyword:
 	arg[l] = '\0';
 	int a = l != 0 ? atoi(arg) : -1;
 
-	while (isspace(c))
+	while (isspace(c) != 0)
 		c = read_byte();
 
 	seen_end_of_comment = c == '*' && (c = read_byte()) == '/';
@@ -1495,6 +1507,79 @@ pushdown(const sym_t *sym)
 	dcs->d_last_dlsym = &nsym->s_level_next;
 
 	return nsym;
+}
+
+static void
+fill_token(int tk, const char *text, token *tok)
+{
+	switch (tk) {
+	case T_NAME:
+	case T_TYPENAME:
+		tok->kind = TK_IDENTIFIER;
+		tok->u.identifier = xstrdup(yylval.y_name->sb_name);
+		break;
+	case T_CON:
+		tok->kind = TK_CONSTANT;
+		tok->u.constant = *yylval.y_val;
+		break;
+	case T_NAMED_CONSTANT:
+		tok->kind = TK_IDENTIFIER;
+		tok->u.identifier = xstrdup(text);
+		break;
+	case T_STRING:;
+		tok->kind = TK_STRING_LITERALS;
+		tok->u.string_literals.len = yylval.y_string->len;
+		tok->u.string_literals.cap = yylval.y_string->cap;
+		tok->u.string_literals.data = xstrdup(yylval.y_string->data);
+		break;
+	default:
+		tok->kind = TK_PUNCTUATOR;
+		tok->u.punctuator = xstrdup(text);
+	}
+}
+
+static void
+seq_reserve(balanced_token_sequence *seq)
+{
+	if (seq->len >= seq->cap) {
+		seq->cap = 16 + 2 * seq->cap;
+		const balanced_token *old_tokens = seq->tokens;
+		balanced_token *new_tokens = block_zero_alloc(
+		    seq->cap * sizeof(*seq->tokens), "balanced_token[]");
+		if (seq->len > 0)
+			memcpy(new_tokens, old_tokens,
+			    seq->len * sizeof(*seq->tokens));
+		seq->tokens = new_tokens;
+	}
+}
+
+static balanced_token_sequence
+read_balanced(int opening)
+{
+	int closing = opening == T_LPAREN ? T_RPAREN
+	    : opening == T_LBRACK ? T_RBRACK : T_RBRACE;
+	balanced_token_sequence seq = { NULL, 0, 0 };
+
+	int tok;
+	while (tok = yylex(), tok > 0 && tok != closing) {
+		seq_reserve(&seq);
+		if (tok == T_LPAREN || tok == T_LBRACK || tok == T_LBRACE) {
+			seq.tokens[seq.len].kind = tok == T_LPAREN ? '('
+			    : tok == T_LBRACK ? '[' : '{';
+			seq.tokens[seq.len].u.tokens = read_balanced(tok);
+		} else {
+			fill_token(tok, yytext, &seq.tokens[seq.len].u.token);
+			freeyyv(&yylval, tok);
+		}
+		seq.len++;
+	}
+	return seq;
+}
+
+balanced_token_sequence
+lex_balanced(void)
+{
+	return read_balanced(T_LPAREN);
 }
 
 /*

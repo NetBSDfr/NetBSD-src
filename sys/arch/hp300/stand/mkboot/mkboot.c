@@ -1,4 +1,4 @@
-/*	$NetBSD: mkboot.c,v 1.15 2024/02/24 15:34:47 christos Exp $	*/
+/*	$NetBSD: mkboot.c,v 1.20 2024/05/11 22:29:36 tsutsui Exp $	*/
 
 /*
  * Copyright (c) 1990, 1993
@@ -46,13 +46,17 @@ The Regents of the University of California.  All rights reserved.");
 #ifdef notdef
 static char sccsid[] = "@(#)mkboot.c	7.2 (Berkeley) 12/16/90";
 #endif
-__RCSID("$NetBSD: mkboot.c,v 1.15 2024/02/24 15:34:47 christos Exp $");
+__RCSID("$NetBSD: mkboot.c,v 1.20 2024/05/11 22:29:36 tsutsui Exp $");
 #endif /* not lint */
 
 #include <sys/param.h>
 #include <sys/file.h>
 #include <sys/stat.h>
-#ifndef HAVE_NBTOOL_CONFIG_H
+#if HAVE_NBTOOL_CONFIG_H
+#include "nbtool_config.h"
+#include "../../sys/sys/bootblock.h"
+#else
+#include <sys/bootblock.h>
 #include <sys/endian.h>
 #endif
 
@@ -65,30 +69,35 @@ __RCSID("$NetBSD: mkboot.c,v 1.15 2024/02/24 15:34:47 christos Exp $");
 #include <string.h>
 #include <unistd.h>
 
-#include "volhdr.h"
-
 #define LIF_NUMDIR	8
 
 #define LIF_VOLSTART	0
-#define LIF_VOLSIZE	sizeof(struct lifvol)
+#define LIF_VOLSIZE	sizeof(struct hp300_lifvol)
 #define LIF_DIRSTART	512
-#define LIF_DIRSIZE	(LIF_NUMDIR * sizeof(struct lifdir))
+#define LIF_DIRSIZE	(LIF_NUMDIR * sizeof(struct hp300_lifdir))
 #define LIF_FILESTART	8192
 
-#define btolifs(b)	(((b) + (SECTSIZE - 1)) / SECTSIZE)
-#define lifstob(s)	((s) * SECTSIZE)
+#define btolifs(b)	(((b) + (HP300_SECTSIZE - 1)) / HP300_SECTSIZE)
+#define lifstob(s)	((s) * HP300_SECTSIZE)
 
-int	loadpoint = -1;
-struct  load ld;
-struct	lifvol lifv;
-struct	lifdir lifd[LIF_NUMDIR];
-time_t repro_epoch = 0;
+#define bintobcd(bin)	((((bin) / 10) << 4) | ((bin) % 10))
+
+static uint32_t loadpoint = ULONG_MAX;
+static struct hp300_load ld;
+static struct hp300_lifvol lifv;
+static struct hp300_lifdir lifd[LIF_NUMDIR];
+static time_t repro_epoch = 0;
 
 int	 main(int, char **);
-void	 bcddate(char *, char *);
-char	*lifname(char *);
-int	 putfile(char *, int);
-void	 usage(void);
+
+static void	 bcddate(char *, char *);
+static char	*lifname(char *);
+static size_t	 putfile(char *, int);
+static void	 usage(void);
+
+#ifndef __CTASSERT
+#define	__CTASSERT(X)
+#endif
 
 #define CLEAR(a, b, c)	\
 __CTASSERT(sizeof(b) - 1 == c); \
@@ -113,15 +122,14 @@ memcpy((a), (b), (c))
 int
 main(int argc, char **argv)
 {
-	char *n1, *n2, *n3;
-	int n, to, ch;
-	int count;
-
+	char *name1, *name2, *name3;
+	int to, ch;
+	uint32_t count, nsec;
 
 	while ((ch = getopt(argc, argv, "l:t:")) != -1)
 		switch (ch) {
 		case 'l':
-			loadpoint = strtol(optarg, NULL, 0);
+			loadpoint = strtoul(optarg, NULL, 0);
 			break;
 		case 't':
 			repro_epoch = (time_t)atoll(optarg);
@@ -132,96 +140,103 @@ main(int argc, char **argv)
 
 	argc -= optind;
 	argv += optind;
-	if (loadpoint == -1 || argc == 0)
+	if (loadpoint == ULONG_MAX || argc == 0)
 		usage();
-	n1 = argv[0];
+	name1 = argv[0];
 	argv++;
 	argc--;
 	if (argc == 0)
 		usage();
 	if (argc > 1) {
-		n2 = argv[0];
+		name2 = argv[0];
 		argv++;
 		argc--;
 		if (argc > 1) {
-			n3 = argv[0];
+			name3 = argv[0];
 			argv++;
 			argc--;
 		} else
-			n3 = NULL;
+			name3 = NULL;
 	} else
-		n2 = n3 = NULL;
+		name2 = name3 = NULL;
 
 	if ((to = open(argv[0], O_WRONLY | O_TRUNC | O_CREAT, 0644)) == -1)
 		err(1, "Can't open `%s'", argv[0]);
+
 	/* clear possibly unused directory entries */
 	CLEAR(lifd[1].dir_name, "          ", sizeof(lifd[1].dir_name));
-	lifd[1].dir_type = htobe16(-1);
+	lifd[1].dir_type = htobe16(0xFFFF);
 	lifd[1].dir_addr = htobe32(0);
 	lifd[1].dir_length = htobe32(0);
-	lifd[1].dir_flag = htobe16(0xFF);
+	lifd[1].dir_flag = htobe16(0x00FF);
 	lifd[1].dir_exec = htobe32(0);
 	lifd[7] = lifd[6] = lifd[5] = lifd[4] = lifd[3] = lifd[2] = lifd[1];
+
 	/* record volume info */
-	lifv.vol_id = htobe16(VOL_ID);
+	lifv.vol_id = htobe16(HP300_VOL_ID);
 	CLEAR(lifv.vol_label, "BOOT43", sizeof(lifv.vol_label));
 	lifv.vol_addr = htobe32(btolifs(LIF_DIRSTART));
-	lifv.vol_oct = htobe16(VOL_OCT);
+	lifv.vol_oct = htobe16(HP300_VOL_OCT);
 	lifv.vol_dirsize = htobe32(btolifs(LIF_DIRSIZE));
 	lifv.vol_version = htobe16(1);
+
 	/* output bootfile one */
 	lseek(to, LIF_FILESTART, SEEK_SET);
-	count = putfile(n1, to);
-	n = btolifs(count);
-	strcpy(lifd[0].dir_name, lifname(n1));
-	lifd[0].dir_type = htobe16(DIR_TYPE);
+	count = putfile(name1, to);
+	nsec = btolifs(count);
+	strcpy(lifd[0].dir_name, lifname(name1));
+	lifd[0].dir_type = htobe16(HP300_DIR_TYPE);
 	lifd[0].dir_addr = htobe32(btolifs(LIF_FILESTART));
-	lifd[0].dir_length = htobe32(n);
-	bcddate(n1, lifd[0].dir_toc);
-	lifd[0].dir_flag = htobe16(DIR_FLAG);
+	lifd[0].dir_length = htobe32(nsec);
+	bcddate(name1, lifd[0].dir_toc);
+	lifd[0].dir_flag = htobe16(HP300_DIR_FLAG);
 	lifd[0].dir_exec = htobe32(loadpoint);
 	lifv.vol_length = htobe32(be32toh(lifd[0].dir_addr) +
-				  be32toh(lifd[0].dir_length));
+	    be32toh(lifd[0].dir_length));
+
 	/* if there is an optional second boot program, output it */
-	if (n2) {
-		lseek(to, LIF_FILESTART+lifstob(n), SEEK_SET);
-		count = putfile(n2, to);
-		n = btolifs(count);
-		strcpy(lifd[1].dir_name, lifname(n2));
-		lifd[1].dir_type = htobe16(DIR_TYPE);
+	if (name2 != NULL) {
+		lseek(to, LIF_FILESTART + lifstob(nsec), SEEK_SET);
+		count = putfile(name2, to);
+		nsec = btolifs(count);
+		strcpy(lifd[1].dir_name, lifname(name2));
+		lifd[1].dir_type = htobe16(HP300_DIR_TYPE);
 		lifd[1].dir_addr = htobe32(lifv.vol_length);
-		lifd[1].dir_length = htobe32(n);
-		bcddate(n2, lifd[1].dir_toc);
-		lifd[1].dir_flag = htobe16(DIR_FLAG);
+		lifd[1].dir_length = htobe32(nsec);
+		bcddate(name2, lifd[1].dir_toc);
+		lifd[1].dir_flag = htobe16(HP300_DIR_FLAG);
 		lifd[1].dir_exec = htobe32(loadpoint);
 		lifv.vol_length = htobe32(be32toh(lifd[1].dir_addr) +
-					  be32toh(lifd[1].dir_length));
+		    be32toh(lifd[1].dir_length));
 	}
+
 	/* ditto for three */
-	if (n3) {
-		lseek(to, LIF_FILESTART+lifstob(lifd[0].dir_length+n),
-		      SEEK_SET);
-		count = putfile(n3, to);
-		n = btolifs(count);
-		strcpy(lifd[2].dir_name, lifname(n3));
-		lifd[2].dir_type = htobe16(DIR_TYPE);
+	if (name3 != NULL) {
+		lseek(to, LIF_FILESTART + lifstob(lifd[0].dir_length + nsec),
+		    SEEK_SET);
+		count = putfile(name3, to);
+		nsec = btolifs(count);
+		strcpy(lifd[2].dir_name, lifname(name3));
+		lifd[2].dir_type = htobe16(HP300_DIR_TYPE);
 		lifd[2].dir_addr = htobe32(lifv.vol_length);
-		lifd[2].dir_length = htobe32(n);
-		bcddate(n3, lifd[2].dir_toc);
-		lifd[2].dir_flag = htobe16(DIR_FLAG);
+		lifd[2].dir_length = htobe32(nsec);
+		bcddate(name3, lifd[2].dir_toc);
+		lifd[2].dir_flag = htobe16(HP300_DIR_FLAG);
 		lifd[2].dir_exec = htobe32(loadpoint);
 		lifv.vol_length = htobe32(be32toh(lifd[2].dir_addr) +
-					  be32toh(lifd[2].dir_length));
+		    be32toh(lifd[2].dir_length));
 	}
+
 	/* output volume/directory header info */
 	lseek(to, LIF_VOLSTART, SEEK_SET);
 	write(to, &lifv, LIF_VOLSIZE);
 	lseek(to, LIF_DIRSTART, SEEK_SET);
 	write(to, lifd, LIF_DIRSIZE);
+
 	return EXIT_SUCCESS;
 }
 
-int
+static size_t
 putfile(char *from, int to)
 {
 	int fd;
@@ -241,10 +256,11 @@ putfile(char *from, int to)
 	write(to, &ld, sizeof(ld));
 	write(to, bp, statb.st_size);
 	free(bp);
-	return (statb.st_size + sizeof(ld));
+
+	return statb.st_size + sizeof(ld);
 }
 
-void
+static void
 usage(void)
 {
 
@@ -253,7 +269,7 @@ usage(void)
 	exit(EXIT_FAILURE);
 }
 
-char *
+static char *
 lifname(char *str)
 {
 	static char lname[10] = "SYS_XXXXX";
@@ -271,33 +287,28 @@ lifname(char *str)
 			break;
 		str++;
 	}
-	for ( ; i < 10; i++)
+	for (; i < 10; i++)
 		lname[i] = '\0';
-	return(lname);
+
+	return lname;
 }
 
-void
+static void
 bcddate(char *name, char *toc)
 {
 	struct stat statb;
 	struct tm *tm;
 
-	if (repro_epoch)
+	if (repro_epoch != 0)
 		tm = gmtime(&repro_epoch);
 	else {
 		stat(name, &statb);
 		tm = localtime(&statb.st_ctime);
 	}
-	*toc = ((tm->tm_mon+1) / 10) << 4;
-	*toc++ |= (tm->tm_mon+1) % 10;
-	*toc = (tm->tm_mday / 10) << 4;
-	*toc++ |= tm->tm_mday % 10;
-	*toc = (tm->tm_year / 10) << 4;
-	*toc++ |= tm->tm_year % 10;
-	*toc = (tm->tm_hour / 10) << 4;
-	*toc++ |= tm->tm_hour % 10;
-	*toc = (tm->tm_min / 10) << 4;
-	*toc++ |= tm->tm_min % 10;
-	*toc = (tm->tm_sec / 10) << 4;
-	*toc |= tm->tm_sec % 10;
+	*toc++ = bintobcd(tm->tm_mon + 1);
+	*toc++ = bintobcd(tm->tm_mday);
+	*toc++ = bintobcd(tm->tm_year);
+	*toc++ = bintobcd(tm->tm_hour);
+	*toc++ = bintobcd(tm->tm_min);
+	*toc   = bintobcd(tm->tm_sec);
 }

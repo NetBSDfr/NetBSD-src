@@ -1,4 +1,4 @@
-/*	$NetBSD: cksnprintb.c,v 1.12 2024/03/25 22:37:43 rillig Exp $	*/
+/*	$NetBSD: cksnprintb.c,v 1.15 2024/05/12 18:49:36 rillig Exp $	*/
 
 /*-
  * Copyright (c) 2024 The NetBSD Foundation, Inc.
@@ -35,7 +35,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: cksnprintb.c,v 1.12 2024/03/25 22:37:43 rillig Exp $");
+__RCSID("$NetBSD: cksnprintb.c,v 1.15 2024/05/12 18:49:36 rillig Exp $");
 #endif
 
 #include <stdbool.h>
@@ -46,7 +46,7 @@ __RCSID("$NetBSD: cksnprintb.c,v 1.12 2024/03/25 22:37:43 rillig Exp $");
 typedef struct {
 	bool new_style;
 	const buffer *fmt;
-	const tnode_t *value;
+	uint64_t possible_value_bits;
 
 	quoted_iterator it;
 	uint64_t field_width;
@@ -86,9 +86,9 @@ check_hex_escape(const buffer *buf, quoted_iterator it)
 		bool upper = false;
 		bool lower = false;
 		for (size_t i = it.start + 2; i < it.end; i++) {
-			if (isupper((unsigned char)buf->data[i]))
+			if (ch_isupper(buf->data[i]))
 				upper = true;
-			if (islower((unsigned char)buf->data[i]))
+			if (ch_islower(buf->data[i]))
 				lower = true;
 		}
 		if (upper && lower)
@@ -128,33 +128,29 @@ check_bit(checker *ck, uint64_t dir_lsb, uint64_t width,
 		}
 	}
 
-	if (!(possible_bits(ck->value) & field_mask))
+	if (!(ck->possible_value_bits & field_mask))
 		/* conversion '%.*s' is unreachable by input value */
 		warning(378, len, start);
 }
 
 static bool
-parse_description(checker *ck)
+parse_description(checker *ck, const quoted_iterator *dir)
 {
-	size_t descr_start = 0 /* dummy */;
-	bool seen_descr = false;
+	size_t descr_start = 0;
 	quoted_iterator it = ck->it;
 	uint64_t end_marker = ck->new_style ? 0 : 32;
 
 	while (quoted_next(ck->fmt, &it) && it.value > end_marker) {
 		ck->it = it;
-		if (!seen_descr)
+		if (descr_start == 0)
 			descr_start = it.start;
-		seen_descr = true;
-		if (it.escaped && !isprint((unsigned char)it.value)) {
-			/* non-printing character '%.*s' in description ... */
+		if (it.escaped)
+			/* escaped character '%.*s' in description ... */
 			warning(363,
 			    len(it), start(it, ck->fmt),
-			    (int)(it.end - descr_start),
-			    ck->fmt->data + descr_start);
-		}
+			    range(*dir, it), start(*dir, ck->fmt));
 	}
-	return seen_descr;
+	return descr_start > 0;
 }
 
 static bool
@@ -217,7 +213,7 @@ check_conversion(checker *ck)
 		warning(362, len(dir), start(dir, fmt));
 
 	bool needs_descr = !(new_style && dir.value == 'F');
-	bool seen_descr = parse_description(ck);
+	bool seen_descr = parse_description(ck, &dir);
 	bool seen_null = new_style
 	    && quoted_next(ck->fmt, &ck->it) && ck->it.value == 0;
 
@@ -269,9 +265,8 @@ check_conversion(checker *ck)
 }
 
 void
-check_snprintb(const tnode_t *expr)
+check_snprintb(const function_call *call)
 {
-	const function_call *call = expr->u.call;
 	const char *name;
 	const buffer *fmt;
 	const tnode_t *value;
@@ -291,7 +286,7 @@ check_snprintb(const tnode_t *expr)
 
 	checker ck = {
 		.fmt = fmt,
-		.value = value,
+		.possible_value_bits = possible_bits(value),
 		.field_width = 64,
 	};
 

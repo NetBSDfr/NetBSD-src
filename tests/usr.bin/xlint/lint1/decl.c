@@ -1,4 +1,4 @@
-/*	$NetBSD: decl.c,v 1.28 2024/01/28 08:17:27 rillig Exp $	*/
+/*	$NetBSD: decl.c,v 1.30 2024/05/01 17:42:57 rillig Exp $	*/
 # 3 "decl.c"
 
 /*
@@ -240,4 +240,32 @@ get_x(struct point3d { struct point3d_number { int v; } x, y, z; } arg)
 	static struct point3d local;
 	static struct point3d_number z;
 	return arg.x.v + local.x.v + z.v;
+}
+
+// Expressions of the form '(size_t)&null_ptr->member' are used by several
+// C implementations to implement the offsetof macro.
+void
+offsetof_on_array_member(void)
+{
+	typedef struct {
+		int padding, plain, arr[2];
+	} s1;
+
+	// Bit-fields must have a constant number of bits.
+	struct s2 {
+		unsigned int off_plain:(unsigned long)&((s1 *)0)->plain;
+		unsigned int off_arr:(unsigned long)&((s1 *)0)->arr;
+		unsigned int off_arr_0:(unsigned long)&((s1 *)0)->arr[0];
+		unsigned int off_arr_3:(unsigned long)&((s1 *)0)->arr[3];
+	};
+
+	// Arrays may be variable-width, but the diagnostic reveals the size.
+	/* expect+1: error: negative array dimension (-4) [20] */
+	typedef int off_plain[-(int)(unsigned long)&((s1 *)0)->plain];
+	/* expect+1: error: negative array dimension (-8) [20] */
+	typedef int off_arr[-(int)(unsigned long)&((s1 *)0)->arr];
+	/* expect+1: error: negative array dimension (-8) [20] */
+	typedef int off_arr_0[-(int)(unsigned long)&((s1 *)0)->arr[0]];
+	/* expect+1: error: negative array dimension (-20) [20] */
+	typedef int off_arr_3[-(int)(unsigned long)&((s1 *)0)->arr[3]];
 }

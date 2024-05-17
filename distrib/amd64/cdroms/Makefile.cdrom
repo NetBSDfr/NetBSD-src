@@ -1,4 +1,4 @@
-# $NetBSD: Makefile.cdrom,v 1.27 2021/09/25 08:54:29 maya Exp $
+# $NetBSD: Makefile.cdrom,v 1.29 2024/05/14 14:58:41 christos Exp $
 
 .include <bsd.own.mk>
 .include <bsd.endian.mk>
@@ -17,10 +17,12 @@ CDMAKEFSOPTIONS= bootimage=i386;bootxx.${MACHINE},no-emul-boot,allow-multidot,bo
 CDINSTKERNEL=	../../instkernel
 CDKERNELS=	netbsd-GENERIC.gz       netbsd
 CDRELEASE_NOISOS=	true
-CD_SETS=	base etc gpufw
+CD_SETS+=	base etc gpufw
 .if ${MKKMOD} != "no"
 CD_SETS+=	modules
 .endif
+
+SPEC_EXTRA:=${.PARSEDIR}/spec.in
 
 ${EFIBOOTIMG}: ${DESTDIR}/usr/mdec/bootx64.efi ${DESTDIR}/usr/mdec/bootia32.efi
 	${RM} -f ${EFIBOOTIMG}
