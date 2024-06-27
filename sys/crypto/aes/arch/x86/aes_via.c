@@ -1,4 +1,4 @@
-/*	$NetBSD: aes_via.c,v 1.6 2020/07/28 14:01:35 riastradh Exp $	*/
+/*	$NetBSD: aes_via.c,v 1.9 2024/06/16 16:30:52 rillig Exp $	*/
 
 /*-
  * Copyright (c) 2020 The NetBSD Foundation, Inc.
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(1, "$NetBSD: aes_via.c,v 1.6 2020/07/28 14:01:35 riastradh Exp $");
+__KERNEL_RCSID(1, "$NetBSD: aes_via.c,v 1.9 2024/06/16 16:30:52 rillig Exp $");
 
 #ifdef _KERNEL
 #include <sys/types.h>
@@ -857,7 +857,7 @@ aesvia_probe(void)
 #else
 	/*
 	 * From the VIA PadLock Programming Guide:
-	 * http://linux.via.com.tw/support/beginDownload.action?eleid=181&fid=261
+	 * https://web.archive.org/web/20220104214041/http://linux.via.com.tw/support/beginDownload.action?eleid=181&fid=261
 	 */
 	unsigned eax, ebx, ecx, edx;
 	if (!__get_cpuid(0, &eax, &ebx, &ecx, &edx))

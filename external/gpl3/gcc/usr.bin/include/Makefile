@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.14 2023/08/01 05:57:55 mrg Exp $
+#	$NetBSD: Makefile,v 1.16 2024/06/18 04:07:18 mrg Exp $
 
 .include <bsd.init.mk>
 
@@ -9,6 +9,8 @@ SUBDIR=	sanitizer
 .endif
 
 INCS= ${G_EXTRA_HEADERS:T}
+
+.include "../rs6000-inc.mk"
 
 # Part of the standard headers, the rest of which we replace.
 INCS+=	stdatomic.h

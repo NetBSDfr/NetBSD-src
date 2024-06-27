@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.470 2024/04/26 18:06:02 christos Exp $
+#	$NetBSD: Makefile,v 1.473 2024/06/23 00:37:12 mrg Exp $
 #	from: @(#)Makefile	8.7 (Berkeley) 5/25/95
 
 # Environment variables without default values:
@@ -48,17 +48,13 @@ DISTRIBVER!=	${HOST_SH} ${NETBSDSRCDIR}/sys/conf/osrelease.sh
 
 GZIP_FLAGS= -9 ${GZIP_N_FLAG}
 
-# Flags for creating ISO CDROM image
-# mkisofs is expected to be in $PATH, install via pkgsrc/sysutils/cdrtools
-# Note: At least mkisofs 2.0 should be used.
-#
-.if !defined(MKISOFS)
-MKISOFS!=       (which mkisofs || echo true) 2>/dev/null
-.endif
+# Flags for creating ISO CDROM image for mac68k and macppc that require
+# tools mkhybrid(8) to create hybrid ISO9660/HFS images.
+MKISOFS?=	${TOOL_MKHYBRID}
 DISTRIBREV!=	${HOST_SH} ${KERNSRCDIR}/conf/osrelease.sh -s
 # ISO 9660 volume ID.  Note that this can only contain [A-Z0-9_].
 ISO_VOLID!=	echo NETBSD_${DISTRIBREV} | tr a-z A-Z
-MKISOFS_FLAGS+= -J -l -hide-joliet-trans-tbl -r -T \
+MKISOFS_FLAGS+= -J -l -r \
 		-V ${ISO_VOLID} \
 		-publisher "The NetBSD Project" \
 		-m "${RELEASEDIR}/${RELEASEMACHINEDIR}/installation/cdrom"
@@ -415,7 +411,7 @@ distrib-dirs: .PHONY check_DESTDIR
 	cd ${NETBSDSRCDIR}/etc/mtree && ${MAKE} distrib-dirs
 
 COMPRESS_PROGRAM=${"${USE_XZ_SETS:Uno}"!="no":?${TOOL_XZ}:${TOOL_GZIP}}
-XZ_OPT=-9
+XZ_OPT?=-9
 TAR_SUFF=${"${USE_XZ_SETS:Uno}"!="no":?tar.xz:tgz}
 
 # release, snapshot --
@@ -442,14 +438,9 @@ CDROM.pathlist=	${.OBJDIR}/cdrom.pathlist
 
 iso-image:
 
-.if ${MKISOFS} != true
 do-iso-image: .PHONY check_DESTDIR check_RELEASEDIR iso-image-md-post
 	${MAKESUMS} -t ${RELEASEDIR}/images/ '*.iso'
 	@echo "iso-image created as: ${CDROM_IMAGE}"
-.else
-do-iso-image:
-	@echo iso-image: mkisofs not found
-.endif
 
 iso-image-setup: .PHONY check_RELEASEDIR
 	rm -f ${CDROM.pathlist}
@@ -468,10 +459,6 @@ check_imagedir:
 #	Create the image after the MD operations have completed.
 #
 iso-image-mi: .PHONY check_DESTDIR check_RELEASEDIR iso-image-md-pre check_imagedir
-	@if ! ${MKISOFS} --version; then \
-		echo "install pkgsrc/sysutils/cdrtools and run 'make iso-image'." ; \
-		false; \
-	fi
 	${MKISOFS} ${MKISOFS_FLAGS} -graft-points -path-list ${CDROM.pathlist} \
 	    -o ${CDROM_IMAGE} ${CDROM.dir}
 

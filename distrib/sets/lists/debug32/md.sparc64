@@ -1,4 +1,4 @@
-# $NetBSD: md.sparc64,v 1.6 2024/05/09 02:14:21 mrg Exp $
+# $NetBSD: md.sparc64,v 1.10 2024/06/10 07:47:06 kre Exp $
 ./usr/lib/sparc/i18n/libBIG5_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/sparc/i18n/libDECHanyu_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/sparc/i18n/libEUCTW_g.a			comp-c-debuglib	debuglib,compat
@@ -68,7 +68,7 @@
 ./usr/lib/sparc/libgcov_g.a			comp-c-debuglib	debuglib,compat,gcc
 ./usr/lib/sparc/libgnuctf_g.a			comp-c-debuglib	debuglib,compat,binutils
 ./usr/lib/sparc/libgnumalloc_g.a			comp-c-debuglib	debuglib,compat
-./usr/lib/sparc/libgomp_g.a			comp-c-debuglib	debuglib,compat
+./usr/lib/sparc/libgomp_g.a			comp-c-debuglib	debuglib,compat,gcc
 ./usr/lib/sparc/libgssapi_g.a			comp-c-debuglib	debuglib,compat,kerberos
 ./usr/lib/sparc/libhdb_g.a			comp-c-debuglib	debuglib,compat,kerberos
 ./usr/lib/sparc/libheimbase_g.a			comp-c-debuglib	debuglib,compat,kerberos
@@ -106,7 +106,7 @@
 ./usr/lib/sparc/libnpf_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/sparc/libns_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/sparc/libnvpair_g.a			comp-c-debuglib	debuglib,compat,zfs
-./usr/lib/sparc/libobjc_g.a			comp-c-debuglib	debuglib,compat
+./usr/lib/sparc/libobjc_g.a			comp-c-debuglib	debuglib,compat,gcc
 ./usr/lib/sparc/libopcodes_g.a			comp-c-debuglib	debuglib,compat,binutils
 ./usr/lib/sparc/libossaudio_g.a			comp-c-debuglib	debuglib,compat
 ./usr/lib/sparc/libp2k_g.a			comp-c-debuglib	debuglib,compat,rump
@@ -190,7 +190,7 @@
 ./usr/libdata/debug/usr/lib/sparc/i18n/libmapper_std.so.5.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/sparc/i18n/libmapper_zone.so.5.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/sparc/libamu.so.5.0.debug	comp-sys-debug	debug,compat
-./usr/libdata/debug/usr/lib/sparc/libarchive.so.5.0.debug	comp-sys-debug	debug,compat
+./usr/libdata/debug/usr/lib/sparc/libarchive.so.5.1.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/sparc/libasan.so.5.0.debug	comp-sys-debug	debug,compat,gcc=10
 ./usr/libdata/debug/usr/lib/sparc/libasan.so.6.0.debug	comp-sys-debug	debug,compat,gcc=12
 ./usr/libdata/debug/usr/lib/sparc/libasn1.so.10.0.debug	comp-sys-debug	debug,compat
@@ -204,6 +204,7 @@
 ./usr/libdata/debug/usr/lib/sparc/libbozohttpd.so.1.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/sparc/libbsdmalloc.so.0.1.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/sparc/libbz2.so.1.1.debug	comp-sys-debug	debug,compat
+./usr/libdata/debug/usr/lib/sparc/libc++.so.1.0.debug	comp-sys-debug	debug,compat,libcxx
 ./usr/libdata/debug/usr/lib/sparc/libc.so.12.221.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/sparc/libcbor.so.0.5.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/sparc/libcom_err.so.8.0.debug	comp-sys-debug	debug,compat,kerberos
@@ -227,7 +228,7 @@
 ./usr/libdata/debug/usr/lib/sparc/libfido2.so.5.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/sparc/libform.so.8.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/sparc/libgcc_s.so.1.0.debug	comp-sys-debug	debug,compat,gcc
-./usr/libdata/debug/usr/lib/sparc/libgnuctf.so.1.0.debug	comp-sys-debug	debug,compat,gcc
+./usr/libdata/debug/usr/lib/sparc/libgnuctf.so.1.0.debug	comp-sys-debug	debug,compat,binutils=239
 ./usr/libdata/debug/usr/lib/sparc/libgnumalloc.so.1.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/sparc/libgomp.so.2.1.debug	comp-sys-debug	debug,compat,gcc=10
 ./usr/libdata/debug/usr/lib/sparc/libgomp.so.2.2.debug	comp-sys-debug	debug,compat,gcc=12
@@ -268,7 +269,7 @@
 ./usr/libdata/debug/usr/lib/sparc/libnpf.so.0.1.debug	comp-sys-debug	debug,compat,npf
 ./usr/libdata/debug/usr/lib/sparc/libns.so.21.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/sparc/libnvpair.so.0.0.debug	comp-sys-debug	debug,compat,zfs
-./usr/libdata/debug/usr/lib/sparc/libobjc.so.4.0.debug	comp-sys-debug	debug,compat
+./usr/libdata/debug/usr/lib/sparc/libobjc.so.4.0.debug	comp-sys-debug	debug,compat,gcc
 ./usr/libdata/debug/usr/lib/sparc/libopcodes.so.11.0.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/sparc/libossaudio.so.1.1.debug	comp-sys-debug	debug,compat
 ./usr/libdata/debug/usr/lib/sparc/libp2k.so.2.0.debug	comp-sys-debug	debug,compat

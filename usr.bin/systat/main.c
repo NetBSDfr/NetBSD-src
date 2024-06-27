@@ -1,4 +1,4 @@
-/*	$NetBSD: main.c,v 1.56 2021/08/21 13:22:19 christos Exp $	*/
+/*	$NetBSD: main.c,v 1.58 2024/06/16 22:44:01 kre Exp $	*/
 
 /*-
  * Copyright (c) 1980, 1992, 1993
@@ -36,7 +36,7 @@ __COPYRIGHT("@(#) Copyright (c) 1980, 1992, 1993\
 #if 0
 static char sccsid[] = "@(#)main.c	8.1 (Berkeley) 6/6/93";
 #endif
-__RCSID("$NetBSD: main.c,v 1.56 2021/08/21 13:22:19 christos Exp $");
+__RCSID("$NetBSD: main.c,v 1.58 2024/06/16 22:44:01 kre Exp $");
 #endif /* not lint */
 
 #include <sys/param.h>
@@ -59,7 +59,7 @@ __RCSID("$NetBSD: main.c,v 1.56 2021/08/21 13:22:19 christos Exp $");
 #include "extern.h"
 #include "drvstats.h"
 
-static int     dellave;
+static double	dellave;
 
 kvm_t *kd;
 char	*memf = NULL;

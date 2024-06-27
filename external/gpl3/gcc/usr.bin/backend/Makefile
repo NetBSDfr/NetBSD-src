@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.71 2024/02/25 00:28:02 mrg Exp $
+#	$NetBSD: Makefile,v 1.74 2024/06/18 04:07:18 mrg Exp $
 
 HOSTPROG_CXX=	1
 LIBISPRIVATE=	yes
@@ -52,6 +52,7 @@ CPPFLAGS.cppbuiltin.cc+=	-DBASEVER="\"${BASEVER}"\"
 CLEANFILES+=	gengenrtl genrtl.h \
 		gengtype gtyp-gen.h gtype-brig.h gtype-desc.cc gtype-desc.h \
 		gtype-c.h gtype-cp.h gtype-f.h gtype-objc.h \
+		gtype-d.h gtype-fortran.h \
 		genflags genflags.h \
 		gencheck tree-check.h \
 		insn-preds.cc genpreds tm-preds.h tm_p.h cs-tm_p.h \
@@ -64,6 +65,8 @@ CLEANFILES+=	gengenrtl genrtl.h \
 
 # XXX
 #COPTS.varasm.cc=		-Wno-error
+
+.SUFFIXES: .lo .h .c .cc
 
 # XXX Override the normal rule to use HOST_COMPILE.cc
 .c.lo:
@@ -427,6 +430,14 @@ aarch64-builtin-iterators.h: ${DIST}/gcc/config/aarch64/geniterators.sh \
 	$(HOST_SH) ${.ALLSRC} > ${.TARGET}
 
 CLEANFILES+=	aarch-builtin-iterators.h
+
+.if ${GCC_MACHINE_ARCH} == "powerpc" || ${GCC_MACHINE_ARCH} == "powerpc64" # {
+
+.include "../rs6000-inc.mk"
+gtype-desc.h: rs6000-builtins.h
+
+.endif # }
+
 
 #
 # Required hard-coded dependancies.

@@ -1,4 +1,4 @@
-/*	$NetBSD: vdsk.c,v 1.11 2023/12/12 21:34:34 andvar Exp $	*/
+/*	$NetBSD: vdsk.c,v 1.18 2024/06/20 18:41:45 palle Exp $	*/
 /*	$OpenBSD: vdsk.c,v 1.46 2015/01/25 21:42:13 kettenis Exp $	*/
 /*
  * Copyright (c) 2009, 2011 Mark Kettenis
@@ -139,7 +139,7 @@ struct vdsk_softc {
 
 	struct scsipi_adapter sc_adapter;
 	struct scsipi_channel sc_channel;
-  
+
 	bus_space_tag_t	sc_bustag;
 	bus_dma_tag_t	sc_dmatag;
 
@@ -246,7 +246,7 @@ vdsk_attach(device_t parent, device_t self, void *aux)
 	sc->sc_bustag = ca->ca_bustag;
 	sc->sc_dmatag = ca->ca_dmatag;
 
-	printf(": ivec 0x%llx, 0x%llx", 
+	printf(": ivec 0x%llx, 0x%llx",
 	       (long long unsigned int)ca->ca_tx_ino,
 	       (long long unsigned int)ca->ca_rx_ino);
 
@@ -329,7 +329,7 @@ vdsk_attach(device_t parent, device_t self, void *aux)
 	if (pmap_extract(pmap_kernel(), va, &pa) == FALSE)
 		panic("pmap_extract failed %lx\n", va);
 #if OPENBSD_BUSDMA
-	err = hv_ldc_tx_qconf(lc->lc_id, 
+	err = hv_ldc_tx_qconf(lc->lc_id,
 	    lc->lc_txq->lq_map->dm_segs[0].ds_addr, lc->lc_txq->lq_nentries);
 #else
         err = hv_ldc_tx_qconf(lc->lc_id, pa, lc->lc_txq->lq_nentries);
@@ -421,10 +421,10 @@ vdsk_scsipi_request(struct scsipi_channel *chan, scsipi_adapter_req_t req,
 	switch (req) {
 		case ADAPTER_REQ_RUN_XFER:
 			vdsk_scsi_cmd(sc, xs);
-			break;  
+			break;
 		case ADAPTER_REQ_GROW_RESOURCES:
-		case ADAPTER_REQ_SET_XFER_MODE: 
-			/* Ignored */  
+		case ADAPTER_REQ_SET_XFER_MODE:
+			/* Ignored */
 			break;
 		default:
 			panic("req unhandled: %x", req);
@@ -631,7 +631,9 @@ vdsk_rx_vio_attr_info(struct vdsk_softc *sc, struct vio_msg_tag *tag)
 			}
 
 			sc->sc_vdisk_block_size = ai->vdisk_block_size;
+			DPRINTF(("vdisk_block_size %u\n", sc->sc_vdisk_block_size));
 			sc->sc_vdisk_size = ai->vdisk_size;
+			DPRINTF(("vdisk_size %lu\n", sc->sc_vdisk_size));
 			if (sc->sc_major > 1 || sc->sc_minor >= 1)
 				sc->sc_vd_mtype = ai->vd_mtype;
 			else
@@ -788,7 +790,6 @@ vdsk_rx_vio_dring_data(struct vdsk_softc *sc, struct vio_msg_tag *tag)
 void
 vdsk_ldc_reset(struct ldc_conn *lc)
 {
-
 	struct vdsk_softc *sc = lc->lc_sc;
 
 	sc->sc_vio_state = 0;
@@ -797,7 +798,6 @@ vdsk_ldc_reset(struct ldc_conn *lc)
 void
 vdsk_ldc_start(struct ldc_conn *lc)
 {
-
 	struct vdsk_softc *sc = lc->lc_sc;
 
 	vdsk_send_ver_info(sc, VDSK_MAJOR, VDSK_MINOR);
@@ -806,7 +806,6 @@ vdsk_ldc_start(struct ldc_conn *lc)
 void
 vdsk_sendmsg(struct vdsk_softc *sc, void *msg, size_t len)
 {
-
 	struct ldc_conn *lc = &sc->sc_lc;
 	int err;
 
@@ -818,7 +817,6 @@ vdsk_sendmsg(struct vdsk_softc *sc, void *msg, size_t len)
 void
 vdsk_send_ver_info(struct vdsk_softc *sc, uint16_t major, uint16_t minor)
 {
-
 	struct vio_ver_info vi;
 
 	/* Allocate new session ID. */
@@ -850,6 +848,8 @@ vdsk_send_attr_info(struct vdsk_softc *sc)
 	ai.xfer_mode = VIO_DRING_MODE;
 	ai.vdisk_block_size = DEV_BSIZE;
 	ai.max_xfer_sz = MAXPHYS / DEV_BSIZE;
+	DPRINTF(("vdisk_block_size %u\n", ai.vdisk_block_size));
+	DPRINTF(("max_xfer_sz %lu\n", ai.max_xfer_sz));
 	vdsk_sendmsg(sc, &ai, sizeof(ai));
 
 	sc->sc_vio_state |= VIO_SND_ATTR_INFO;
@@ -1027,47 +1027,103 @@ vdsk_scsi_cmd(struct vdsk_softc *sc, struct scsipi_xfer *xs)
 	switch (xs->cmd->opcode) {
 
 		case SCSI_READ_6_COMMAND:
+			DPRINTF(("SCSI_READ_6_COMMAND\n"));
+			break;
+			
 		case READ_10:
+			DPRINTF(("SCSI_READ_10\n"));
+			break;
+			
 		case READ_12:
+			DPRINTF(("SCSI_READ_12\n"));
+			break;
+			
 		case READ_16:
+			DPRINTF(("SCSI_READ_16\n"));
+			break;
+			
 		case SCSI_WRITE_6_COMMAND:
+			DPRINTF(("SCSI_WRITE_6\n"));
+			break;
+			
 		case WRITE_10:
+			DPRINTF(("SCSI_WRITE_10\n"));
+			break;
+			
 		case WRITE_12:
+			DPRINTF(("SCSI_WRITE_12\n"));
+			break;
+			
 		case WRITE_16:
+			DPRINTF(("SCSI_WRITE_16\n"));
+			break;
+			
 		case SCSI_SYNCHRONIZE_CACHE_10:
+			DPRINTF(("SCSI_SYNCHRONIZE_CACHE_10WRITE_16\n"));
 			break;
 
 		case INQUIRY:
+			DPRINTF(("INQUIRY\n"));
 			vdsk_scsi_inq(sc, xs);
 			return;
 
 		case READ_CAPACITY_10:
+			DPRINTF(("READ_CAPACITY_10\n"));
 			vdsk_scsi_capacity(sc, xs);
 			return;
 
 		case READ_CAPACITY_16:
+			DPRINTF(("READ_CAPACITY_16\n"));
 			vdsk_scsi_capacity16(sc, xs);
 			return;
 
 		case SCSI_REPORT_LUNS:
+			DPRINTF(("REPORT_LUNS\n"));
 			vdsk_scsi_report_luns(sc, xs);
 			return;
-			
+
 		case SCSI_TEST_UNIT_READY:
+			DPRINTF(("TEST_UNIT_READY\n"));
+			vdsk_scsi_done(xs, XS_NOERROR);
+			return;
+			
 		case START_STOP:
+			DPRINTF(("START_STOP\n"));
+			vdsk_scsi_done(xs, XS_NOERROR);
+			return;
+			
 		case SCSI_PREVENT_ALLOW_MEDIUM_REMOVAL:
+			DPRINTF(("PREVENT_ALLOW_MEDIUM_REMOVAL\n"));
+			vdsk_scsi_done(xs, XS_NOERROR);
+			return;
+			
 		case SCSI_MODE_SENSE_6:
+			DPRINTF(("SCSI_MODE_SENSE_6 (not implemented)\n"));
+			vdsk_scsi_done(xs, XS_DRIVER_STUFFUP);
+			return;
+
+		case SCSI_MODE_SELECT_6:
+				DPRINTF(("MODE_SELECT_6 (not implemented)\n"));
+			vdsk_scsi_done(xs, XS_DRIVER_STUFFUP);
+			return;
+
 		case SCSI_MAINTENANCE_IN:
+			DPRINTF(("MAINTENANCE_IN\n"));
 			vdsk_scsi_done(xs, XS_NOERROR);
 			return;
 
 		case SCSI_MODE_SENSE_10:
+			DPRINTF(("SCSI_MODE_SENSE_10 (not implemented)\n"));
+			vdsk_scsi_done(xs, XS_DRIVER_STUFFUP);
+			return;
+			
 		case READ_TOC:
+			DPRINTF(("READ_TOC (not implemented)\n"));
 			vdsk_scsi_done(xs, XS_DRIVER_STUFFUP);
 			return;
 
 		default:
-			panic("%s unhandled cmd 0x%02x\n", 
+			panic("%s unhandled cmd 0x%02x\n",
 			      __func__, xs->cmd->opcode);
 	}
 
@@ -1117,6 +1173,7 @@ vdsk_submit_cmd(struct vdsk_softc *sc, struct scsipi_xfer *xs)
 		case READ_10:
 		case READ_12:
 		case READ_16:
+			DPRINTF(("VD_OP_BREAD\n"));
 			operation = VD_OP_BREAD;
 			break;
 
@@ -1124,15 +1181,17 @@ vdsk_submit_cmd(struct vdsk_softc *sc, struct scsipi_xfer *xs)
 		case WRITE_10:
 		case WRITE_12:
 		case WRITE_16:
+			DPRINTF(("VD_OP_BWRITE\n"));
 			operation = VD_OP_BWRITE;
 			break;
 
 		case SCSI_SYNCHRONIZE_CACHE_10:
+			DPRINTF(("VD_OP_FLUSH\n"));
 			operation = VD_OP_FLUSH;
 			break;
 
 		default:
-			panic("%s  unhandled cmd opcode 0x%x", 
+			panic("%s  unhandled cmd opcode 0x%x",
 			      __func__, xs->cmd->opcode);
 	}
 
@@ -1161,7 +1220,7 @@ vdsk_submit_cmd(struct vdsk_softc *sc, struct scsipi_xfer *xs)
 	len = xs->datalen;
 	va = (vaddr_t)xs->data;
 	while (len > 0) {
-	  DPRINTF(("len = %u\n", len));
+		DPRINTF(("len = %u\n", len));
 		KASSERT(ncookies < MAXPHYS / PAGE_SIZE);
 		pa = 0;
 		pmap_extract(pmap_kernel(), va, &pa);
@@ -1240,8 +1299,8 @@ vdsk_complete_cmd(struct vdsk_softc *sc, struct scsipi_xfer *xs, int desc)
 	xs->resid = xs->datalen -
 		sc->sc_vd->vd_desc[desc].size;
 
-	/* 
-	 * scsi_done() called by vdsk_scsi_done() requires 
+	/*
+	 * scsi_done() called by vdsk_scsi_done() requires
 	 * the kernel to be locked
 	 */
 	KERNEL_LOCK(1, curlwp);
@@ -1255,14 +1314,12 @@ vdsk_complete_cmd(struct vdsk_softc *sc, struct scsipi_xfer *xs, int desc)
 void
 vdsk_scsi_inq(struct vdsk_softc *sc, struct scsipi_xfer *xs)
 {
-
 	vdsk_scsi_inquiry(sc, xs);
 }
 
 void
 vdsk_scsi_inquiry(struct vdsk_softc *sc, struct scsipi_xfer *xs)
 {
-
 	struct scsipi_inquiry_data inq;
 	char buf[5];
 
@@ -1272,20 +1329,21 @@ vdsk_scsi_inquiry(struct vdsk_softc *sc, struct scsipi_xfer *xs)
 		case VD_MEDIA_TYPE_CD:
 		case VD_MEDIA_TYPE_DVD:
 			inq.device = T_CDROM;
+			inq.dev_qual2 = SID_REMOVABLE;
+			bcopy("Virtual CDROM   ", inq.product, sizeof(inq.product));
 			break;
-
 		case VD_MEDIA_TYPE_FIXED:
-		default:
 			inq.device = T_DIRECT;
+			bcopy("Virtual Disk    ", inq.product, sizeof(inq.product));
 			break;
+		default:
+			panic("Unhandled media type %d\n", sc->sc_vd_mtype);
 	}
-
 	inq.version = 0x05; /* SPC-3 */
 	inq.response_format = 2;
 	inq.additional_length = 32;
 	inq.flags3 |= SID_CmdQue;
 	bcopy("SUN     ", inq.vendor, sizeof(inq.vendor));
-	bcopy("Virtual Disk    ", inq.product, sizeof(inq.product));
 	snprintf(buf, sizeof(buf), "%u.%u ", sc->sc_major, sc->sc_minor);
 	bcopy(buf, inq.revision, sizeof(inq.revision));
 
@@ -1297,7 +1355,6 @@ vdsk_scsi_inquiry(struct vdsk_softc *sc, struct scsipi_xfer *xs)
 void
 vdsk_scsi_capacity(struct vdsk_softc *sc, struct scsipi_xfer *xs)
 {
-
 	struct scsipi_read_capacity_10_data rcd;
 	uint64_t capacity;
 
@@ -1321,7 +1378,6 @@ vdsk_scsi_capacity(struct vdsk_softc *sc, struct scsipi_xfer *xs)
 void
 vdsk_scsi_capacity16(struct vdsk_softc *sc, struct scsipi_xfer *xs)
 {
-
 	struct scsipi_read_capacity_16_data rcd;
 	uint64_t capacity;
 
@@ -1349,7 +1405,6 @@ vdsk_scsi_report_luns(struct vdsk_softc *sc, struct scsipi_xfer *xs)
 void
 vdsk_scsi_done(struct scsipi_xfer *xs, int error)
 {
-
 	xs->error = error;
 
 	scsipi_done(xs);

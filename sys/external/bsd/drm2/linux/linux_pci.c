@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_pci.c,v 1.27 2023/09/30 10:46:46 mrg Exp $	*/
+/*	$NetBSD: linux_pci.c,v 1.30 2024/06/24 21:23:53 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 2013 The NetBSD Foundation, Inc.
@@ -35,7 +35,7 @@
 #endif
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: linux_pci.c,v 1.27 2023/09/30 10:46:46 mrg Exp $");
+__KERNEL_RCSID(0, "$NetBSD: linux_pci.c,v 1.30 2024/06/24 21:23:53 riastradh Exp $");
 
 #if NACPICA > 0
 #include <dev/acpi/acpivar.h>
@@ -573,24 +573,20 @@ pci_bus_alloc_resource(struct pci_bus *bus, struct resource *resource,
 	return 0;
 }
 
-/*
- * XXX Mega-kludgerific!  pci_get_bus_and_slot and pci_get_class are
- * defined only for their single purposes in i915drm, in
- * i915_get_bridge_dev and intel_detect_pch.  We can't define them more
- * generally without adapting pci_find_device (and pci_enumerate_bus
- * internally) to pass a cookie through.
- */
+struct pci_domain_bus_and_slot {
+	int domain, bus, slot;
+};
 
 static int
-pci_kludgey_match_bus0_dev0_func0(const struct pci_attach_args *pa)
+pci_match_domain_bus_and_slot(void *cookie, const struct pci_attach_args *pa)
 {
+	const struct pci_domain_bus_and_slot *C = cookie;
 
-	/* XXX domain */
-	if (pa->pa_bus != 0)
+	if (pci_get_segment(pa->pa_pc) != C->domain)
 		return 0;
-	if (pa->pa_device != 0)
+	if (pa->pa_bus != C->bus)
 		return 0;
-	if (pa->pa_function != 0)
+	if (PCI_DEVFN(pa->pa_device, pa->pa_function) != C->slot)
 		return 0;
 
 	return 1;
@@ -600,30 +596,16 @@ struct pci_dev *
 pci_get_domain_bus_and_slot(int domain, int bus, int slot)
 {
 	struct pci_attach_args pa;
+	struct pci_domain_bus_and_slot context = {domain, bus, slot},
+	    *C = &context;
 
-	KASSERT(domain == 0);
-	KASSERT(bus == 0);
-	KASSERT(slot == PCI_DEVFN(0, 0));
-
-	if (!pci_find_device(&pa, &pci_kludgey_match_bus0_dev0_func0))
+	if (!pci_find_device1(&pa, &pci_match_domain_bus_and_slot, C))
 		return NULL;
 
 	struct pci_dev *const pdev = kmem_zalloc(sizeof(*pdev), KM_SLEEP);
 	linux_pci_dev_init(pdev, NULL, NULL, &pa, NBPCI_KLUDGE_GET_MUMBLE);
 
 	return pdev;
-}
-
-static int
-pci_kludgey_match_isa_bridge(const struct pci_attach_args *pa)
-{
-
-	if (PCI_CLASS(pa->pa_class) != PCI_CLASS_BRIDGE)
-		return 0;
-	if (PCI_SUBCLASS(pa->pa_class) != PCI_SUBCLASS_BRIDGE_ISA)
-		return 0;
-
-	return 1;
 }
 
 void
@@ -638,24 +620,49 @@ pci_dev_put(struct pci_dev *pdev)
 	kmem_free(pdev, sizeof(*pdev));
 }
 
-struct pci_dev *		/* XXX i915 kludge */
-pci_get_class(uint32_t class_subclass_shifted __unused, struct pci_dev *from)
+struct pci_get_class_state {
+	uint32_t		class_subclass_interface;
+	const struct pci_dev	*from;
+};
+
+static int
+pci_get_class_match(void *cookie, const struct pci_attach_args *pa)
 {
-	struct pci_attach_args pa;
+	struct pci_get_class_state *C = cookie;
 
-	KASSERT(class_subclass_shifted == (PCI_CLASS_BRIDGE_ISA << 8));
-
-	if (from != NULL) {
-		pci_dev_put(from);
-		return NULL;
+	if (C->from) {
+		if ((pci_get_segment(C->from->pd_pa.pa_pc) ==
+			pci_get_segment(pa->pa_pc)) &&
+		    C->from->pd_pa.pa_bus == pa->pa_bus &&
+		    C->from->pd_pa.pa_device == pa->pa_device &&
+		    C->from->pd_pa.pa_function == pa->pa_function)
+			C->from = NULL;
+		return 0;
 	}
+	if (C->class_subclass_interface !=
+	    (PCI_CLASS(pa->pa_class) << 16 |
+		PCI_SUBCLASS(pa->pa_class) << 8 |
+		PCI_INTERFACE(pa->pa_class)))
+		return 0;
 
-	if (!pci_find_device(&pa, &pci_kludgey_match_isa_bridge))
-		return NULL;
+	return 1;
+}
 
-	struct pci_dev *const pdev = kmem_zalloc(sizeof(*pdev), KM_SLEEP);
+struct pci_dev *
+pci_get_class(uint32_t class_subclass_interface, struct pci_dev *from)
+{
+	struct pci_get_class_state context = {class_subclass_interface, from},
+	    *C = &context;
+	struct pci_attach_args pa;
+	struct pci_dev *pdev = NULL;
+
+	if (!pci_find_device1(&pa, &pci_get_class_match, C))
+		goto out;
+	pdev = kmem_zalloc(sizeof(*pdev), KM_SLEEP);
 	linux_pci_dev_init(pdev, NULL, NULL, &pa, NBPCI_KLUDGE_GET_MUMBLE);
 
+out:	if (from)
+		pci_dev_put(from);
 	return pdev;
 }
 

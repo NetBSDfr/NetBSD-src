@@ -1,4 +1,4 @@
-#  $NetBSD: Makefile,v 1.235 2024/05/14 14:34:35 riastradh Exp $
+#  $NetBSD: Makefile,v 1.238 2024/06/10 12:49:29 riastradh Exp $
 #
 #  @(#)Makefile 5.1beta 93/09/24
 #
@@ -59,6 +59,23 @@ LINTFLAGS.s_logl.c+=	-X 161	# constant in conditional context
 LINTFLAGS.s_logl.c+=	-X 193	# unreachable statement (due to 161)
 LINTFLAGS.s_logl.c+=	-X 177	# non-constant initializer
 
+EXPSYM_SRCS=	m.common.expsym
+EXPSYM_SRCS+=	m.ieee754.expsym
+EXPSYM_SRCS+=	m.fenv.expsym
+EXPSYM_SRCS+=	${EXPSYM_SRC_MD:U}
+
+.if exists(${.CURDIR}/m.${LIBC_MACHINE_ARCH}.expsym)
+EXPSYM_SRC_MD=	m.${LIBC_MACHINE_ARCH}.expsym
+.elif exists(${.CURDIR}/m.${LIBC_MACHINE_CPU}.expsym)
+EXPSYM_SRC_MD=	m.${LIBC_MACHINE_CPU}.expsym
+.endif
+
+# We will build m.expsym with a rule below, by merging all the files
+# listed in EXPSYM_SRCS, which individual architectures can override.
+# (The rule has to be written below after EXPSYM_SRCS has been
+# determined.)
+LIB_EXPSYM=	m.expsym
+
 .if (${LIBC_MACHINE_CPU} == "aarch64")
 .PATH: ${.CURDIR}/arch/aarch64
 ARCH_SRCS = e_sqrt.S e_sqrtf.S s_fabsf.S
@@ -77,11 +94,26 @@ COMMON_SRCS+= fenv.c
 COMMON_SRCS+= s_fma.c s_fmaf.c s_fmal.c
 COPTS+=	-mfloat-ieee -mieee-with-inexact -mfp-trap-mode=sui -mtrap-precision=i
 
+# alpha doesn't have symbols for:
+#
+#	feclearexcept
+#	fegetexceptflag
+#	fegetround
+#	feraiseexcept
+#	fesetexceptflag
+#	fesetround
+#	fetestexcept
+#
+# Instead, they are static inlines in fenv.h.  So we won't use
+# m.fenv.expsym.
+#
+EXPSYM_SRCS=	m.common.expsym m.ieee754.expsym m.alpha.expsym
+
 .elif (${LIBC_MACHINE_CPU} == "arm")
 .PATH.c: ${.CURDIR}/arch/arm
 .if ${MKSOFTFLOAT} == "no"
 COMMON_SRCS+= fenv.c
-LIB_EXPSYM=	${LIB}.armhf.expsym
+EXPSYM_SRC_MD=	m.armhf.expsym
 .endif
 .for f in fenv.c lrint.S lrintf.S s_fabsf.S s_fma.S s_fmaf.S
 COPTS.$f +=	-mfpu=vfp
@@ -179,6 +211,10 @@ COMMON_SRCS+= s_fma.c s_fmaf.c s_fmal.c
 ARCH_SRCS = n_scalbn.S
 WARNS?=5
 
+# No IEEE 754 stuff.  Not all of it is actually specific to IEEE 754,
+# but it's missing anyway: PR port-vax/57881.
+EXPSYM_SRCS=	m.common.expsym m.vax.expsym
+
 .elif (${LIBC_MACHINE_CPU} == "riscv")
 .PATH:	${.CURDIR}/arch/riscv
 
@@ -215,15 +251,15 @@ COMMON_SRCS+= s_fma.c s_fmaf.c s_fmal.c
 
 .  if ${MKSOFTFLOAT} == "no"
 .    if ${MACHINE_MIPS64} && (!defined(CPUFLAGS) || empty(CPUFLAGS:M-mabi=32))
-LIB_EXPSYM=	m.mips64hf.expsym
+EXPSYM_SRC_MD=	m.mips64hf.expsym
 .    else
-LIB_EXPSYM=	m.mipshf.expsym
+EXPSYM_SRC_MD=	m.mipshf.expsym
 .    endif
 .  else
 .    if ${MACHINE_MIPS64} && (!defined(CPUFLAGS) || empty(CPUFLAGS:M-mabi=32))
-LIB_EXPSYM=	m.mips64.expsym
+EXPSYM_SRC_MD=	m.mips64.expsym
 .    else
-LIB_EXPSYM=	m.mips.expsym
+EXPSYM_SRC_MD=	m.mips.expsym
 .    endif
 .  endif
 
@@ -241,6 +277,12 @@ WARNS?=5
 .PATH:	${.CURDIR}/man
 .PATH:	${.CURDIR}/src
 .PATH:	${.CURDIR}/noieee_src
+
+m.expsym: ${EXPSYM_SRCS}
+	${_MKTARGET_CREATE}
+	LC_ALL=C sort -m ${.ALLSRC} >${.TARGET}.tmp && \
+	${MV} ${.TARGET}.tmp ${.TARGET}
+CLEANFILES+=	m.expsym m.expsym.tmp
 
 .if (${LIBC_MACHINE_ARCH} == "alpha")
 COPTS+= -mfp-rounding-mode=d

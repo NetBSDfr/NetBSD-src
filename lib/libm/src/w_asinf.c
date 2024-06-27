@@ -1,4 +1,7 @@
-/* w_asinf.c -- float version of w_asin.c.
+/*	$NetBSD: w_asinf.c,v 1.9 2024/06/09 13:35:38 riastradh Exp $	*/
+
+/*
+ * w_asinf.c -- float version of w_asin.c.
  * Conversion to float by Ian Lance Taylor, Cygnus Support, ian@cygnus.com.
  */
 
@@ -15,7 +18,7 @@
 
 #include <sys/cdefs.h>
 #if defined(LIBM_SCCS) && !defined(lint)
-__RCSID("$NetBSD: w_asinf.c,v 1.7 2007/08/20 16:01:39 drochner Exp $");
+__RCSID("$NetBSD: w_asinf.c,v 1.9 2024/06/09 13:35:38 riastradh Exp $");
 #endif
 
 /*
@@ -23,12 +26,11 @@ __RCSID("$NetBSD: w_asinf.c,v 1.7 2007/08/20 16:01:39 drochner Exp $");
  */
 
 #include "namespace.h"
+
 #include "math.h"
 #include "math_private.h"
 
-#ifdef __weak_alias
 __weak_alias(asinf, _asinf)
-#endif
 
 float
 asinf(float x)		/* wrapper asinf */

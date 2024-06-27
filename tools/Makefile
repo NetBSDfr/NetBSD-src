@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.219 2024/04/01 02:22:38 christos Exp $
+#	$NetBSD: Makefile,v 1.222 2024/06/08 13:03:41 tsutsui Exp $
 
 .include <bsd.own.mk>
 .include <bsd.endian.mk>
@@ -172,6 +172,7 @@ SUBDIR+=	ibmnws-ncdcs
 
 .if ${MACHINE} == "macppc"
 SUBDIR+=	macppc-fixcoff
+SUBDIR+=	macppc_installboot
 .endif
 
 .if (${MACHINE} == "prep" || ${MACHINE} == "rs6000" || ${MACHINE} == "bebox")
@@ -219,20 +220,19 @@ SUBDIR+=	elftosb
 
 .if ${MACHINE} == "evbarm" || ${MACHINE} == "evbmips" || \
     ${MACHINE} == "evbppc" || ${MACHINE} == "evbsh3" || \
-    ${MACHINE} == "sandpoint"
-SUBDIR+=	mkubootimage
-.endif
-
-.if ${MACHINE} == "evbarm" || ${MACHINE} == "evbmips" || \
-    ${MACHINE} == "evbppc" || ${MACHINE} == "evbsh3" || \
     ${MACHINE} == "sandpoint" || \
     ${MACHINE_CPU} == "riscv"
+SUBDIR+=	mkubootimage
 SUBDIR+=	libfdt .WAIT
 SUBDIR+=	dtc
 .endif
 
 .if ${MACHINE} == "mvme68k"
 SUBDIR+=	mvme68k-wrtvid
+.endif
+
+.if ${MACHINE} == "mac68k" || ${MACHINE} == "macppc"
+SUBDIR+=	mkhybrid
 .endif
 
 .if ${MKX11} != "no"

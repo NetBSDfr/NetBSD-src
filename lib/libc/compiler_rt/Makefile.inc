@@ -1,4 +1,4 @@
-# $NetBSD: Makefile.inc,v 1.48 2024/05/01 18:38:15 christos Exp $
+# $NetBSD: Makefile.inc,v 1.50 2024/06/07 20:50:27 riastradh Exp $
 
 COMPILER_RT_DIR=	${NETBSDSRCDIR}/sys/external/bsd/compiler_rt
 COMPILER_RT_SRCDIR=	${COMPILER_RT_DIR}/dist
@@ -136,6 +136,7 @@ GENERIC_SRCS+= \
 .if ${LIBC_MACHINE_CPU} == "aarch64"
 GENERIC_SRCS+= \
 	comparetf2.c
+LINTFLAGS.comparetf2.c += -X 132
 .endif
 
 GENERIC_SRCS+= \
@@ -266,6 +267,21 @@ GENERIC_SRCS+= \
 	floatunditf.c \
 	floatsitf.c \
 	floatditf.c
+LINTFLAGS.addtf3.c += -X 132
+LINTFLAGS.divtf3.c += -X 132
+LINTFLAGS.extenddftf2.c += -X 117,132
+LINTFLAGS.extendsftf2.c += -X 117,132
+LINTFLAGS.fixdfti.c += -X 132,309
+LINTFLAGS.fixtfdi.c += -X 132
+LINTFLAGS.fixtfsi.c += -X 132
+LINTFLAGS.floatditf.c += -X 132
+LINTFLAGS.floatsitf.c += -X 132
+LINTFLAGS.floatunsitf.c += -X 132
+LINTFLAGS.floatunditf.c += -X 132
+LINTFLAGS.multf3.c += -X 132
+LINTFLAGS.subtf3.c += -X 132
+LINTFLAGS.trunctfdf2.c += -X 117,132
+LINTFLAGS.trunctfsf2.c += -X 117,132
 .endif
 
 .if ${LIBC_MACHINE_ARCH} == "powerpc" || ${LIBC_MACHINE_ARCH} == "powerpc64"
@@ -318,8 +334,8 @@ COPTS.${src}+=	-D__SOFT_FP__
 
 LINTFLAGS.GCDAProfiling.c += -X 123,132,351 # Ok, this is just sloppy
 LINTFLAGS.GCDAProfiling.c += -X 298 # vax
-LINTFLAGS.InstrProfiling.c += -X 351
 LINTFLAGS.InstrProfiling.c += -X 298 # vax
+LINTFLAGS.InstrProfiling.c += -X 351
 LINTFLAGS.InstrProfilingFile.c += -X 351
 LINTFLAGS.InstrProfilingPlatformLinux.c += -X 190,351
 LINTFLAGS.InstrProfilingValue.c += -X 132,231,275,351
@@ -333,8 +349,8 @@ LINTFLAGS.addvdi3.c += -X 351
 LINTFLAGS.addvsi3.c += -X 351
 LINTFLAGS.addvti3.c += -X 351
 LINTFLAGS.ashlti3.c += -X 351
-LINTFLAGS.ashrti3.c += -X 117,351
 LINTFLAGS.ashrdi3.c += -X 117 # vax
+LINTFLAGS.ashrti3.c += -X 117,351
 LINTFLAGS.clzdi2.c += -X 351
 LINTFLAGS.clzsi2.c += -X 351
 LINTFLAGS.cmpti2.c += -X 351
@@ -346,8 +362,8 @@ LINTFLAGS.ctzti2.c += -X 351
 LINTFLAGS.divdi3.c += -X 117 # vax
 LINTFLAGS.divmodsi4.c += -X 351
 LINTFLAGS.divsi3.c += -X 117
-LINTFLAGS.divti3.c += -X 117,351
 LINTFLAGS.divtc3.c += -X 351	# ppc
+LINTFLAGS.divti3.c += -X 117,351
 LINTFLAGS.dlfcn_elf.c += -X 351
 LINTFLAGS.ffsdi2.c += -X 132,351
 LINTFLAGS.ffsti2.c += -X 132,351
@@ -365,12 +381,12 @@ LINTFLAGS.fixunsxfsi.c += -X 132,309,351
 LINTFLAGS.fixunsxfti.c += -X 132,351
 LINTFLAGS.fixxfdi.c += -X 351
 LINTFLAGS.fixxfti.c += -X 117,132,351
-LINTFLAGS.floatdidf.c += -X 351
 LINTFLAGS.floatdidf.c += -X 117	# alpha
-LINTFLAGS.floatdisf.c += -X 351
+LINTFLAGS.floatdidf.c += -X 351
 LINTFLAGS.floatdisf.c += -X 117	# alpha
-LINTFLAGS.floatdixf.c += -X 351
+LINTFLAGS.floatdisf.c += -X 351
 LINTFLAGS.floatdixf.c += -X 117	# alpha
+LINTFLAGS.floatdixf.c += -X 351
 LINTFLAGS.floattidf.c += -X 117,122,141,267,351
 LINTFLAGS.floattisf.c += -X 117,351
 LINTFLAGS.floattisf.c += -X 117,351

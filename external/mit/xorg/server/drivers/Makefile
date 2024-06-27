@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.109 2023/02/27 00:34:11 mrg Exp $
+#	$NetBSD: Makefile,v 1.113 2024/06/22 23:21:56 mrg Exp $
 
 .include <bsd.own.mk>
 
@@ -27,6 +27,7 @@ SUBDIR+= \
     ${MACHINE_ARCH} == "x86_64"
 SUBDIR+= \
 	xf86-video-amdgpu \
+	xf86-video-ark \
 	xf86-video-ast \
 	xf86-video-ati \
 	xf86-video-chips \
@@ -48,11 +49,14 @@ SUBDIR+= \
 	xf86-video-siliconmotion \
 	xf86-video-sis \
 	xf86-video-tdfx \
+	xf86-video-trident \
 	xf86-video-tseng \
 	xf86-video-vboxvideo \
 	xf86-video-vmware \
 	xf86-video-vesa \
 	xf86-video-wsfb
+
+# XXX add -qxl, also for arm?
 
 # needs porting for xorg-server 1.6
 #	xf86-video-imstt
@@ -61,11 +65,9 @@ SUBDIR+= \
 # needs porting for xorg-server 21.1.3
 #	xf86-video-s3
 #	xf86-video-tga
-#	xf86-video-trident
 
 # needs porting for xorg-server 1.18
 #	xf86-video-apm \
-#	xf86-video-ark \
 #	xf86-video-glint \
 #	xf86-video-intel-old \
 #	xf86-video-xgi
@@ -79,6 +81,7 @@ SUBDIR+= \
 
 .if ${MACHINE} == "alpha"
 SUBDIR+= \
+	xf86-video-ark \
 	xf86-video-ast \
 	xf86-video-ati \
 	xf86-video-chips \
@@ -90,24 +93,34 @@ SUBDIR+= \
 	xf86-video-nv \
 	xf86-video-r128 \
 	xf86-video-radeon \
-	xf86-video-s3 \
 	xf86-video-s3virge \
 	xf86-video-savage \
 	xf86-video-siliconmotion \
 	xf86-video-sis \
 	xf86-video-tdfx \
-	xf86-video-tga \
 	xf86-video-trident \
 	xf86-video-tseng \
 	xf86-video-wsfb
+
+# needs porting for xorg-server 1.6
 #	xf86-video-imstt
-# needs porting for xorg-server 1.18, and 21.1
+
+# needs porting for xorg-server 1.18
+#	xf86-video-apm
+#	xf86-video-glint
+
+# needs porting for xorg-server 21.1.3
+#	xf86-video-s3
+#	xf86-video-tga
+
 .if ${XORG_SERVER_SUBDIR} == "xorg-server.old"
 SUBDIR+= \
 	xf86-video-apm \
-	xf86-video-ark \
-	xf86-video-glint
+	xf86-video-glint \
+	xf86-video-s3 \
+	xf86-video-tga
 .endif	# ${XORG_SERVER_SUBDIR} == "xorg-server.old"
+
 .endif	# ${MACHINE} == "alpha"
 
 .if ${MACHINE} == "amiga"
@@ -128,6 +141,7 @@ SUBDIR+= \
 
 .if ${MACHINE} == "cats"
 SUBDIR+= \
+	xf86-video-ark \
 	xf86-video-ast \
 	xf86-video-ati \
 	xf86-video-chips \
@@ -142,6 +156,7 @@ SUBDIR+= \
 	xf86-video-savage \
 	xf86-video-siliconmotion \
 	xf86-video-tdfx \
+	xf86-video-trident \
 	xf86-video-tseng \
 	xf86-video-vesa \
 	xf86-video-wsfb
@@ -149,11 +164,9 @@ SUBDIR+= \
 # needs porting for xorg-server 21.1.3
 #	xf86-video-s3
 #	xf86-video-tga
-#	xf86-video-trident
 
 # needs porting for xorg-server 1.18
-#	xf86-video-apm \
-#	xf86-video-ark \
+#	xf86-video-apm
 #	xf86-video-glint
 
 .endif	# ${MACHINE} == "cats"
@@ -242,9 +255,11 @@ SUBDIR+= \
 	xf86-video-tdfx \
 	xf86-video-wsfb
 
+# needs porting for xorg-server 1.6
+#	xf86-video-imstt
+
 # needs porting for xorg-server 21.1.3
 #	xf86-video-glint
-#	xf86-video-imstt
 
 .endif	# ${MACHINE} == "macppc"
 

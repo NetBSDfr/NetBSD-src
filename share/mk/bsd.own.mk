@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.own.mk,v 1.1373 2024/04/28 08:01:04 nia Exp $
+#	$NetBSD: bsd.own.mk,v 1.1383 2024/06/22 23:26:37 mrg Exp $
 
 # This needs to be before bsd.init.mk
 .if defined(BSD_MK_COMPAT_FILE)
@@ -75,6 +75,19 @@ TOOLCHAIN_MISSING?=	no
 #
 # What GCC is used?
 #
+.if \
+    ${MACHINE_CPU} == "aarch64" || \
+    ${MACHINE_CPU} == "arm" || \
+    ${MACHINE_CPU} == "riscv" || \
+    ${MACHINE_ARCH} == "x86_64" || \
+    ${MACHINE_ARCH} == "i386" || \
+    ${MACHINE} == "hppa" || \
+    ${MACHINE} == "sparc" || \
+    ${MACHINE} == "sparc64" || \
+    ${MACHINE} == "ia64" || \
+    ${MACHINE} == "alpha"
+HAVE_GCC?=	12
+.endif
 HAVE_GCC?=	10
 
 #
@@ -233,6 +246,14 @@ PRINTOBJDIR=	${MAKE} -V .OBJDIR
 .endif
 .else
 PRINTOBJDIR=	echo /error/bsd.own.mk/PRINTOBJDIR # avoid infinite recursion
+.endif
+
+#
+# Make sure we set _NETBSD_REVISIONID in CPPFLAGS if requested.
+#
+.ifdef NETBSD_REVISIONID
+_NETBSD_REVISIONID_STR=	"${NETBSD_REVISIONID}"
+CPPFLAGS+=	-D_NETBSD_REVISIONID=${_NETBSD_REVISIONID_STR:Q}
 .endif
 
 #
@@ -465,6 +486,7 @@ TOOL_JOIN=		${TOOLDIR}/bin/${_TOOL_PREFIX}join
 TOOL_LLVM_TBLGEN=	${TOOLDIR}/bin/${_TOOL_PREFIX}llvm-tblgen
 TOOL_M4=		${TOOLDIR}/bin/${_TOOL_PREFIX}m4
 TOOL_MACPPCFIXCOFF=	${TOOLDIR}/bin/${_TOOL_PREFIX}macppc-fixcoff
+TOOL_MACPPCINSTALLBOOT=	${TOOLDIR}/bin/${_TOOL_PREFIX}macppc_installboot
 TOOL_MAKEFS=		${TOOLDIR}/bin/${_TOOL_PREFIX}makefs
 TOOL_MAKEINFO=		${TOOLDIR}/bin/${_TOOL_PREFIX}makeinfo
 TOOL_MAKEKEYS=		${TOOLDIR}/bin/${_TOOL_PREFIX}makekeys
@@ -480,6 +502,7 @@ TOOL_M68KELF2AOUT=	${TOOLDIR}/bin/${_TOOL_PREFIX}m68k-elf2aout
 TOOL_MIPSELF2ECOFF=	${TOOLDIR}/bin/${_TOOL_PREFIX}mips-elf2ecoff
 TOOL_MKCSMAPPER=	${TOOLDIR}/bin/${_TOOL_PREFIX}mkcsmapper
 TOOL_MKESDB=		${TOOLDIR}/bin/${_TOOL_PREFIX}mkesdb
+TOOL_MKHYBRID=		${TOOLDIR}/bin/${_TOOL_PREFIX}mkhybrid
 TOOL_MKLOCALE=		${TOOLDIR}/bin/${_TOOL_PREFIX}mklocale
 TOOL_MKMAGIC=		${TOOLDIR}/bin/${_TOOL_PREFIX}file
 TOOL_MKNOD=		${TOOLDIR}/bin/${_TOOL_PREFIX}mknod
@@ -1320,10 +1343,9 @@ MKDTB.riscv32=			yes
 MKDTB.riscv64=			yes
 
 # During transition from xorg-server 1.10 to 1.20
-.if \
-    ${MACHINE} == "alpha"	|| \
-    ${MACHINE} == "netwinder"	|| \
-    ${MACHINE} == "sgimips"
+# XXX sgimips uses XAA which is removed in 1.20, and EXA is hard
+# XXX to do the same with.
+.if ${MACHINE} == "sgimips"
 HAVE_XORG_SERVER_VER?=110
 .else
 HAVE_XORG_SERVER_VER?=120

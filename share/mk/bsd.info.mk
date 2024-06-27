@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.info.mk,v 1.43 2023/05/01 20:22:18 christos Exp $
+#	$NetBSD: bsd.info.mk,v 1.45 2024/06/16 21:11:53 hgutch Exp $
 
 .include <bsd.init.mk>
 
@@ -45,6 +45,7 @@ __infoinstall: .USE
 	@[ -f ${INFODIRFILE} ] || touch ${INFODIRFILE}; 		\
 	while ! ln ${INFODIRFILE} ${INFODIRFILE}.lock 2> /dev/null;	\
 		do sleep 1; done;					\
+	! [ -s ${INFODIRFILE} ] && rm -f ${INFODIRFILE} ||		\
 	${TOOL_INSTALL_INFO} -d ${INFODIRFILE} -r ${.TARGET} 2> /dev/null; \
 	${TOOL_INSTALL_INFO} -d ${INFODIRFILE} ${.TARGET};		\
 	${TOOL_SORTINFO} < ${INFODIRFILE} > ${INFODIRFILE}.tmp;		\

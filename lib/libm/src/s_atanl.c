@@ -1,3 +1,5 @@
+/*	$NetBSD: s_atanl.c,v 1.7 2024/06/09 13:35:38 riastradh Exp $	*/
+
 /* FreeBSD: head/lib/msun/src/s_atan.c 176451 2008-02-22 02:30:36Z das */
 /*
  * ====================================================
@@ -9,7 +11,9 @@
  * is preserved.
  * ====================================================
  */
+
 #include <sys/cdefs.h>
+__RCSID("$NetBSD: s_atanl.c,v 1.7 2024/06/09 13:35:38 riastradh Exp $");
 
 #include "namespace.h"
 
@@ -19,10 +23,6 @@
 #include "math.h"
 #include "math_private.h"
 
-#ifdef __weak_alias
-__weak_alias(atanl, _atanl)
-#endif
-
 #ifdef __HAVE_LONG_DOUBLE
 
 /*
@@ -30,6 +30,7 @@ __weak_alias(atanl, _atanl)
  * Converted to long double by David Schultz <das@FreeBSD.ORG>.
  */
 
+__weak_alias(atanl, _atanl)
 
 #if LDBL_MANT_DIG == 64
 #include "../ld80/invtrig.h"
@@ -100,11 +101,5 @@ atanl(long double x)
 	    z = atanhi[id] - ((x*(s1+s2) - atanlo[id]) - x);
 	    return (expsign<0)? -z:z;
 	}
-}
-#else
-long double
-atanl(long double x)
-{
-	return atan(x);
 }
 #endif

@@ -1,3 +1,4 @@
+/*	$NetBSD: e_acosl.c,v 1.5 2024/06/09 13:35:38 riastradh Exp $	*/
 
 /* FreeBSD: head/lib/msun/src/e_acos.c 176451 2008-02-22 02:30:36Z das */
 /*
@@ -6,16 +7,19 @@
  *
  * Developed at SunSoft, a Sun Microsystems, Inc. business.
  * Permission to use, copy, modify, and distribute this
- * software is freely granted, provided that this notice 
+ * software is freely granted, provided that this notice
  * is preserved.
  * ====================================================
  */
 
 #include <sys/cdefs.h>
+__RCSID("$NetBSD: e_acosl.c,v 1.5 2024/06/09 13:35:38 riastradh Exp $");
+
 /*
  * See comments in e_acos.c.
  * Converted to long double by David Schultz <das@FreeBSD.ORG>.
  */
+
 #include "namespace.h"
 
 #include <float.h>
@@ -24,9 +28,9 @@
 #include "math.h"
 #include "math_private.h"
 
-__weak_alias(acosl, _acosl)
-
 #ifdef __HAVE_LONG_DOUBLE
+
+__weak_alias(acosl, _acosl)
 
 #if LDBL_MANT_DIG == 64
 #include "../ld80/invtrig.h"
@@ -98,11 +102,5 @@ acosl(long double x)
 	    w = r*s+c;
 	    return 2.0*(df+w);
 	}
-}
-#else
-long double
-acosl(long double x)
-{
-	return acos(x);
 }
 #endif

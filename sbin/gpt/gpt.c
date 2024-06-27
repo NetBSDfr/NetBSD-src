@@ -35,7 +35,7 @@
 __FBSDID("$FreeBSD: src/sbin/gpt/gpt.c,v 1.16 2006/07/07 02:44:23 marcel Exp $");
 #endif
 #ifdef __RCSID
-__RCSID("$NetBSD: gpt.c,v 1.87 2023/12/13 06:51:57 mrg Exp $");
+__RCSID("$NetBSD: gpt.c,v 1.89 2024/06/10 09:17:29 kre Exp $");
 #endif
 
 #include <sys/param.h>

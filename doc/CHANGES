@@ -1,4 +1,4 @@
-# LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.3056 $>
+# LIST OF CHANGES FROM LAST RELEASE:			<$Revision: 1.3067 $>
 #
 #
 # [Note: This file does not mention every change made to the NetBSD source tree.
@@ -59,6 +59,8 @@ Changes from NetBSD 10.0 to NetBSD 11.0:
 	amiga: Fix bootblocks for Kickstart 3.2. [abs 20230325]
 	libc: Add __atomic_is_lock_free to help stdatomic.h usage with
 		GCC. [riastradh 20230330]
+	uaudio(4): Initial support for USB Audio Class 2.0 devices.
+		[mlelstv 20230402]
 	vacation(1): Check 'Auto-Submitted:' header in addition to
 		'Precedence:', and set 'Precedence:' in addition to
 		'Auto-Submitted:'.  [hauke 20230411]
@@ -381,7 +383,6 @@ Changes from NetBSD 10.0 to NetBSD 11.0:
 		[mrg 20240506]
 	makefs(8): Add an option to warn and error out for mtree missing
 		entries.  [christos 20240508]
-	hp300: Preliminary CD boot support.  [tsutsui 20240509]
 	lint(1): Support new keywords in C23 mode, including nullptr.
 		[rillig 20240509]
 	install(1): Support -v (verbose). [wiz 20240510]
@@ -401,3 +402,22 @@ Changes from NetBSD 10.0 to NetBSD 11.0:
 		(from Ricardo Branco).  [christos 20240512]
 	cgdconfig(8): Add zfs verification method (from Malte Dehling)
 		[christos 20240512]
+	curses(3): Constify argument of define_key(3) for compatibility
+		with ncurses.  [uwe 20240514]
+	eap(4): Support monoraual sound at the hardware level and
+		a range of hardware frequencies, as in NetBSD 7
+		and earlier.  [nia 20240517]
+	curses(3): Constify arguments of newterm(3), setterm(3)
+		functions.  [uwe 20240517]
+	hp300: Installation CD ISO image is now bootable. [tsutsui 20240519]
+	tic(1): Honour the user's umask (from RVP).  [christos 20240520]
+	dhcpcd: Import version 10.0.8. [roy 20240524]
+	mkhybrid: Import mkhybrid from OpenBSD 7.3 as a tool to create
+		ISO9660/HFS hybrid ISO images for mac68k and macppc.
+		[tsutsui 20240531]
+	pthread(3): Fix memory leak in pthread_create(). [hannken 20240608]
+	libarchive: Import libarchive-3.7.4. [christos 20240609]
+	pkg_install: Import pkg_install-20240307. [wiz 20240611]
+	OpenSSL: Imported 3.0.14. [christos 2020611]
+	tmux(1): Import version 3.4 with Sixel support enabled. [wiz 20240622]
+	OpenSSH: Import 9.6. [christos 20240625]
