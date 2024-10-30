@@ -1277,7 +1277,9 @@ sysctl_machdep_bootmethod(SYSCTLFN_ARGS)
 
 	node = *rnode;
 	node.sysctl_data = buf;
-	if (bootmethod_efi)
+	if (vm_guest == VM_GUEST_XENPVH || vm_guest == VM_GUEST_GENPVH)
+		memcpy(node.sysctl_data, "PVH", 4);
+	else if (bootmethod_efi)
 		memcpy(node.sysctl_data, "UEFI", 5);
 	else
 		memcpy(node.sysctl_data, "BIOS", 5);
