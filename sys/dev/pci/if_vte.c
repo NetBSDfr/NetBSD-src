@@ -1,4 +1,4 @@
-/*	$NetBSD: if_vte.c,v 1.35 2022/09/24 18:12:43 thorpej Exp $	*/
+/*	$NetBSD: if_vte.c,v 1.38 2024/09/05 17:54:02 andvar Exp $	*/
 
 /*
  * Copyright (c) 2011 Manuel Bouyer.  All rights reserved.
@@ -55,7 +55,7 @@
 /* Driver for DM&P Electronics, Inc, Vortex86 RDC R6040 FastEthernet. */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_vte.c,v 1.35 2022/09/24 18:12:43 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_vte.c,v 1.38 2024/09/05 17:54:02 andvar Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -926,25 +926,25 @@ vte_stats_update(struct vte_softc *sc)
 	stat->rx_mcast_frames += (value & 0xFF);
 
 	value = CSR_READ_2(sc, VTE_CNT_MECNT1);
-	if_statadd_ref(nsr, if_ierrors,
+	if_statadd_ref(ifp, nsr, if_ierrors,
 	    (value >> 8) +			/* rx_runts */
 	    (value & 0xFF));			/* rx_crcerrs */
 
 	value = CSR_READ_2(sc, VTE_CNT_MECNT2);
-	if_statadd_ref(nsr, if_ierrors,
+	if_statadd_ref(ifp, nsr, if_ierrors,
 	    (value & 0xFF));			/* rx_long_frames */
 
 	value = CSR_READ_2(sc, VTE_CNT_MECNT3);
-	if_statadd_ref(nsr, if_ierrors,
+	if_statadd_ref(ifp, nsr, if_ierrors,
 	    (value >> 8));			/* rx_fifo_full */
 	stat->rx_desc_unavail += (value & 0xFF);
 
 	/* TX stats. */
-	if_statadd_ref(nsr, if_opackets,
+	if_statadd_ref(ifp, nsr, if_opackets,
 	    CSR_READ_2(sc, VTE_CNT_TX_DONE));	/* tx_frames */
 
 	value = CSR_READ_2(sc, VTE_CNT_MECNT4);
-	if_statadd_ref(nsr, if_oerrors,
+	if_statadd_ref(ifp, nsr, if_oerrors,
 	    (value >> 8) +			/* tx_underruns */
 	    (value & 0xFF));			/* tx_late_colls */
 
@@ -1114,7 +1114,7 @@ vte_rxeof(struct vte_softc *sc)
 	    VTE_DESC_INC(cons, VTE_RX_RING_CNT)) {
 		rxd = &sc->vte_cdata.vte_rxdesc[cons];
 		status = le16toh(rxd->rx_desc->drst);
-		DPRINTF(("vte_rxoef rxd %d/%p mbuf %p status 0x%x len %d\n",
+		DPRINTF(("vte_rxeof rxd %d/%p mbuf %p status 0x%x len %d\n",
 			cons, rxd, rxd->rx_m, status,
 			VTE_RX_LEN(le16toh(rxd->rx_desc->drlen))));
 		if ((status & VTE_DRST_RX_OWN) != 0)
@@ -1435,10 +1435,8 @@ vte_stop(struct ifnet *ifp, int disable)
 	}
 	/* Free TX mbuf pools used for deep copy. */
 	for (i = 0; i < VTE_TX_RING_CNT; i++) {
-		if (sc->vte_cdata.vte_txmbufs[i] != NULL) {
-			m_freem(sc->vte_cdata.vte_txmbufs[i]);
-			sc->vte_cdata.vte_txmbufs[i] = NULL;
-		}
+		m_freem(sc->vte_cdata.vte_txmbufs[i]);
+		sc->vte_cdata.vte_txmbufs[i] = NULL;
 	}
 }
 

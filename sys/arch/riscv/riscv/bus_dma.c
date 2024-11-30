@@ -1,4 +1,4 @@
-/*	$NetBSD: bus_dma.c,v 1.2 2024/02/08 18:25:58 skrll Exp $	*/
+/*	$NetBSD: bus_dma.c,v 1.8 2024/10/21 07:10:43 skrll Exp $	*/
 
 /*-
  * Copyright (c) 1996, 1997, 1998, 2020 The NetBSD Foundation, Inc.
@@ -34,7 +34,7 @@
 #define _RISCV_NEED_BUS_DMA_BOUNCE
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: bus_dma.c,v 1.2 2024/02/08 18:25:58 skrll Exp $");
+__KERNEL_RCSID(0, "$NetBSD: bus_dma.c,v 1.8 2024/10/21 07:10:43 skrll Exp $");
 
 #include <sys/param.h>
 
@@ -1077,8 +1077,8 @@ _bus_dmamap_sync(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t offset,
 	/*
 	 * Mixing of PRE and POST operations is not allowed.
 	 */
-	if ((ops & (BUS_DMASYNC_PREREAD|BUS_DMASYNC_PREWRITE)) != 0 &&
-	    (ops & (BUS_DMASYNC_POSTREAD|BUS_DMASYNC_POSTWRITE)) != 0)
+	if ((ops & (BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE)) != 0 &&
+	    (ops & (BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE)) != 0)
 		panic("%s: mix PRE and POST", __func__);
 
 	KASSERTMSG(offset < map->dm_mapsize,
@@ -1089,14 +1089,13 @@ _bus_dmamap_sync(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t offset,
 	    len, offset, map->dm_mapsize);
 
 	/*
-	 * For a virtually-indexed write-back cache, we need
-	 * to do the following things:
+	 * For a write-back cache, we need to do the following things:
 	 *
 	 *	PREREAD -- Invalidate the D-cache.  We do this
 	 *	here in case a write-back is required by the back-end.
 	 *
 	 *	PREWRITE -- Write-back the D-cache.  Note that if
-	 *	we are doing a PREREAD|PREWRITE, we can collapse
+	 *	we are doing a PREREAD | PREWRITE, we can collapse
 	 *	the whole thing into a single Wb-Inv.
 	 *
 	 *	POSTREAD -- Re-invalidate the D-cache in case speculative
@@ -1111,8 +1110,8 @@ _bus_dmamap_sync(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t offset,
 	const bool bouncing = false;
 #endif
 
-	const int pre_ops = ops & (BUS_DMASYNC_PREREAD|BUS_DMASYNC_PREWRITE);
-	const int post_ops = ops & (BUS_DMASYNC_POSTREAD|BUS_DMASYNC_POSTWRITE);
+	const int pre_ops = ops & (BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
+	const int post_ops = ops & (BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE);
 	if (pre_ops == 0 && post_ops == 0)
 		return;
 
@@ -1140,12 +1139,16 @@ _bus_dmamap_sync(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t offset,
 		case _BUS_DMA_BUFTYPE_LINEAR:
 			memcpy(dataptr, cookie->id_origlinearbuf + offset, len);
 			break;
+
 		case _BUS_DMA_BUFTYPE_MBUF:
 			m_copydata(cookie->id_origmbuf, offset, len, dataptr);
 			break;
+
 		case _BUS_DMA_BUFTYPE_UIO:
-			_bus_dma_uiomove(dataptr, cookie->id_origuio, len, UIO_WRITE);
+			_bus_dma_uiomove(dataptr, cookie->id_origuio, len,
+			    UIO_WRITE);
 			break;
+
 #ifdef DIAGNOSTIC
 		case _BUS_DMA_BUFTYPE_RAW:
 			panic("%s:(pre): _BUS_DMA_BUFTYPE_RAW", __func__);
@@ -1166,7 +1169,7 @@ _bus_dmamap_sync(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t offset,
 	/* Skip cache frobbing if mapping was COHERENT */
 	if ((map->_dm_flags & _BUS_DMAMAP_COHERENT)) {
 		switch (ops) {
-		case BUS_DMASYNC_PREREAD|BUS_DMASYNC_PREWRITE:
+		case BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE:
 			STAT_INCR(sync_coherent_prereadwrite);
 			break;
 
@@ -1178,7 +1181,7 @@ _bus_dmamap_sync(bus_dma_tag_t t, bus_dmamap_t map, bus_addr_t offset,
 			STAT_INCR(sync_coherent_prewrite);
 			break;
 
-		case BUS_DMASYNC_POSTREAD|BUS_DMASYNC_POSTWRITE:
+		case BUS_DMASYNC_POSTREAD | BUS_DMASYNC_POSTWRITE:
 			STAT_INCR(sync_coherent_postreadwrite);
 			break;
 
@@ -1812,10 +1815,10 @@ int
 _bus_dmatag_subregion(bus_dma_tag_t tag, bus_addr_t min_addr,
     bus_addr_t max_addr, bus_dma_tag_t *newtag, int flags)
 {
+#ifdef _RISCV_NEED_BUS_DMA_BOUNCE
 	if (min_addr >= max_addr)
 		return EOPNOTSUPP;
 
-#ifdef _RISCV_NEED_BUS_DMA_BOUNCE
 	struct riscv_dma_range *dr;
 	bool psubset = true;
 	size_t nranges = 0;

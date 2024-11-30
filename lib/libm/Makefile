@@ -1,4 +1,4 @@
-#  $NetBSD: Makefile,v 1.238 2024/06/10 12:49:29 riastradh Exp $
+#  $NetBSD: Makefile,v 1.240 2024/10/29 01:34:18 nat Exp $
 #
 #  @(#)Makefile 5.1beta 93/09/24
 #
@@ -14,7 +14,6 @@
 #
 
 NOSANITIZER=		# defined
-COPTS+=			${${ACTIVE_CC} == "gcc":? -frounding-math :}
 
 #
 # There are two options in making libm at fdlibm compile time:
@@ -75,6 +74,8 @@ EXPSYM_SRC_MD=	m.${LIBC_MACHINE_CPU}.expsym
 # (The rule has to be written below after EXPSYM_SRCS has been
 # determined.)
 LIB_EXPSYM=	m.expsym
+
+COPTS+=	${${ACTIVE_CC} == "gcc":? -frounding-math :}
 
 .if (${LIBC_MACHINE_CPU} == "aarch64")
 .PATH: ${.CURDIR}/arch/aarch64
@@ -195,8 +196,9 @@ ARCH_SRCS = e_acos.S e_asin.S e_atanh.S e_cosh.S e_exp.S e_fmod.S e_log.S \
 	    e_log10.S e_remainder.S e_scalb.S e_sinh.S e_sqrt.S s_atan.S \
 	    s_ceil.S s_copysign.S s_cos.S s_expm1.S s_finite.S s_floor.S \
 	    s_log1p.S s_logb.S s_rint.S s_scalbn.S s_sin.S s_tan.S s_tanh.S
-COMMON_SRCS += fenv.c s_nexttoward.c s_rintl.c
+COMMON_SRCS += fenv.c
 .endif
+COMMON_SRCS += s_nexttoward.c s_rintl.c
 COMMON_SRCS+= s_fma.c s_fmaf.c s_fmal.c
 # end of m68k
 

@@ -1,4 +1,4 @@
-/*	$NetBSD: linux_misc.h,v 1.32 2024/05/12 19:54:48 christos Exp $	*/
+/*	$NetBSD: linux_misc.h,v 1.34 2024/10/01 16:41:29 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -156,16 +156,21 @@ extern const int linux_fstypes_cnt;
 /* Personality flags. */
 #define LINUX_PER_ADDR_NO_RANDOMIZE	0x00040000
 
-/* 
+/*
  * Convert POSIX_FADV_* constants from Linux to NetBSD
  * (it's f(x)=x everywhere except S390)
  */
 #define linux_to_bsd_posix_fadv(advice) (advice)
 
+struct linux_getcpu_cache{
+	unsigned long blob[128 / sizeof(long)];
+};
+
 struct linux_epoll_event {
 	uint32_t	events;
 	uint64_t	data;
 }
+
 #if defined(__amd64__)
 /* Only for x86_64. See include/uapi/linux/eventpoll.h. */
 __packed

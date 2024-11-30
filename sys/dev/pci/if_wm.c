@@ -1,4 +1,4 @@
-/*	$NetBSD: if_wm.c,v 1.798 2024/02/21 12:23:52 msaitoh Exp $	*/
+/*	$NetBSD: if_wm.c,v 1.801 2024/11/10 11:46:24 mlelstv Exp $	*/
 
 /*
  * Copyright (c) 2001, 2002, 2003, 2004 Wasabi Systems, Inc.
@@ -82,7 +82,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_wm.c,v 1.798 2024/02/21 12:23:52 msaitoh Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_wm.c,v 1.801 2024/11/10 11:46:24 mlelstv Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_if_wm.h"
@@ -5949,6 +5949,7 @@ wm_add_rxbuf(struct wm_rxqueue *rxq, int idx)
 	MGETHDR(m, M_DONTWAIT, MT_DATA);
 	if (m == NULL)
 		return ENOBUFS;
+	MCLAIM(m, &sc->sc_ethercom.ec_rx_mowner);
 
 	MCLGET(m, M_DONTWAIT);
 	if ((m->m_flags & M_EXT) == 0) {
@@ -6820,8 +6821,8 @@ wm_update_stats(struct wm_softc *sc)
 		}
 	}
 	net_stat_ref_t nsr = IF_STAT_GETREF(ifp);
-	if_statadd_ref(nsr, if_collisions, colc);
-	if_statadd_ref(nsr, if_ierrors,
+	if_statadd_ref(ifp, nsr, if_collisions, colc);
+	if_statadd_ref(ifp, nsr, if_ierrors,
 	    crcerrs + algnerrc + symerrc + rxerrc + sec + cexterr + rlec);
 	/*
 	 * WMREG_RNBC is incremented when there are no available buffers in
@@ -6832,7 +6833,7 @@ wm_update_stats(struct wm_softc *sc)
 	 * If you want to know the nubmer of WMREG_RMBC, you should use such as
 	 * own EVCNT instead of if_iqdrops.
 	 */
-	if_statadd_ref(nsr, if_iqdrops, mpc + total_qdrop);
+	if_statadd_ref(ifp, nsr, if_iqdrops, mpc + total_qdrop);
 	IF_STAT_PUTREF(ifp);
 }
 
@@ -8909,9 +8910,9 @@ wm_transmit(struct ifnet *ifp, struct mbuf *m)
 	}
 
 	net_stat_ref_t nsr = IF_STAT_GETREF(ifp);
-	if_statadd_ref(nsr, if_obytes, m->m_pkthdr.len);
+	if_statadd_ref(ifp, nsr, if_obytes, m->m_pkthdr.len);
 	if (m->m_flags & M_MCAST)
-		if_statinc_ref(nsr, if_omcasts);
+		if_statinc_ref(ifp, nsr, if_omcasts);
 	IF_STAT_PUTREF(ifp);
 
 	if (mutex_tryenter(txq->txq_lock)) {
@@ -9516,9 +9517,9 @@ wm_nq_transmit(struct ifnet *ifp, struct mbuf *m)
 	}
 
 	net_stat_ref_t nsr = IF_STAT_GETREF(ifp);
-	if_statadd_ref(nsr, if_obytes, m->m_pkthdr.len);
+	if_statadd_ref(ifp, nsr, if_obytes, m->m_pkthdr.len);
 	if (m->m_flags & M_MCAST)
-		if_statinc_ref(nsr, if_omcasts);
+		if_statinc_ref(ifp, nsr, if_omcasts);
 	IF_STAT_PUTREF(ifp);
 
 	/*
@@ -10294,8 +10295,7 @@ wm_rxeof(struct wm_rxqueue *rxq, u_int limit)
 			wm_init_rxdesc(rxq, i);
 			if (!wm_rxdesc_is_eop(rxq, status))
 				rxq->rxq_discard = 1;
-			if (rxq->rxq_head != NULL)
-				m_freem(rxq->rxq_head);
+			m_freem(rxq->rxq_head);
 			WM_RXCHAIN_RESET(rxq);
 			DPRINTF(sc, WM_DEBUG_RX,
 			    ("%s: RX: Rx buffer allocation failed, "

@@ -1552,6 +1552,8 @@ bit_value_binop (enum tree_code code, signop sgn, int width,
 		  *mask = wi::lrotate (r1mask, shift, width);
 		  *val = wi::lrotate (r1val, shift, width);
 		}
+	      *mask = wi::ext (*mask, width, sgn);
+	      *val = wi::ext (*val, width, sgn);
 	    }
 	}
       else if (wi::ltu_p (r2val | r2mask, width)
@@ -1593,8 +1595,8 @@ bit_value_binop (enum tree_code code, signop sgn, int width,
 	      /* Accumulate the result.  */
 	      res_mask |= tmp_mask | (res_val ^ tmp_val);
 	    }
-	  *val = wi::bit_and_not (res_val, res_mask);
-	  *mask = res_mask;
+	  *val = wi::ext (wi::bit_and_not (res_val, res_mask), width, sgn);
+	  *mask = wi::ext (res_mask, width, sgn);
 	}
       break;
 
@@ -4670,10 +4672,6 @@ make_pass_post_ipa_warn (gcc::context *ctxt)
 #ifdef _LP64
 #define	TARGET_64BIT	1
 #else
-#ifdef __sh__
-#undef UNITS_PER_WORD
-#define	UNITS_PER_WORD	4	/* original definition varies depending on cpu */
-#endif
 #define	TARGET_64BIT	0
 #endif
 

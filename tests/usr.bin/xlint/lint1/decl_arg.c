@@ -1,4 +1,4 @@
-/*	$NetBSD: decl_arg.c,v 1.13 2024/01/28 08:17:27 rillig Exp $	*/
+/*	$NetBSD: decl_arg.c,v 1.15 2024/09/28 15:51:40 rillig Exp $	*/
 # 3 "decl_arg.c"
 
 /*
@@ -95,10 +95,30 @@ const
 	return arg;
 }
 
-void test_varargs_attribute(
+// The attribute 'unused' belongs to the parameter.
+// The attribute 'format' belongs to the function type.
+void
+param_func_attr_unused(
     void (*pr)(const char *, ...)
+	__attribute__((__unused__))
 	__attribute__((__format__(__printf__, 1, 2)))
-);
+)
+{
+}
+
+// The attribute 'unused' belongs to the parameter.
+// The attribute 'format' belongs to the function type.
+void
+param_func_attr_printf(
+    void (*pr)(const char *, ...)
+	__attribute__((__unused__))
+	__attribute__((__format__(__printf__, 1, 2)))
+)
+{
+	// GCC and Clang already warn about the malformed format string,
+	// so there is nothing left to do for lint.
+	pr("%");
+}
 
 /*
  * XXX: To cover the grammar rule 'direct_notype_param_decl', the parameters

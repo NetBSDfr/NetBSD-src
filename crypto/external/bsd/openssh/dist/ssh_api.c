@@ -1,5 +1,5 @@
-/*	$NetBSD: ssh_api.c,v 1.16 2024/06/25 16:36:54 christos Exp $	*/
-/* $OpenBSD: ssh_api.c,v 1.28 2024/01/09 21:39:14 djm Exp $ */
+/*	$NetBSD: ssh_api.c,v 1.18 2024/09/24 21:32:19 christos Exp $	*/
+/* $OpenBSD: ssh_api.c,v 1.31 2024/09/09 02:39:57 djm Exp $ */
 
 /*
  * Copyright (c) 2012 Markus Friedl.  All rights reserved.
@@ -18,7 +18,7 @@
  */
 
 #include "includes.h"
-__RCSID("$NetBSD: ssh_api.c,v 1.16 2024/06/25 16:36:54 christos Exp $");
+__RCSID("$NetBSD: ssh_api.c,v 1.18 2024/09/24 21:32:19 christos Exp $");
 
 #include <sys/types.h>
 
@@ -30,6 +30,7 @@ __RCSID("$NetBSD: ssh_api.c,v 1.16 2024/06/25 16:36:54 christos Exp $");
 #include "log.h"
 #include "authfile.h"
 #include "sshkey.h"
+#include "dh.h"
 #include "misc.h"
 #include "ssh2.h"
 #include "version.h"
@@ -50,10 +51,8 @@ int	_ssh_host_key_sign(struct ssh *, struct sshkey *, struct sshkey *,
     u_char **, size_t *, const u_char *, size_t, const char *);
 
 /*
- * stubs for the server side implementation of kex.
- * disable privsep so our stubs will never be called.
+ * stubs for privsep calls in the server side implementation of kex.
  */
-int	use_privsep = 0;
 int	mm_sshkey_sign(struct sshkey *, u_char **, u_int *,
     const u_char *, u_int, const char *, const char *, const char *, u_int);
 
@@ -66,14 +65,20 @@ mm_sshkey_sign(struct sshkey *key, u_char **sigp, u_int *lenp,
     const u_char *data, u_int datalen, const char *alg,
     const char *sk_provider, const char *sk_pin, u_int compat)
 {
-	return (-1);
+	size_t slen = 0;
+	int ret;
+
+	ret = sshkey_sign(key, sigp, &slen, data, datalen, alg,
+	    sk_provider, sk_pin, compat);
+	*lenp = slen;
+	return ret;
 }
 
 #ifdef WITH_OPENSSL
 DH *
 mm_choose_dh(int min, int nbits, int max)
 {
-	return (NULL);
+	return choose_dh(min, nbits, max);
 }
 #endif
 
@@ -130,6 +135,7 @@ ssh_init(struct ssh **sshp, int is_server, struct kex_params *kex_params)
 #endif /* WITH_OPENSSL */
 		ssh->kex->kex[KEX_C25519_SHA256] = kex_gen_server;
 		ssh->kex->kex[KEX_KEM_SNTRUP761X25519_SHA512] = kex_gen_server;
+		ssh->kex->kex[KEX_KEM_MLKEM768X25519_SHA256] = kex_gen_server;
 		ssh->kex->load_host_public_key=&_ssh_host_public_key;
 		ssh->kex->load_host_private_key=&_ssh_host_private_key;
 		ssh->kex->sign=&_ssh_host_key_sign;
@@ -146,6 +152,7 @@ ssh_init(struct ssh **sshp, int is_server, struct kex_params *kex_params)
 #endif /* WITH_OPENSSL */
 		ssh->kex->kex[KEX_C25519_SHA256] = kex_gen_client;
 		ssh->kex->kex[KEX_KEM_SNTRUP761X25519_SHA512] = kex_gen_client;
+		ssh->kex->kex[KEX_KEM_MLKEM768X25519_SHA256] = kex_gen_client;
 		ssh->kex->verify_host_key =&_ssh_verify_host_key;
 	}
 	*sshp = ssh;

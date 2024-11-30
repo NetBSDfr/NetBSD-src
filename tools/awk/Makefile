@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.3 2010/12/12 04:06:19 christos Exp $
+#	$NetBSD: Makefile,v 1.5 2024/09/20 07:49:56 rin Exp $
 
 HOSTPROGNAME=	${_TOOL_PREFIX}awk
 HOST_SRCDIR=	external/historical/nawk/bin

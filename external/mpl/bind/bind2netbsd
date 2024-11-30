@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-#	$NetBSD: bind2netbsd,v 1.6 2020/05/24 19:46:10 christos Exp $
+#	$NetBSD: bind2netbsd,v 1.8 2024/09/22 00:13:55 christos Exp $
 #
 # Copyright (c) 2000 The NetBSD Foundation, Inc.
 # All rights reserved.
@@ -26,7 +26,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 #
-# bind2netbsd:  convert a bind tree into a
+# bind2netbsd:  convert a bind source tree into a
 # netbsd bind source tree, under src/external/mpl/bind/dist,
 # based on bind2netbsd by Bernd Ernesti and changes by Simon Burge
 #
@@ -39,7 +39,7 @@
 #	$ cvs -d cvs.netbsd.org:/cvsroot import src/external/mpl/bind/dist ISC bind-9-x-y
 #	Enter the new CHANGES portion as your commit message
 #	$ cd ../../../../../bind-9.x.y
-#	$ run ./configure --enable-dnsrps --enable-querytrace --enable-fixed-rrset --without-python
+#	$ run ./configure --enable-querytrace --enable-fixed-rrset
 #	$ run make
 #	- use the binclude4netbsd to create and import the new headers in
 #	  /usr/src/external/mpl/bind/include

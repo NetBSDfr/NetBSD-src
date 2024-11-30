@@ -1,4 +1,4 @@
-/*	$NetBSD: if_arp.c,v 1.312 2024/02/24 21:39:05 mlelstv Exp $	*/
+/*	$NetBSD: if_arp.c,v 1.317 2024/11/13 09:25:52 roy Exp $	*/
 
 /*
  * Copyright (c) 1998, 2000, 2008 The NetBSD Foundation, Inc.
@@ -68,7 +68,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_arp.c,v 1.312 2024/02/24 21:39:05 mlelstv Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_arp.c,v 1.317 2024/11/13 09:25:52 roy Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_ddb.h"
@@ -515,7 +515,7 @@ arprequest(struct ifnet *ifp,
 	struct mbuf *m;
 	struct arphdr *ah;
 	struct sockaddr sa;
-	uint64_t *arps;
+	net_stat_ref_t arps;
 
 	KASSERT(sip != NULL);
 	KASSERT(tip != NULL);
@@ -561,8 +561,8 @@ arprequest(struct ifnet *ifp,
 	sa.sa_family = AF_ARP;
 	sa.sa_len = 2;
 	arps = ARP_STAT_GETREF();
-	arps[ARP_STAT_SNDTOTAL]++;
-	arps[ARP_STAT_SENDREQUEST]++;
+	_NET_STATINC_REF(arps, ARP_STAT_SNDTOTAL);
+	_NET_STATINC_REF(arps, ARP_STAT_SENDREQUEST);
 	ARP_STAT_PUTREF();
 	if_output_lock(ifp, ifp, m, &sa, NULL);
 }
@@ -779,7 +779,7 @@ in_arpinput(struct mbuf *m)
 	struct in_addr isaddr, itaddr, myaddr;
 	int op, rt_cmd, new_state = 0;
 	void *tha;
-	uint64_t *arps;
+	net_stat_ref_t arps;
 	struct psref psref, psref_ia;
 	int s;
 	char ipbuf[INET_ADDRSTRLEN];
@@ -793,6 +793,8 @@ in_arpinput(struct mbuf *m)
 	if (ah->ar_pln != sizeof(struct in_addr))
 		goto out;
 
+	/* RFC5227 2.4 says any of the host's own interface addresses
+	 * are not conflicting ARP packets. */
 	ifp = if_get_bylla(ar_sha(ah), ah->ar_hln, &psref);
 	if (ifp) {
 		/* it's from me, ignore it. */
@@ -924,8 +926,20 @@ again:
 	 */
 	if (in_nullhost(isaddr))
 		ARP_STATINC(ARP_STAT_RCVZEROSPA);
-	else if (in_hosteq(isaddr, myaddr))
+	else if (in_hosteq(isaddr, myaddr)) {
 		ARP_STATINC(ARP_STAT_RCVLOCALSPA);
+		/* This is the original behavior prior to supporting IPv4 DAD */
+		if (!ip_dad_enabled()) {
+			char llabuf[LLA_ADDRSTRLEN];
+			log(LOG_ERR,
+			    "duplicate IP address %s sent from link address %s\n",
+			    IN_PRINT(ipbuf, &isaddr),
+			    lla_snprintf(llabuf, sizeof(llabuf), ar_sha(ah),
+			                 ah->ar_hln));
+			itaddr = myaddr;
+			goto reply;
+		}
+	}
 
 	if (in_nullhost(itaddr))
 		ARP_STATINC(ARP_STAT_RCVZEROTPA);
@@ -941,7 +955,7 @@ again:
 	 * AND our address is either tentative or duplicated
 	 * If it was unicast then it's a valid Unicast Poll from RFC 1122.
 	 */
-	if (do_dad &&
+	if (ip_dad_enabled() && do_dad &&
 	    (in_hosteq(isaddr, myaddr) ||
 	    (in_nullhost(isaddr) && in_hosteq(itaddr, myaddr) &&
 	     m->m_flags & M_BCAST &&
@@ -1022,6 +1036,17 @@ again:
 			/* This was a solicited ARP reply. */
 			la->ln_byhint = 0;
 			new_state = ND_LLINFO_REACHABLE;
+		} else if (op == ARPOP_REQUEST &&
+		           (la->ln_state == ND_LLINFO_NOSTATE ||
+			    la->ln_state == ND_LLINFO_INCOMPLETE)) {
+			/*
+			 * If an ARP request comes but there is no entry
+			 * and a new one has been created or an entry exists
+			 * but incomplete, make it stale to allow to send
+			 * packets to the requester without an ARP resolution.
+			 */
+			la->ln_byhint = 0;
+			new_state = ND_LLINFO_STALE;
 		}
 		rt_cmd = la->la_flags & LLE_VALID ? 0 : RTM_ADD;
 	}
@@ -1166,8 +1191,8 @@ reply:
 	sa.sa_family = AF_ARP;
 	sa.sa_len = 2;
 	arps = ARP_STAT_GETREF();
-	arps[ARP_STAT_SNDTOTAL]++;
-	arps[ARP_STAT_SNDREPLY]++;
+	_NET_STATINC_REF(arps, ARP_STAT_SNDTOTAL);
+	_NET_STATINC_REF(arps, ARP_STAT_SNDREPLY);
 	ARP_STAT_PUTREF();
 	if_output_lock(ifp, ifp, m, &sa, NULL);
 	if (rcvif != NULL)

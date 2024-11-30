@@ -1,4 +1,4 @@
-/*	$NetBSD: ip_input.c,v 1.402 2022/09/02 03:50:00 thorpej Exp $	*/
+/*	$NetBSD: ip_input.c,v 1.404 2024/07/05 04:31:54 rin Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -91,7 +91,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ip_input.c,v 1.402 2022/09/02 03:50:00 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ip_input.c,v 1.404 2024/07/05 04:31:54 rin Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_inet.h"
@@ -812,8 +812,7 @@ ours:
 	return;
 
 out:
-	if (m != NULL)
-		m_freem(m);
+	m_freem(m);
 }
 
 /*
@@ -1333,7 +1332,7 @@ ip_forward(struct mbuf *m, int srcrt, struct ifnet *rcvif)
 		struct sockaddr		dst;
 		struct sockaddr_in	dst4;
 	} u;
-	uint64_t *ips;
+	net_stat_ref_t ips;
 	struct route *ro;
 
 	KASSERTMSG(cpu_softintr_p(), "ip_forward: not in the software "
@@ -1422,10 +1421,10 @@ ip_forward(struct mbuf *m, int srcrt, struct ifnet *rcvif)
 	}
 
 	ips = IP_STAT_GETREF();
-	ips[IP_STAT_FORWARD]++;
+	_NET_STATINC_REF(ips, IP_STAT_FORWARD);
 
 	if (type) {
-		ips[IP_STAT_REDIRECTSENT]++;
+		_NET_STATINC_REF(ips, IP_STAT_REDIRECTSENT);
 		IP_STAT_PUTREF();
 		goto redirect;
 	}
@@ -1486,8 +1485,7 @@ error:
 		 * be a big problem under DoS attacks or if the underlying
 		 * interface is rate-limited.
 		 */
-		if (mcopy)
-			m_freem(mcopy);
+		m_freem(mcopy);
 		rtcache_percpu_putref(ipforward_rt_percpu);
 		return;
 	}

@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.5 2002/03/22 21:27:58 leo Exp $
+#	$NetBSD: Makefile,v 1.7 2024/09/25 08:32:44 rin Exp $
 #
 LIB	= libtos.a
 

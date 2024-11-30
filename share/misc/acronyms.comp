@@ -1,4 +1,4 @@
-$NetBSD: acronyms.comp,v 1.390 2024/05/19 15:47:38 gutteridge Exp $
+$NetBSD: acronyms.comp,v 1.395 2024/11/12 19:58:53 jschauma Exp $
 3WHS	three-way handshake
 8VSB	8-state vestigial side band modulation
 AA	anti-aliasing
@@ -533,6 +533,7 @@ ECDH	elliptic curve Diffie-Hellman
 ECDL	elliptic curve discrete logarithm
 ECDLP	elliptic curve discrete logarithm problem
 ECDSA	elliptic curve digital signature algorithm
+EDDSA	Edwards-curve digital signature algorithm
 ECL	emitter-coupled logic
 ECN	explicit congestion notification
 ECP	enhanced capability port
@@ -700,6 +701,7 @@ HAL	hardware abstraction layer
 HAT	hashed array tree
 HATEOAS	hypermedia as the engine of application state
 HBA	host bus adapter
+HBS	hash-based signature
 HCC	Home Cable Computer
 HCCA	Home Cable Computer Adaptor
 HCF	halt and catch fire
@@ -874,6 +876,7 @@ KB	kilobyte
 KBD	keyboard
 KBD	kilobaud
 KCS	keyboard controller style
+KDF	key derivation function
 KEK	key encryption key
 KEM	key encapsulation mechanism
 KLOC	thousand lines of code
@@ -934,6 +937,7 @@ LMCE	local machine check exception
 LMI	local management interface
 LMM	link management mode
 LMP	link management protocol
+LMS	Leighton-Micali Signature
 LNO	loop nest optimization
 LOC	lines of code
 LOM	lights-out management
@@ -1123,6 +1127,7 @@ NIA	next instruction address
 NIC	network information center
 NIC	network interface card
 NIDS	network intrusion detection system
+NIKE	Non-Interactive Key Exchange
 NIP	network interface protocol
 NIPR	non-classified IP router (network)
 NIPS	network intrusion prevention system
@@ -1506,6 +1511,7 @@ SATA	serial advanced technology attachment
 SAX	simple API for XML
 SB	sound blaster
 SBI	supervisor binary interface
+SBOM	Software Bill of Materials
 SBSA	server base system architecture
 SBU	standard build unit
 SC	store conditional
@@ -1849,6 +1855,7 @@ VFO	variable-frequency oscillator
 VFS	virtual file system
 VG	volume group
 VGA	Video Graphics Array
+VHD	virtual hard disk
 VHDCI	very high density cable interconnect
 VID	{VLAN,voltage level} identifier
 VIM	Vi IMproved
@@ -1889,6 +1896,7 @@ WAN	wide area network
 WAP	Wireless Application Protocol
 WAP	wireless access point
 WDDM	Windows Display Driver Model
+WDM	Wavelength Division Multiplexing
 WDM	Windows Driver Model
 WDT	watchdog timer
 WEP	Wired Equivalent Privacy
@@ -1927,8 +1935,10 @@ XGA	Extended Graphics Array
 XHR	XMLHttpRequest
 XIP	execute in place
 XML	Extensible Markup Language
+XMSS	eXtended Merkle Signature Scheme
 XNA	XNA's not acronymed
 XNS	Xerox network systems
+XOF	eXtendable-Output Function
 XOR	exclusive or
 XP	extreme programming
 XSI	X/Open System Interface

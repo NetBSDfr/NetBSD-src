@@ -1,6 +1,9 @@
-/*	$NetBSD: pm_direct.c,v 1.32 2024/06/02 13:28:45 andvar Exp $	*/
+/*	$NetBSD: pm_direct.c,v 1.36 2024/09/26 01:16:50 riastradh Exp $	*/
 
 /*
+ * Copyright (c) 2024 Nathanial Sloss <nathanialsloss@yahoo.com.au>
+ * All rights reserved.
+ *
  * Copyright (C) 1997 Takashi Hamada
  * All rights reserved.
  *
@@ -32,7 +35,7 @@
 /* From: pm_direct.c 1.3 03/18/98 Takashi Hamada */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: pm_direct.c,v 1.32 2024/06/02 13:28:45 andvar Exp $");
+__KERNEL_RCSID(0, "$NetBSD: pm_direct.c,v 1.36 2024/09/26 01:16:50 riastradh Exp $");
 
 #include "opt_adb.h"
 
@@ -46,6 +49,8 @@ __KERNEL_RCSID(0, "$NetBSD: pm_direct.c,v 1.32 2024/06/02 13:28:45 andvar Exp $"
 
 #include <sys/types.h>
 #include <sys/systm.h>
+
+#include <dev/sysmon/sysmonvar.h>
 
 #include <machine/viareg.h>
 #include <machine/param.h>
@@ -85,6 +90,7 @@ u_short	pm_existent_ADB_devices = 0x0;	/* each bit expresses the existent ADB de
 u_int	pm_LCD_brightness = 0x0;
 u_int	pm_LCD_contrast = 0x0;
 u_int	pm_counter = 0;			/* clock count */
+struct sysmon_pswitch pbutton;
 
 /* these values shows that number of data returned after 'send' cmd is sent */
 char pm_send_cmd_type[] = {
@@ -257,6 +263,12 @@ pm_setup_adb(void)
 		case MACH_MACPB180:
 		case MACH_MACPB180C:
 			pmHardware = PM_HW_PB1XX;
+
+			memset(&pbutton, 0, sizeof(struct sysmon_pswitch));
+			pbutton.smpsw_name = "PB";
+			pbutton.smpsw_type = PSWITCH_TYPE_POWER;
+			if (sysmon_pswitch_register(&pbutton) != 0)
+				printf("Unable to register soft power\n");
 			break;
 		case MACH_MACPB150:
 		case MACH_MACPB210:
@@ -269,6 +281,13 @@ pm_setup_adb(void)
 		case MACH_MACPB190:
 		case MACH_MACPB190CS:
 			pmHardware = PM_HW_PB5XX;
+#if notyet
+			memset(&pbutton, 0, sizeof(struct sysmon_pswitch));
+			pbutton.smpsw_name = "PB";
+			pbutton.smpsw_type = PSWITCH_TYPE_POWER;
+			if (sysmon_pswitch_register(&pbutton) != 0)
+				printf("Unable to register soft power\n");
+#endif
 			break;
 		default:
 			break;
@@ -406,7 +425,7 @@ pm_pmgrop_pm1(PMData *pmdata)
 	u_char via1_vIER, via1_vDirA;
 	int rval = 0;
 	int num_pm_data = 0;
-	u_char pm_cmd;	
+	u_char pm_cmd;
 	u_char pm_data;
 	u_char *pm_buf;
 
@@ -419,7 +438,7 @@ pm_pmgrop_pm1(PMData *pmdata)
 	switch (pmdata->command) {
 		default:
 			for (i = 0; i < 7; i++) {
-				via_reg(VIA2, vDirA) = 0x00;	
+				via_reg(VIA2, vDirA) = 0x00;
 
 				/* wait until PM is free */
 				if (pm_wait_free(ADBDelay) == 0) {	/* timeout */
@@ -523,7 +542,7 @@ pm_pmgrop_pm1(PMData *pmdata)
 			rval = 0;
 	}
 
-	via_reg(VIA2, vDirA) = 0x00;	
+	via_reg(VIA2, vDirA) = 0x00;
 
 	/* restore formar value */
 	via_reg(VIA1, vDirA) = via1_vDirA;
@@ -576,6 +595,9 @@ pm_intr_pm1(void *arg)
 			/* ADB device event */
 			pm_adb_get_ADB_data(&pmdata);
 		}
+	} else if ((pmdata.num_data == 0x1) && (pmdata.data[0] == 0)) {
+		/* PowerBook 160/180 Power button. */
+		sysmon_pswitch_event(&pbutton, PSWITCH_EVENT_PRESSED);
 	} else {
 #ifdef ADB_DEBUG
 		if (adb_debug)
@@ -629,7 +651,7 @@ pm_receive_pm2(u_char *data)
 	via_reg(VIA1, vACR) |= 0x1c;
 
 	return rval;
-}	
+}
 
 
 
@@ -674,7 +696,7 @@ pm_pmgrop_pm2(PMData *pmdata)
 	u_char via1_vIER;
 	int rval = 0;
 	int num_pm_data = 0;
-	u_char pm_cmd;	
+	u_char pm_cmd;
 	short pm_num_rx_data;
 	u_char pm_data;
 	u_char *pm_buf;
@@ -696,7 +718,7 @@ pm_pmgrop_pm2(PMData *pmdata)
 			if (pm_wait_free(ADBDelay * 4) == 0)
 				break;			/* timeout */
 
-			if (HwCfgFlags3 & 0x00200000) {	
+			if (HwCfgFlags3 & 0x00200000) {
 				/* PB 160, PB 165(c), PB 180(c)? */
 				int xdelay = ADBDelay * 16;
 
@@ -726,7 +748,7 @@ pm_pmgrop_pm2(PMData *pmdata)
 			} else {				/* PB 1XX series ? */
 				if ((rval = pm_send_pm2((u_char)(num_pm_data & 0xff))) != 0)
 					break;			/* timeout */
-			}			
+			}
 			/* send PM data */
 			pm_buf = (u_char *)pmdata->s_buf;
 			for (i = 0 ; i < num_pm_data; i++)
@@ -845,18 +867,8 @@ pm_intr_pm2(void *arg)
 			rval = pm_pmgrop_pm2(&pmdata);
 			pm_printerr("#33", rval, pmdata.num_data, pmdata.data);
 */
-			/* this is an experimental code */
-			pmdata.command = 0x41;
-			pmdata.num_data = 1;
-			pmdata.s_buf = pmdata.data;
-			pmdata.r_buf = pmdata.data;
-			pm_LCD_brightness = 0x7f - pm_LCD_brightness / 2;
-			if (pm_LCD_brightness < 0x25)
-				pm_LCD_brightness = 0x25;
-			if (pm_LCD_brightness > 0x5a)
-				pm_LCD_brightness = 0x7f;
-			pmdata.data[0] = pm_LCD_brightness;
-			rval = pm_pmgrop_pm2(&pmdata);
+			pm_LCD_brightness =
+			    pm_set_brightness(pm_LCD_brightness);
 			break;
 		case 0x10:			/* ADB data that were requested by TALK command */
 		case 0x14:
@@ -1067,9 +1079,9 @@ pm_adb_op(u_char *buffer, void *compRout, void *data, int command)
 		pmdata.num_data = 4;
 		pmdata.s_buf = pmdata.data;
 		pmdata.r_buf = pmdata.data;
-		pmdata.data[0] = 0x00;	
+		pmdata.data[0] = 0x00;
 		pmdata.data[1] = 0x86;	/* magic spell for awaking the PM */
-		pmdata.data[2] = 0x00;	
+		pmdata.data[2] = 0x00;
 		pmdata.data[3] = 0x0c;	/* each bit may express the existent ADB device */
 	} else {				/* PB 1XX series */
 		pmdata.command = 0x20;
@@ -1157,4 +1169,63 @@ pm_adb_poll_next_device_pm1(PMData *pmdata)
 	tmp_pmdata.data[1] = 0x04;	/* magic spell for awaking the PM */
 	tmp_pmdata.data[2] = 0x00;
 	pmgrop(&tmp_pmdata);
+}
+
+void
+pm_poweroff(void)
+{
+	PMData pmdata;
+	int attempt = 3;
+
+	while (pmHardware == PM_HW_PB1XX && attempt > 0) {
+		pmdata.command = 0x7e;
+		pmdata.num_data = 0;
+		pmdata.data[0] = pmdata.data[1] = 0;
+		pmdata.s_buf = &pmdata.data[2];
+		pmdata.r_buf = &pmdata.data[2];
+		(void)pm_pmgrop_pm1(&pmdata);
+		attempt--;
+	}
+
+	return;
+}
+
+u_int
+pm_set_brightness(u_int brightness)
+{
+	PMData pmdata;
+
+	pmdata.num_data = 1;
+	pmdata.s_buf = pmdata.data;
+	pmdata.r_buf = pmdata.data;
+
+	switch (pmHardware) {
+	case PM_HW_PB5XX:
+		/* this is an experimental code */
+		pmdata.command = 0x41;
+		brightness = 0x7f - brightness / 2;
+		if (brightness < 0x25)
+			brightness = 0x25;
+		if (brightness > 0x5a)
+			brightness = 0x7f;
+		pmdata.data[0] = brightness;
+		(void)pm_pmgrop_pm2(&pmdata);
+		break;
+	case PM_HW_PB1XX:
+		/* this is an experimental code also */
+		pmdata.command = 0x40;
+		if ((int)brightness < 0)
+			brightness = 0;
+		if ((int)brightness > 31)
+			brightness = 31;
+		pmdata.data[0] = 31 - brightness;
+		(void)pm_pmgrop_pm1(&pmdata);
+		break;
+	default:
+
+		return 0;
+		break;
+	}
+
+	return brightness;
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: autoconf.c,v 1.241 2024/06/20 18:02:45 palle Exp $ */
+/*	$NetBSD: autoconf.c,v 1.243 2024/11/19 20:38:24 palle Exp $ */
 
 /*
  * Copyright (c) 1996
@@ -48,7 +48,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.241 2024/06/20 18:02:45 palle Exp $");
+__KERNEL_RCSID(0, "$NetBSD: autoconf.c,v 1.243 2024/11/19 20:38:24 palle Exp $");
 
 #include "opt_ddb.h"
 #include "opt_kgdb.h"

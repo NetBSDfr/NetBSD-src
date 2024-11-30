@@ -1,4 +1,4 @@
-/*	$NetBSD: tree.c,v 1.648 2024/06/17 17:06:47 rillig Exp $	*/
+/*	$NetBSD: tree.c,v 1.661 2024/11/29 06:57:43 rillig Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -37,7 +37,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: tree.c,v 1.648 2024/06/17 17:06:47 rillig Exp $");
+__RCSID("$NetBSD: tree.c,v 1.661 2024/11/29 06:57:43 rillig Exp $");
 #endif
 
 #include <float.h>
@@ -55,10 +55,33 @@ typedef struct integer_constraints {
 	int64_t		smax;	/* signed maximum */
 	uint64_t	umin;	/* unsigned minimum */
 	uint64_t	umax;	/* unsigned maximum */
-	uint64_t	bset;	/* bits that are definitely set */
 	uint64_t	bclr;	/* bits that are definitely clear */
 } integer_constraints;
 
+
+static int64_t
+s64_min(int64_t a, int64_t b)
+{
+	return a < b ? a : b;
+}
+
+static int64_t
+s64_max(int64_t a, int64_t b)
+{
+	return a > b ? a : b;
+}
+
+static uint64_t
+s64_abs(int64_t x)
+{
+	return x >= 0 ? (uint64_t)x : -(uint64_t)x;
+}
+
+static uint64_t
+u64_max(uint64_t a, uint64_t b)
+{
+	return a > b ? a : b;
+}
 
 static uint64_t
 u64_fill_right(uint64_t x)
@@ -119,76 +142,63 @@ ic_any(const type_t *tp)
 		c.smax = INT64_MAX;
 		c.umin = 0;
 		c.umax = vbits;
-		c.bset = 0;
 		c.bclr = ~c.umax;
 	} else {
 		c.smin = (int64_t)-1 - (int64_t)(vbits >> 1);
 		c.smax = (int64_t)(vbits >> 1);
 		c.umin = 0;
 		c.umax = UINT64_MAX;
-		c.bset = 0;
 		c.bclr = 0;
 	}
 	return c;
 }
 
 static integer_constraints
-ic_con(const type_t *tp, const val_t *v)
+ic_mult(const type_t *tp, integer_constraints a, integer_constraints b)
 {
 	integer_constraints c;
 
-	lint_assert(is_integer(tp->t_tspec));
-	int64_t si = v->u.integer;
-	uint64_t ui = (uint64_t)si;
-	c.smin = si;
-	c.smax = si;
-	c.umin = ui;
-	c.umax = ui;
-	c.bset = ui;
-	c.bclr = ~ui;
+	if (ic_maybe_signed(tp, &a) || ic_maybe_signed(tp, &b)
+	    || (a.umax > 0 && b.umax > ic_any(tp).umax / a.umax))
+		return ic_any(tp);
+
+	c.smin = INT64_MIN;
+	c.smax = INT64_MAX;
+	c.umin = a.umin * b.umin;
+	c.umax = a.umax * b.umax;
+	c.bclr = ~u64_fill_right(c.umax);
 	return c;
 }
 
 static integer_constraints
-ic_cvt(const type_t *ntp, const type_t *otp, integer_constraints a)
-{
-	unsigned nw = width_in_bits(ntp);
-	unsigned ow = width_in_bits(otp);
-	bool nu = is_uinteger(ntp->t_tspec);
-	bool ou = is_uinteger(otp->t_tspec);
-
-	if (nw >= ow && nu == ou)
-		return a;
-	if (nw > ow && ou)
-		return a;
-	return ic_any(ntp);
-}
-
-static integer_constraints
-ic_bitand(integer_constraints a, integer_constraints b)
+ic_div(const type_t *tp, integer_constraints a, integer_constraints b)
 {
 	integer_constraints c;
 
+	if (ic_maybe_signed(tp, &a) || ic_maybe_signed(tp, &b) || b.umin == 0)
+		return ic_any(tp);
+
 	c.smin = INT64_MIN;
 	c.smax = INT64_MAX;
-	c.umin = 0;
-	c.umax = UINT64_MAX;
-	c.bset = a.bset & b.bset;
-	c.bclr = a.bclr | b.bclr;
+	c.umin = a.umin / b.umax;
+	c.umax = a.umax / b.umin;
+	c.bclr = ~u64_fill_right(c.umax);
 	return c;
 }
 
 static integer_constraints
-ic_bitor(integer_constraints a, integer_constraints b)
+ic_mod_signed(integer_constraints a, integer_constraints b)
 {
 	integer_constraints c;
 
-	c.smin = INT64_MIN;
-	c.smax = INT64_MAX;
+	uint64_t max_abs_b = u64_max(s64_abs(b.smin), s64_abs(b.smax));
+	if (max_abs_b >> 63 != 0 || max_abs_b == 0)
+		return a;
+	c.smin = s64_max(a.smin, -(int64_t)(max_abs_b - 1));
+	c.smax = s64_min(a.smax, (int64_t)(max_abs_b - 1));
 	c.umin = 0;
 	c.umax = UINT64_MAX;
-	c.bset = a.bset | b.bset;
-	c.bclr = a.bclr & b.bclr;
+	c.bclr = 0;
 	return c;
 }
 
@@ -198,13 +208,12 @@ ic_mod(const type_t *tp, integer_constraints a, integer_constraints b)
 	integer_constraints c;
 
 	if (ic_maybe_signed(tp, &a) || ic_maybe_signed(tp, &b))
-		return ic_any(tp);
+		return ic_mod_signed(a, b);
 
 	c.smin = INT64_MIN;
 	c.smax = INT64_MAX;
 	c.umin = 0;
 	c.umax = b.umax - 1;
-	c.bset = 0;
 	c.bclr = ~u64_fill_right(c.umax);
 	return c;
 }
@@ -229,7 +238,6 @@ ic_shl(const type_t *tp, integer_constraints a, integer_constraints b)
 	c.smax = INT64_MAX;
 	c.umin = 0;
 	c.umax = UINT64_MAX;
-	c.bset = a.bset << amount;
 	c.bclr = a.bclr << amount | (((uint64_t)1 << amount) - 1);
 	return c;
 }
@@ -254,13 +262,42 @@ ic_shr(const type_t *tp, integer_constraints a, integer_constraints b)
 	c.smax = INT64_MAX;
 	c.umin = 0;
 	c.umax = UINT64_MAX;
-	c.bset = a.bset >> amount;
 	c.bclr = a.bclr >> amount | ~(~(uint64_t)0 >> amount);
 	return c;
 }
 
 static integer_constraints
-ic_cond(integer_constraints a, integer_constraints b)
+ic_bitand(integer_constraints a, integer_constraints b)
+{
+	integer_constraints c;
+
+	c.smin = INT64_MIN;
+	c.smax = INT64_MAX;
+	c.umin = 0;
+	c.umax = ~(a.bclr | b.bclr);
+	if (c.umax >> 63 == 0) {
+		c.smin = 0;
+		c.smax = (int64_t)c.umax;
+	}
+	c.bclr = a.bclr | b.bclr;
+	return c;
+}
+
+static integer_constraints
+ic_bitor(integer_constraints a, integer_constraints b)
+{
+	integer_constraints c;
+
+	c.smin = INT64_MIN;
+	c.smax = INT64_MAX;
+	c.umin = 0;
+	c.umax = ~(a.bclr & b.bclr);
+	c.bclr = a.bclr & b.bclr;
+	return c;
+}
+
+static integer_constraints
+ic_quest_colon(integer_constraints a, integer_constraints b)
 {
 	integer_constraints c;
 
@@ -268,9 +305,39 @@ ic_cond(integer_constraints a, integer_constraints b)
 	c.smax = a.smax > b.smax ? a.smax : b.smax;
 	c.umin = a.umin < b.umin ? a.umin : b.umin;
 	c.umax = a.umax > b.umax ? a.umax : b.umax;
-	c.bset = a.bset | b.bset;
 	c.bclr = a.bclr & b.bclr;
 	return c;
+}
+
+static integer_constraints
+ic_con(const type_t *tp, const val_t *v)
+{
+	integer_constraints c;
+
+	lint_assert(is_integer(tp->t_tspec));
+	int64_t si = v->u.integer;
+	uint64_t ui = (uint64_t)si;
+	c.smin = si;
+	c.smax = si;
+	c.umin = ui;
+	c.umax = ui;
+	c.bclr = ~ui;
+	return c;
+}
+
+static integer_constraints
+ic_cvt(const type_t *ntp, const type_t *otp, integer_constraints a)
+{
+	unsigned nw = width_in_bits(ntp);
+	unsigned ow = width_in_bits(otp);
+	bool nu = is_uinteger(ntp->t_tspec);
+	bool ou = is_uinteger(otp->t_tspec);
+
+	if (nw >= ow && nu == ou)
+		return a;
+	if (nw > ow && ou)
+		return a;
+	return ic_any(ntp);
 }
 
 static integer_constraints
@@ -281,13 +348,14 @@ ic_expr(const tnode_t *tn)
 	lint_assert(is_integer(tn->tn_type->t_tspec));
 
 	switch (tn->tn_op) {
-	case CON:
-		return ic_con(tn->tn_type, &tn->u.value);
-	case CVT:
-		if (!is_integer(tn->u.ops.left->tn_type->t_tspec))
-			return ic_any(tn->tn_type);
-		lc = ic_expr(tn->u.ops.left);
-		return ic_cvt(tn->tn_type, tn->u.ops.left->tn_type, lc);
+	case MULT:
+		lc = ic_expr(before_conversion(tn->u.ops.left));
+		rc = ic_expr(before_conversion(tn->u.ops.right));
+		return ic_mult(tn->tn_type, lc, rc);
+	case DIV:
+		lc = ic_expr(before_conversion(tn->u.ops.left));
+		rc = ic_expr(before_conversion(tn->u.ops.right));
+		return ic_div(tn->tn_type, lc, rc);
 	case MOD:
 		lc = ic_expr(before_conversion(tn->u.ops.left));
 		rc = ic_expr(before_conversion(tn->u.ops.right));
@@ -311,7 +379,14 @@ ic_expr(const tnode_t *tn)
 	case QUEST:
 		lc = ic_expr(tn->u.ops.right->u.ops.left);
 		rc = ic_expr(tn->u.ops.right->u.ops.right);
-		return ic_cond(lc, rc);
+		return ic_quest_colon(lc, rc);
+	case CON:
+		return ic_con(tn->tn_type, &tn->u.value);
+	case CVT:
+		if (!is_integer(tn->u.ops.left->tn_type->t_tspec))
+			return ic_any(tn->tn_type);
+		lc = ic_expr(tn->u.ops.left);
+		return ic_cvt(tn->tn_type, tn->u.ops.left->tn_type, lc);
 	default:
 		return ic_any(tn->tn_type);
 	}
@@ -633,7 +708,7 @@ check_integer_comparison(op_t op, tnode_t *ln, tnode_t *rn)
 	if (!is_integer(lt) || !is_integer(rt))
 		return;
 
-	if (any_query_enabled && !in_system_header) {
+	if (!in_system_header) {
 		if (lt == CHAR && rn->tn_op == CON &&
 		    !rn->u.value.v_char_constant) {
 			/* comparison '%s' of 'char' with plain integer %d */
@@ -1180,11 +1255,13 @@ check_enum_array_index(const tnode_t *ln, const tnode_t *rn)
 	    (strstr(max_ec->s_name, "MAX") != NULL ||
 	     strstr(max_ec->s_name, "max") != NULL ||
 	     strstr(max_ec->s_name, "NUM") != NULL ||
-	     strstr(max_ec->s_name, "num") != NULL))
+	     strstr(max_ec->s_name, "num") != NULL ||
+	     strncmp(max_ec->s_name, "N_", 2) == 0))
 		return;
 
-	/* maximum value %d of '%s' does not match maximum array index %d */
-	warning(348, (int)max_enum_value, type_name(rtp), max_array_index);
+	/* maximum value %d for '%s' of type '%s' does not match maximum array index %d */
+	warning(348, (int)max_enum_value, max_ec->s_name, type_name(rtp),
+	    max_array_index);
 	print_previous_declaration(max_ec);
 }
 
@@ -1408,10 +1485,9 @@ build_assignment(op_t op, bool sys, tnode_t *ln, tnode_t *rn)
 	tspec_t lt = ln->tn_type->t_tspec;
 	tspec_t rt = rn->tn_type->t_tspec;
 
-	if (any_query_enabled && is_assignment(rn->tn_op)) {
+	if (is_assignment(rn->tn_op))
 		/* chained assignment with '%s' and '%s' */
 		query_message(10, op_name(op), op_name(rn->tn_op));
-	}
 
 	if ((op == ADDASS || op == SUBASS) && lt == PTR) {
 		lint_assert(is_integer(rt));
@@ -1450,14 +1526,13 @@ build_assignment(op_t op, bool sys, tnode_t *ln, tnode_t *rn)
 		rt = lt;
 	}
 
-	if (is_query_enabled[20]
-	    && lt == PTR && ln->tn_type->t_subt->t_tspec != VOID
+	if (lt == PTR && ln->tn_type->t_subt->t_tspec != VOID
 	    && rt == PTR && rn->tn_type->t_subt->t_tspec == VOID
 	    && !is_null_pointer(rn))
 		/* implicit narrowing conversion from void ... */
 		query_message(20, type_name(ln->tn_type));
 
-	if (any_query_enabled && rn->tn_op == CVT && rn->tn_cast &&
+	if (rn->tn_op == CVT && rn->tn_cast &&
 	    types_compatible(ln->tn_type, rn->tn_type, false, false, NULL) &&
 	    is_cast_redundant(rn)) {
 		/* redundant cast from '%s' to '%s' before assignment */
@@ -1809,6 +1884,15 @@ build_binary(tnode_t *ln, op_t op, bool sys, tnode_t *rn)
 	case ARROW:
 		ntn = build_struct_access(op, sys, ln, rn);
 		break;
+	case NOT:
+		if (ln->tn_op == ASSIGN && ln->u.ops.right->tn_op == CON) {
+			/* constant assignment of type '%s' in operand ... */
+			warning(382, type_name(ln->tn_type),
+			    is_nonzero_val(&ln->u.ops.right->u.value)
+			    ? "true" : "false");
+		}
+		ntn = build_op(op, sys, gettyp(Tflag ? BOOL : INT), ln, NULL);
+		break;
 	case INCAFT:
 	case DECAFT:
 	case INCBEF:
@@ -1848,11 +1932,9 @@ build_binary(tnode_t *ln, op_t op, bool sys, tnode_t *rn)
 		ntn = build_assignment(op, sys, ln, rn);
 		break;
 	case COMMA:
-		if (any_query_enabled) {
-			/* comma operator with types '%s' and '%s' */
-			query_message(12,
-			    type_name(ln->tn_type), type_name(rn->tn_type));
-		}
+		/* comma operator with types '%s' and '%s' */
+		query_message(12,
+		    type_name(ln->tn_type), type_name(rn->tn_type));
 		/* FALLTHROUGH */
 	case QUEST:
 		ntn = build_op(op, sys, rn->tn_type, ln, rn);
@@ -2759,7 +2841,7 @@ check_unconst_function(const type_t *lstp, const tnode_t *rn)
 
 static bool
 check_assign_void_pointer_compat(op_t op, int arg,
-				 const type_t *ltp, tspec_t lt,
+				 tspec_t lt,
 				 const type_t *lstp, tspec_t lst,
 				 const tnode_t *rn,
 				 const type_t *rtp, tspec_t rt,
@@ -2771,25 +2853,26 @@ check_assign_void_pointer_compat(op_t op, int arg,
 		return false;
 
 	/* compatible pointer types (qualifiers ignored) */
-	if (allow_c90 &&
-	    ((!lstp->t_const && rstp->t_const) ||
-	     (!lstp->t_volatile && rstp->t_volatile))) {
-		/* left side has not all qualifiers of right */
+	char qualifiers[32];
+	snprintf(qualifiers, sizeof(qualifiers), "%s%s",
+	    !lstp->t_const && rstp->t_const ? " const" : "",
+	    !lstp->t_volatile && rstp->t_volatile ? " volatile" : "");
+	if (allow_c90 && qualifiers[0] != '\0') {
 		switch (op) {
 		case INIT:
 		case RETURN:
-			/* incompatible pointer types to '%s' and '%s' */
-			warning(182, type_name(lstp), type_name(rstp));
+			/* '%s' discards '%s' from '%s' */
+			warning(182, op_name(op),
+			    qualifiers + 1, type_name(rtp));
 			break;
 		case FARG:
-			/* converting '%s' to incompatible '%s' ... */
-			warning(153,
-			    type_name(rtp), type_name(ltp), arg);
+			/* passing '%s' to argument %d discards '%s' */
+			warning(383, type_name(rtp), arg, qualifiers + 1);
 			break;
 		default:
-			/* operands of '%s' have incompatible pointer ... */
+			/* operator '%s' discards '%s' from '%s' */
 			warning(128, op_name(op),
-			    type_name(lstp), type_name(rstp));
+			    qualifiers + 1, type_name(rtp));
 			break;
 		}
 	}
@@ -2908,7 +2991,7 @@ check_assign_types_compatible(op_t op, int arg,
 	check_assign_void_pointer(op, arg, lt, lst, rt, rst);
 
 	if (check_assign_void_pointer_compat(op, arg,
-	    ltp, lt, lstp, lst, rn, rtp, rt, rstp, rst))
+	    lt, lstp, lst, rn, rtp, rt, rstp, rst))
 		return true;
 
 	if (check_assign_pointer_integer(op, arg, ltp, lt, rtp, rt))
@@ -3412,10 +3495,6 @@ check_prototype_conversion(int arg, tspec_t nt, tspec_t ot, type_t *tp,
 static bool
 can_represent(const type_t *tp, const tnode_t *tn)
 {
-
-	debug_step("%s: type '%s'", __func__, type_name(tp));
-	debug_node(tn);
-
 	uint64_t nmask = value_bits(width_in_bits(tp));
 	if (!is_uinteger(tp->t_tspec))
 		nmask >>= 1;
@@ -3430,6 +3509,10 @@ can_represent(const type_t *tp, const tnode_t *tn)
 	    : tpc.smin <= c.smin && tpc.smax >= c.smax)
 		return true;
 
+	debug_enter();
+	debug_step("type '%s' cannot represent:", type_name(tp));
+	debug_node(tn);
+	debug_leave();
 	return false;
 }
 
@@ -3496,7 +3579,7 @@ convert_integer_from_integer(op_t op, int arg, tspec_t nt, tspec_t ot,
 		}
 	}
 
-	if (any_query_enabled && is_uinteger(nt) != is_uinteger(ot))
+	if (is_uinteger(nt) != is_uinteger(ot))
 		/* implicit conversion changes sign from '%s' to '%s' */
 		query_message(3, type_name(tn->tn_type), type_name(tp));
 }
@@ -3645,8 +3728,8 @@ convert_pointer_from_pointer(type_t *ntp, tnode_t *tn)
 	}
 
 	if (cflag && should_warn_about_pointer_cast(nstp, nst, ostp, ost)) {
-		/* pointer cast from '%s' to '%s' may be troublesome */
-		warning(247, type_name(otp), type_name(ntp));
+		/* pointer cast from '%s' to unrelated '%s' */
+		warning(247, type_name(ostp), type_name(nstp));
 	}
 }
 
@@ -4218,8 +4301,7 @@ cast(tnode_t *tn, bool sys, type_t *tp)
 	} else
 		goto invalid_cast;
 
-	if (any_query_enabled
-	    && types_compatible(tp, tn->tn_type, false, false, NULL))
+	if (types_compatible(tp, tn->tn_type, false, false, NULL))
 		/* no-op cast from '%s' to '%s' */
 		query_message(6, type_name(tn->tn_type), type_name(tp));
 
@@ -4438,7 +4520,8 @@ is_constcond_false(const tnode_t *tn, tspec_t t)
  * memory which is used for the expression.
  */
 void
-expr(tnode_t *tn, bool vctx, bool cond, bool dofreeblk, bool is_do_while)
+expr(tnode_t *tn, bool vctx, bool cond, bool dofreeblk, bool is_do_while,
+    const char *stmt_kind)
 {
 
 	if (tn == NULL) {	/* in case of errors */
@@ -4448,7 +4531,7 @@ expr(tnode_t *tn, bool vctx, bool cond, bool dofreeblk, bool is_do_while)
 
 	/* expr() is also called in global initializations */
 	if (dcs->d_kind != DLK_EXTERN && !is_do_while)
-		check_statement_reachable();
+		check_statement_reachable(stmt_kind);
 
 	check_expr_misc(tn, vctx, cond, !cond, false, false, false);
 	if (tn->tn_op == ASSIGN && !tn->tn_parenthesized) {

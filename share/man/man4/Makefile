@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.733 2023/10/04 07:51:36 rin Exp $
+#	$NetBSD: Makefile,v 1.737 2024/11/04 20:43:37 brad Exp $
 #	@(#)Makefile	8.1 (Berkeley) 6/18/93
 
 MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 \
@@ -20,8 +20,8 @@ MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 \
 	clockctl.4 cmdide.4 cmpci.4 cms.4 cnw.4 \
 	com.4 coram.4 crypto.4 cs80bus.4 cuda.4 cypide.4 cxdtv.4 \
 	ddb.4 ddc.4 dge.4 dk.4 dm.4 dmoverio.4 \
-	dmphy.4 dpt.4 dpti.4 drm.4 drum.4 drvctl.4 dse.4 dtv.4 dtviic.4 \
-	dwctwo.4 \
+	dmphy.4 dpt.4 dpti.4 drm.4 drum.4 drvctl.4 ds2482ow.4 dse.4 dtv.4 \
+	dtviic.4 dwctwo.4 \
 	eap.4 ebus.4 edc.4 elmc.4 emuxki.4 ena.4 envsys.4 ep.4 \
 	eqos.4 esa.4 esiop.4 esm.4 eso.4 et.4 etphy.4 exphy.4 \
 	fd.4 finsio.4 flash.4 fms.4 fss.4 \
@@ -31,7 +31,8 @@ MAN=	aac.4 ac97.4 acardide.4 aceride.4 acphy.4 \
 	gpiosim.4 gre.4 gphyter.4 gsip.4 \
 	hdaudio.4 hifn.4 hme.4 hpacel.4 hpqlb.4 hptide.4 hvn.4 hythygtemp.4 \
 	iavf.4 ibmcd.4 ibmhawk.4 ichsmb.4 icmp.4 icp.4 icsphy.4 iee.4 \
-	ieee80211.4 ifmedia.4 igc.4 igmafb.4 igphy.4 igpio.4 igsfb.4 iha.4 \
+	ieee80211.4 ietp.4 ifmedia.4 \
+	igc.4 igmafb.4 igphy.4 igpio.4 igsfb.4 iha.4 \
 	ihidev.4 ihphy.4 iic.4 ims.4 inet.4 ikphy.4 inphy.4 intersil7170.4 \
 	intro.4 ioasic.4 ioat.4 iop.4 iophy.4 iopsp.4 ip.4 ipgphy.4 ipmi.4 \
 	ipw.4 irmce.4 isp.4 ismt.4 isv.4 itesio.4 iteide.4 iwi.4 iwm.4 iwn.4 \
@@ -99,8 +100,10 @@ MAN+=	irframe.4 cir.4 irframetty.4 oboe.4
 
 # ACPI devices
 MAN+=	acpi.4 acpiacad.4 acpibat.4 acpibut.4 acpicpu.4 \
-	acpidalb.4 acpiec.4 acpifan.4 acpilid.4 \
-	acpipmtr.4 acpismbus.4 acpitz.4 acpivga.4 acpiwdrt.4 acpiwmi.4
+	acpidalb.4 acpiec.4 acpifan.4 acpihed.4 acpilid.4 \
+	acpipmtr.4 acpismbus.4 acpitz.4 acpivga.4 acpivmgenid.4 \
+	acpiwdrt.4 acpiwmi.4
+MAN+=	apei.4
 
 # Radio devices
 MAN+=	radio.4 az.4 gtp.4 rt.4 rtii.4 sf2r.4

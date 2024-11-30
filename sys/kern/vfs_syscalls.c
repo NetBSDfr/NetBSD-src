@@ -1,4 +1,4 @@
-/*	$NetBSD: vfs_syscalls.c,v 1.561 2023/09/09 18:34:44 ad Exp $	*/
+/*	$NetBSD: vfs_syscalls.c,v 1.568 2024/08/11 13:43:20 bad Exp $	*/
 
 /*-
  * Copyright (c) 2008, 2009, 2019, 2020, 2023 The NetBSD Foundation, Inc.
@@ -70,7 +70,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: vfs_syscalls.c,v 1.561 2023/09/09 18:34:44 ad Exp $");
+__KERNEL_RCSID(0, "$NetBSD: vfs_syscalls.c,v 1.568 2024/08/11 13:43:20 bad Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_fileassoc.h"
@@ -234,8 +234,9 @@ fd_nameiat(struct lwp *l, int fdat, struct nameidata *ndp)
 {
 	file_t *dfp;
 	int error;
+	const char *path = pathbuf_stringcopy_get(ndp->ni_pathbuf);
 
-	if (fdat != AT_FDCWD) {
+	if (fdat != AT_FDCWD && path[0] != '/') {
 		if ((error = fd_getvnode(fdat, &dfp)) != 0)
 			goto out;
 
@@ -244,9 +245,10 @@ fd_nameiat(struct lwp *l, int fdat, struct nameidata *ndp)
 
 	error = namei(ndp);
 
-	if (fdat != AT_FDCWD)
+	if (fdat != AT_FDCWD && path[0] != '/')
 		fd_putfile(fdat);
 out:
+	pathbuf_stringcopy_put(ndp->ni_pathbuf, path);
 	return error;
 }
 
@@ -257,8 +259,16 @@ fd_nameiat_simple_user(struct lwp *l, int fdat, const char *path,
 	file_t *dfp;
 	struct vnode *dvp;
 	int error;
+	struct pathbuf *pb;
+	const char *p;
 
-	if (fdat != AT_FDCWD) {
+	error = pathbuf_copyin(path, &pb);
+	if (error) {
+		return error;
+	}
+	p = pathbuf_stringcopy_get(pb);
+
+	if (fdat != AT_FDCWD && p[0] != '/') {
 		if ((error = fd_getvnode(fdat, &dfp)) != 0)
 			goto out;
 
@@ -267,11 +277,15 @@ fd_nameiat_simple_user(struct lwp *l, int fdat, const char *path,
 		dvp = NULL;
 	}
 
-	error = nameiat_simple_user(dvp, path, sflags, vp_ret);
+	error = nameiat_simple(dvp, pb, sflags, vp_ret);
 
-	if (fdat != AT_FDCWD)
+	if (fdat != AT_FDCWD && p[0] != '/')
 		fd_putfile(fdat);
+
 out:
+	pathbuf_stringcopy_put(pb, p);
+	pathbuf_destroy(pb);
+
 	return error;
 }
 
@@ -727,11 +741,15 @@ do_sys_sync(struct lwp *l)
 	while ((mp = mountlist_iterator_next(iter)) != NULL) {
 		mutex_enter(mp->mnt_updating);
 		if ((mp->mnt_flag & MNT_RDONLY) == 0) {
+			/*
+			 * Temporarily clear the MNT_ASYNC flags so that
+			 * bwrite() doesnt convert the sync writes to
+			 * delayed writes.
+			 */
 			asyncflag = mp->mnt_flag & MNT_ASYNC;
 			mp->mnt_flag &= ~MNT_ASYNC;
 			VFS_SYNC(mp, MNT_NOWAIT, l->l_cred);
-			if (asyncflag)
-				 mp->mnt_flag |= MNT_ASYNC;
+			mp->mnt_flag |= asyncflag;
 		}
 		mutex_exit(mp->mnt_updating);
 	}

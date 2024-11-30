@@ -1,4 +1,4 @@
-/*	$NetBSD: if_alc.c,v 1.53 2022/09/17 13:55:35 thorpej Exp $	*/
+/*	$NetBSD: if_alc.c,v 1.55 2024/07/05 04:31:51 rin Exp $	*/
 /*	$OpenBSD: if_alc.c,v 1.1 2009/08/08 09:31:13 kevlo Exp $	*/
 /*-
  * Copyright (c) 2009, Pyun YongHyeon <yongari@FreeBSD.org>
@@ -2288,18 +2288,18 @@ alc_stats_update(struct alc_softc *sc)
 	/* Update counters in ifnet. */
 	net_stat_ref_t nsr = IF_STAT_GETREF(ifp);
 
-	if_statadd_ref(nsr, if_opackets, smb->tx_frames);
+	if_statadd_ref(ifp, nsr, if_opackets, smb->tx_frames);
 
-	if_statadd_ref(nsr, if_collisions,
+	if_statadd_ref(ifp, nsr, if_collisions,
 	    smb->tx_single_colls +
 	    smb->tx_multi_colls * 2 + smb->tx_late_colls +
 	    smb->tx_excess_colls * HDPX_CFG_RETRY_DEFAULT);
 
-	if_statadd_ref(nsr, if_oerrors,
+	if_statadd_ref(ifp, nsr, if_oerrors,
 	    smb->tx_late_colls + smb->tx_excess_colls +
 	    smb->tx_underrun + smb->tx_pkts_truncated);
 
-	if_statadd_ref(nsr, if_ierrors,
+	if_statadd_ref(ifp, nsr, if_ierrors,
 	    smb->rx_crcerrs + smb->rx_lenerrs +
 	    smb->rx_runts + smb->rx_pkts_truncated +
 	    smb->rx_fifo_oflows + smb->rx_rrs_errs +
@@ -2579,8 +2579,7 @@ alc_rxeof(struct alc_softc *sc, struct rx_rdesc *rrd)
 		if (alc_newbuf(sc, rxd, false) != 0) {
 			if_statinc(ifp, if_iqdrops);
 			/* Reuse Rx buffers. */
-			if (sc->alc_cdata.alc_rxhead != NULL)
-				m_freem(sc->alc_cdata.alc_rxhead);
+			m_freem(sc->alc_cdata.alc_rxhead);
 			break;
 		}
 
@@ -3229,8 +3228,7 @@ alc_stop(struct ifnet *ifp, int disable)
 	alc_aspm(sc, 0, IFM_UNKNOWN);
 
 	/* Reclaim Rx buffers that have been processed. */
-	if (sc->alc_cdata.alc_rxhead != NULL)
-		m_freem(sc->alc_cdata.alc_rxhead);
+	m_freem(sc->alc_cdata.alc_rxhead);
 	ALC_RXCHAIN_RESET(sc);
 	/*
 	 * Free Tx/Rx mbufs still in the queues.

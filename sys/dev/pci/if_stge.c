@@ -1,4 +1,4 @@
-/*	$NetBSD: if_stge.c,v 1.91 2024/02/10 09:30:06 andvar Exp $	*/
+/*	$NetBSD: if_stge.c,v 1.93 2024/07/05 04:31:51 rin Exp $	*/
 
 /*-
  * Copyright (c) 2001 The NetBSD Foundation, Inc.
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_stge.c,v 1.91 2024/02/10 09:30:06 andvar Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_stge.c,v 1.93 2024/07/05 04:31:51 rin Exp $");
 
 
 #include <sys/param.h>
@@ -1278,8 +1278,7 @@ stge_rxintr(struct stge_softc *sc)
 			STGE_INIT_RXDESC(sc, i);
 			if ((status & RFD_FrameEnd) == 0)
 				sc->sc_rxdiscard = 1;
-			if (sc->sc_rxhead != NULL)
-				m_freem(sc->sc_rxhead);
+			m_freem(sc->sc_rxhead);
 			STGE_RXCHAIN_RESET(sc);
 			continue;
 		}
@@ -1447,20 +1446,20 @@ stge_stats_update(struct stge_softc *sc)
 
 	net_stat_ref_t nsr = IF_STAT_GETREF(ifp);
 
-	if_statadd_ref(nsr, if_ierrors,
+	if_statadd_ref(ifp, nsr, if_ierrors,
 	    (u_int) CSR_READ_2(sc, STGE_FramesLostRxErrors));
 
 	(void) CSR_READ_4(sc, STGE_OctetXmtdOk);
 
-	if_statadd_ref(nsr, if_opackets,
+	if_statadd_ref(ifp, nsr, if_opackets,
 	    CSR_READ_4(sc, STGE_FramesXmtdOk));
 
-	if_statadd_ref(nsr, if_collisions,
+	if_statadd_ref(ifp, nsr, if_collisions,
 	    CSR_READ_4(sc, STGE_LateCollisions) +
 	    CSR_READ_4(sc, STGE_MultiColFrames) +
 	    CSR_READ_4(sc, STGE_SingleColFrames));
 
-	if_statadd_ref(nsr, if_oerrors,
+	if_statadd_ref(ifp, nsr, if_oerrors,
 	    (u_int) CSR_READ_2(sc, STGE_FramesAbortXSColls) +
 	    (u_int) CSR_READ_2(sc, STGE_FramesWEXDeferal));
 

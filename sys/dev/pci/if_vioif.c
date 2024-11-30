@@ -1,4 +1,4 @@
-/*	$NetBSD: if_vioif.c,v 1.111 2024/03/21 12:33:21 isaki Exp $	*/
+/*	$NetBSD: if_vioif.c,v 1.113 2024/11/10 11:46:11 mlelstv Exp $	*/
 
 /*
  * Copyright (c) 2020 The NetBSD Foundation, Inc.
@@ -27,7 +27,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_vioif.c,v 1.111 2024/03/21 12:33:21 isaki Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_vioif.c,v 1.113 2024/11/10 11:46:11 mlelstv Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_net_mpsafe.h"
@@ -845,9 +845,9 @@ vioif_transmit(struct ifnet *ifp, struct mbuf *m)
 	}
 
 	net_stat_ref_t nsr = IF_STAT_GETREF(ifp);
-	if_statadd_ref(nsr, if_obytes, m->m_pkthdr.len);
+	if_statadd_ref(ifp, nsr, if_obytes, m->m_pkthdr.len);
 	if (m->m_flags & M_MCAST)
-		if_statinc_ref(nsr, if_omcasts);
+		if_statinc_ref(ifp, nsr, if_omcasts);
 	IF_STAT_PUTREF(ifp);
 
 	if (mutex_tryenter(&netq->netq_lock)) {
@@ -1763,6 +1763,7 @@ vioif_populate_rx_mbufs_locked(struct vioif_softc *sc, struct vioif_netqueue *ne
 			rxc->rxc_mbuf_enobufs.ev_count++;
 			break;
 		}
+		MCLAIM(m, &sc->sc_ethercom.ec_rx_mowner);
 		MCLGET(m, M_DONTWAIT);
 		if ((m->m_flags & M_EXT) == 0) {
 			virtio_enqueue_abort(vsc, vq, slot);

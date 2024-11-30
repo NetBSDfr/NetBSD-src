@@ -1,4 +1,4 @@
-/* $NetBSD: if_ae.c,v 1.43 2024/02/10 09:30:05 andvar Exp $ */
+/* $NetBSD: if_ae.c,v 1.45 2024/07/05 04:31:49 rin Exp $ */
 /*-
  * Copyright (c) 2006 Urbana-Champaign Independent Media Center.
  * Copyright (c) 2006 Garrett D'Amore.
@@ -98,7 +98,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_ae.c,v 1.43 2024/02/10 09:30:05 andvar Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_ae.c,v 1.45 2024/07/05 04:31:49 rin Exp $");
 
 
 #include <sys/param.h>
@@ -638,8 +638,7 @@ ae_start(struct ifnet *ifp)
 			 * XXX it is worth it?
 			 */
 			bus_dmamap_unload(sc->sc_dmat, dmamap);
-			if (m != NULL)
-				m_freem(m);
+			m_freem(m);
 			break;
 		}
 
@@ -1209,17 +1208,17 @@ ae_txintr(struct ae_softc *sc)
 
 		net_stat_ref_t nsr = IF_STAT_GETREF(ifp);
 		if (txstat & (ADSTAT_Tx_UF | ADSTAT_Tx_TO))
-			if_statinc_ref(nsr, if_oerrors);
+			if_statinc_ref(ifp, nsr, if_oerrors);
 
 		if (txstat & ADSTAT_Tx_EC)
-			if_statadd_ref(nsr, if_collisions, 16);
+			if_statadd_ref(ifp, nsr, if_collisions, 16);
 		else if (ADSTAT_Tx_COLLISIONS(txstat))
-			if_statadd_ref(nsr, if_collisions,
+			if_statadd_ref(ifp, nsr, if_collisions,
 			    ADSTAT_Tx_COLLISIONS(txstat));
 		if (txstat & ADSTAT_Tx_LC)
-			if_statinc_ref(nsr, if_collisions);
+			if_statinc_ref(ifp, nsr, if_collisions);
 
-		if_statinc_ref(nsr, if_opackets);
+		if_statinc_ref(ifp, nsr, if_opackets);
 		IF_STAT_PUTREF(ifp);
 	}
 

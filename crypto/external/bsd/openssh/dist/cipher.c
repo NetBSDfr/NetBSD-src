@@ -1,5 +1,5 @@
-/*	$NetBSD: cipher.c,v 1.21 2023/12/20 17:15:20 christos Exp $	*/
-/* $OpenBSD: cipher.c,v 1.120 2023/10/10 06:49:54 tb Exp $ */
+/*	$NetBSD: cipher.c,v 1.23 2024/09/24 21:32:18 christos Exp $	*/
+/* $OpenBSD: cipher.c,v 1.123 2024/08/23 04:51:00 deraadt Exp $ */
 
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
@@ -38,7 +38,7 @@
  */
 
 #include "includes.h"
-__RCSID("$NetBSD: cipher.c,v 1.21 2023/12/20 17:15:20 christos Exp $");
+__RCSID("$NetBSD: cipher.c,v 1.23 2024/09/24 21:32:18 christos Exp $");
 #include <sys/types.h>
 
 #include <string.h>
@@ -172,8 +172,8 @@ const char *
 compression_alg_list(int compression)
 {
 #ifdef WITH_ZLIB
-	return compression ? "zlib@openssh.com,zlib,none" :
-	    "none,zlib@openssh.com,zlib";
+	return compression ? "zlib@openssh.com,none" :
+	    "none,zlib@openssh.com";
 #else
 	return "none";
 #endif
@@ -284,7 +284,7 @@ cipher_init(struct sshcipher_ctx **ccp, const struct sshcipher *cipher,
 #endif
 
 	*ccp = NULL;
-	if ((cc = calloc(sizeof(*cc), 1)) == NULL)
+	if ((cc = calloc(1, sizeof(*cc))) == NULL)
 		return SSH_ERR_ALLOC_FAIL;
 
 	cc->plaintext = (cipher->flags & CFLAG_NONE) != 0;
@@ -403,7 +403,7 @@ cipher_crypt(struct sshcipher_ctx *cc, u_int seqnr, u_char *dest,
 		if (!EVP_CIPHER_CTX_ctrl(cc->evp, EVP_CTRL_GCM_IV_GEN,
 		    1, lastiv))
 			return SSH_ERR_LIBCRYPTO_ERROR;
-		/* set tag on decyption */
+		/* set tag on decryption */
 		if (!cc->encrypt &&
 		    !EVP_CIPHER_CTX_ctrl(cc->evp, EVP_CTRL_GCM_SET_TAG,
 		    authlen, __UNCONST(src + aadlen + len)))

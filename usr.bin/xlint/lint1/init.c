@@ -1,4 +1,4 @@
-/*	$NetBSD: init.c,v 1.269 2024/05/09 20:53:13 rillig Exp $	*/
+/*	$NetBSD: init.c,v 1.271 2024/11/13 04:32:49 rillig Exp $	*/
 
 /*
  * Copyright (c) 1994, 1995 Jochen Pohl
@@ -38,7 +38,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: init.c,v 1.269 2024/05/09 20:53:13 rillig Exp $");
+__RCSID("$NetBSD: init.c,v 1.271 2024/11/13 04:32:49 rillig Exp $");
 #endif
 
 #include <stdlib.h>
@@ -263,7 +263,7 @@ check_init_expr(const type_t *ltp, sym_t *lsym, tnode_t *rn)
 		return;
 
 	memory_pool saved_mem = expr_save_memory();
-	expr(rn, true, false, true, false);
+	expr(rn, true, false, true, false, "init");
 	expr_restore_memory(saved_mem);
 
 	tspec_t lt = ln->tn_type->t_tspec;
@@ -833,7 +833,7 @@ initialization_expr_using_op(initialization *in, tnode_t *rn)
 	ln->tn_type = expr_unqualified_type(ln->tn_type);
 
 	tnode_t *tn = build_binary(ln, INIT, false /* XXX */, rn);
-	expr(tn, false, false, false, false);
+	expr(tn, false, false, false, false, "init");
 
 	return true;
 }
@@ -892,6 +892,8 @@ initialization_expr(initialization *in, tnode_t *tn)
 		in->in_err = true;
 		goto done;
 	}
+	if (in->in_sym->s_type->t_tspec == AUTO_TYPE)
+		in->in_sym->s_type = block_dup_type(tn->tn_type);
 	if (initialization_expr_using_op(in, tn))
 		goto done;
 	if (initialization_init_array_from_string(in, tn))

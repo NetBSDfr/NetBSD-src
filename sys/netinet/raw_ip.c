@@ -1,4 +1,4 @@
-/*	$NetBSD: raw_ip.c,v 1.184 2022/11/04 09:00:58 ozaki-r Exp $	*/
+/*	$NetBSD: raw_ip.c,v 1.186 2024/07/05 04:31:54 rin Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -65,7 +65,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: raw_ip.c,v 1.184 2022/11/04 09:00:58 ozaki-r Exp $");
+__KERNEL_RCSID(0, "$NetBSD: raw_ip.c,v 1.186 2024/07/05 04:31:54 rin Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_inet.h"
@@ -149,8 +149,7 @@ rip_sbappendaddr(struct inpcb *last, struct ip *ip, const struct sockaddr *sa,
 	if (sbappendaddr(&last->inp_socket->so_rcv, sa, n, opts) == 0) {
 		soroverflow(last->inp_socket);
 		m_freem(n);
-		if (opts)
-			m_freem(opts);
+		m_freem(opts);
 	} else {
 		sorwakeup(last->inp_socket);
 	}
@@ -219,13 +218,13 @@ rip_input(struct mbuf *m, int off, int proto)
 	if (last != NULL) {
 		rip_sbappendaddr(last, ip, sintosa(&ripsrc), hlen, m);
 	} else if (inetsw[ip_protox[ip->ip_p]].pr_input == rip_input) {
-		uint64_t *ips;
+		net_stat_ref_t ips;
 
 		icmp_error(m, ICMP_UNREACH, ICMP_UNREACH_PROTOCOL,
 		    0, 0);
 		ips = IP_STAT_GETREF();
-		ips[IP_STAT_NOPROTO]++;
-		ips[IP_STAT_DELIVERED]--;
+		_NET_STATINC_REF(ips, IP_STAT_NOPROTO);
+		_NET_STATDEC_REF(ips, IP_STAT_DELIVERED);
 		IP_STAT_PUTREF();
 	} else {
 		m_freem(m);
@@ -313,8 +312,7 @@ rip_output(struct mbuf *m, struct inpcb *inp, struct mbuf *control,
 	/* Setup IP outgoing packet options */
 	memset(&pktopts, 0, sizeof(pktopts));
 	error = ip_setpktopts(control, &pktopts, &flags, inp, cred);
-	if (control != NULL)
-		m_freem(control);
+	m_freem(control);
 	if (error != 0)
 		goto release;
 
@@ -394,8 +392,7 @@ rip_output(struct mbuf *m, struct inpcb *inp, struct mbuf *control,
 	    inp);
 
  release:
-	if (m != NULL)
-		m_freem(m);
+	m_freem(m);
 	return error;
 }
 
@@ -792,10 +789,8 @@ rip_send(struct socket *so, struct mbuf *m, struct sockaddr *nam,
 	if (nam)
 		rip_disconnect1(inp);
  die:
-	if (m != NULL)
-		m_freem(m);
-	if (control != NULL)
-		m_freem(control);
+	m_freem(m);
+	m_freem(control);
 
 	splx(s);
 	return error;

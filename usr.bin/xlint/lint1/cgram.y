@@ -1,5 +1,5 @@
 %{
-/* $NetBSD: cgram.y,v 1.506 2024/06/17 22:11:09 rillig Exp $ */
+/* $NetBSD: cgram.y,v 1.515 2024/11/13 04:32:49 rillig Exp $ */
 
 /*
  * Copyright (c) 1996 Christopher G. Demetriou.  All Rights Reserved.
@@ -35,7 +35,7 @@
 
 #include <sys/cdefs.h>
 #if defined(__RCSID)
-__RCSID("$NetBSD: cgram.y,v 1.506 2024/06/17 22:11:09 rillig Exp $");
+__RCSID("$NetBSD: cgram.y,v 1.515 2024/11/13 04:32:49 rillig Exp $");
 #endif
 
 #include <limits.h>
@@ -165,6 +165,7 @@ new_attribute(const sbuf_t *prefix, const sbuf_t *name,
 	scl_t	y_scl;
 	tspec_t	y_tspec;
 	type_qualifiers y_type_qualifiers;
+	type_attributes y_type_attributes;
 	function_specifier y_function_specifier;
 	parameter_list y_parameter_list;
 	function_call *y_arguments;
@@ -202,6 +203,7 @@ new_attribute(const sbuf_t *prefix, const sbuf_t *name,
 %printer { fprintf(yyo, "%s", scl_name($$)); } <y_scl>
 %printer { fprintf(yyo, "%s", tspec_name($$)); } <y_tspec>
 %printer { fprintf(yyo, "%s", type_qualifiers_string($$)); } <y_type_qualifiers>
+%printer { fprintf(yyo, "%s", type_attributes_string($$)); } <y_type_attributes>
 %printer {
 	fprintf(yyo, "%s", function_specifier_name($$));
 } <y_function_specifier>
@@ -365,10 +367,10 @@ new_attribute(const sbuf_t *prefix, const sbuf_t *name,
 %type	<y_type>	begin_type_typespec
 /* No type for begin_type_qualifier_list. */
 /* No type for declmod. */
-/* No type for type_attribute_list_opt. */
-/* No type for type_attribute_list. */
-/* No type for type_attribute_opt. */
-/* No type for type_attribute. */
+%type	<y_type_attributes> type_attribute_list_opt
+%type	<y_type_attributes> type_attribute_list
+%type	<y_type_attributes> type_attribute_opt
+%type	<y_type_attributes> type_attribute
 /* No type for begin_type. */
 /* No type for end_type. */
 /* No type for notype_init_declarator_list. */
@@ -470,11 +472,11 @@ new_attribute(const sbuf_t *prefix, const sbuf_t *name,
 /* No type for arg_declaration_list_opt. */
 /* No type for arg_declaration_list. */
 /* No type for arg_declaration. */
-/* No type for gcc_attribute_specifier_list_opt. */
-/* No type for gcc_attribute_specifier_list. */
-/* No type for gcc_attribute_specifier. */
-/* No type for gcc_attribute_list. */
-/* No type for gcc_attribute. */
+%type	<y_type_attributes> gcc_attribute_specifier_list_opt
+%type	<y_type_attributes> gcc_attribute_specifier_list
+%type	<y_type_attributes> gcc_attribute_specifier
+%type	<y_type_attributes> gcc_attribute_list
+%type	<y_type_attributes> gcc_attribute
 %type	<y_in_system_header> sys
 
 %%
@@ -710,7 +712,8 @@ gcc_statement_expr_item:
 			/* XXX: do that only on the last name */
 			if ($1->tn_op == NAME)
 				$1->u.sym->s_used = true;
-			expr($1, false, false, false, false);
+			expr($1, true, false, false, false,
+			    "statement expression");
 			suppress_fallthrough = false;
 			$$ = $1;
 		}
@@ -951,7 +954,12 @@ begin_type_declaration_specifiers:	/* see C99 6.7, C23 6.7.1 */
 |	begin_type_declmods type_type_specifier {
 		dcs_add_type($2);
 	}
-|	type_attribute begin_type_declaration_specifiers
+|	type_attribute begin_type_declaration_specifiers {
+		if ($1.used)
+			dcs_set_used();
+		if ($1.noreturn)
+			dcs->d_noreturn = true;
+	}
 |	begin_type_declaration_specifiers declmod
 |	begin_type_declaration_specifiers notype_type_specifier {
 		dcs_add_type($2);
@@ -1020,21 +1028,32 @@ declmod:
 |	T_FUNCTION_SPECIFIER {
 		dcs_add_function_specifier($1);
 	}
-|	type_attribute_list
+|	type_attribute_list {
+		if ($1.used)
+			dcs_set_used();
+		if ($1.noreturn)
+			dcs->d_noreturn = true;
+	}
 ;
 
 type_attribute_list_opt:
-	/* empty */
+	/* empty */ {
+		$$ = (type_attributes){ .used = false };
+	}
 |	type_attribute_list
 ;
 
 type_attribute_list:
 	type_attribute
-|	type_attribute_list type_attribute
+|	type_attribute_list type_attribute {
+		$$ = (type_attributes){ .used = $1.used || $2.used };
+	}
 ;
 
 type_attribute_opt:
-	/* empty */
+	/* empty */ {
+		$$ = (type_attributes){ .used = false };
+	}
 |	type_attribute
 ;
 
@@ -1042,12 +1061,15 @@ type_attribute:			/* See C11 6.7 declaration-specifiers */
 	gcc_attribute_specifier
 |	T_ALIGNAS T_LPAREN type_type_specifier T_RPAREN {		/* C11 6.7.5 */
 		dcs_add_alignas(build_sizeof($3));
+		$$ = (type_attributes){ .used = false };
 	}
 |	T_ALIGNAS T_LPAREN constant_expression T_RPAREN {	/* C11 6.7.5 */
 		dcs_add_alignas($3);
+		$$ = (type_attributes){ .used = false };
 	}
 |	T_PACKED {
 		dcs_add_packed();
+		$$ = (type_attributes){ .used = false };
 	}
 ;
 
@@ -1058,6 +1080,7 @@ begin_type:
 |	attribute_specifier_sequence {
 		dcs_begin_type();
 		dcs->d_used = attributes_contain(&$1, "maybe_unused");
+		dcs->d_noreturn = attributes_contain(&$1, "noreturn");
 	}
 ;
 
@@ -1113,7 +1136,8 @@ type_init_declarator:
 		begin_initialization($1);
 		cgram_declare($1, true, $2);
 	} T_ASSIGN initializer {
-		check_size($1);
+		if ($1->s_type->t_tspec != AUTO_TYPE)
+			check_size($1);
 		end_initialization();
 	}
 ;
@@ -1242,8 +1266,7 @@ member_declaration:
 		error(249, "member without type");
 		$$ = NULL;
 	}
-|	begin_type_specifier_qualifier_list end_type type_attribute_opt
-	    T_SEMI {
+|	begin_type_specifier_qualifier_list end_type T_SEMI {
 		set_sym_kind(SK_VCFT);
 		if (!allow_c11 && !allow_gcc)
 			/* anonymous struct/union members is a C11 feature */
@@ -1484,8 +1507,14 @@ type_direct_declarator:
 		$$ = add_function(symbolrename($1, $3), $2);
 		end_declaration_level();
 		block_level--;
+		if ($2.used)
+			$$->s_used = true;
 	}
-|	type_direct_declarator type_attribute
+|	type_direct_declarator type_attribute {
+		$$ = $1;
+		if ($2.used)
+			$$->s_used = true;
+	}
 ;
 
 
@@ -1584,6 +1613,8 @@ notype_param_declarator:
 direct_param_declarator:
 	identifier type_attribute_list {
 		$$ = declarator_name(getsym($1));
+		if ($2.used)
+			dcs_set_used();
 	}
 |	identifier {
 		$$ = declarator_name(getsym($1));
@@ -1594,11 +1625,15 @@ direct_param_declarator:
 |	direct_param_declarator T_LBRACK array_size_opt T_RBRACK
 	    gcc_attribute_specifier_list_opt {
 		$$ = add_array($1, $3.has_dim, $3.dim);
+		if ($5.used)
+			dcs_set_used();
 	}
 |	direct_param_declarator param_list asm_or_symbolrename_opt {
 		$$ = add_function(symbolrename($1, $3), $2);
 		end_declaration_level();
 		block_level--;
+		if ($2.used)
+			dcs_set_used();
 	}
 ;
 
@@ -1699,16 +1734,18 @@ abstract_declaration:		/* specific to lint */
 ;
 
 abstract_decl_param_list:	/* specific to lint */
-	abstract_decl_lparen T_RPAREN type_attribute_opt {
-		$$ = (parameter_list){ .first = NULL };
+	abstract_decl_lparen T_RPAREN type_attribute_list_opt {
+		$$ = (parameter_list){ .used = $3.used };
 	}
 |	abstract_decl_lparen vararg_parameter_type_list T_RPAREN
-	    type_attribute_opt {
+	    type_attribute_list_opt {
 		$$ = $2;
 		$$.prototype = true;
+		$$.used = $4.used;
+		$$.noreturn = $4.noreturn;
 	}
-|	abstract_decl_lparen error T_RPAREN type_attribute_opt {
-		$$ = (parameter_list){ .first = NULL };
+|	abstract_decl_lparen error T_RPAREN type_attribute_list_opt {
+		$$ = (parameter_list){ .used = $4.used };
 	}
 ;
 
@@ -2101,22 +2138,39 @@ block_item:
 /* C99 6.8.3, C23 6.8.4 */
 expression_statement:
 	expression T_SEMI {
-		expr($1, false, false, false, false);
+		/*
+		 * Even though a "call statement" is not a formally defined
+		 * term in the C standards, it occurs so often that it's
+		 * helpful to have a distinguishable term for it.
+		 */
+		expr($1, false, false, false, false,
+		    $1 != NULL && $1->tn_op == CALL ? "call" : "expression");
 		suppress_fallthrough = false;
+		if ($1 != NULL && $1->tn_op == CALL
+		    && $1->u.call->func->tn_type->t_subt->t_noreturn)
+			stmt_call_noreturn();
 	}
 |	T_SEMI {
-		check_statement_reachable();
+		check_statement_reachable("empty");
 		suppress_fallthrough = false;
 	}
 |	attribute_specifier_sequence expression T_SEMI {
 		debug_attribute_list(&$1);
-		expr($2, false, false, false, false);
+		/*
+		 * Even though a "call statement" is not a formally defined
+		 * term in the C standards, it occurs so often that it's
+		 * helpful to have a distinguishable term for it.
+		 */
+		expr($2, false, false, false, false,
+		    $2 != NULL && $2->tn_op == CALL ? "call" : "expression");
 		suppress_fallthrough = false;
 	}
 |	attribute_specifier_sequence T_SEMI {
+		bool is_fallthrough = attributes_contain(&$1, "fallthrough");
 		debug_attribute_list(&$1);
-		check_statement_reachable();
-		suppress_fallthrough = attributes_contain(&$1, "fallthrough");
+		check_statement_reachable(
+		    is_fallthrough ? "fallthrough" : "empty");
+		suppress_fallthrough = is_fallthrough;
 	}
 ;
 
@@ -2131,7 +2185,7 @@ selection_statement:
 		save_warning_flags();
 		stmt_if_then_stmt();
 	} statement {
-		clear_warning_flags();
+		restore_warning_flags();
 		stmt_if_else_stmt(true);
 	}
 |	if_without_else T_ELSE error {
@@ -2439,13 +2493,17 @@ arg_declaration:
 
 /* https://gcc.gnu.org/onlinedocs/gcc/Attribute-Syntax.html */
 gcc_attribute_specifier_list_opt:
-	/* empty */
+	/* empty */ {
+		$$ = (type_attributes){ .used = false };
+	}
 |	gcc_attribute_specifier_list
 ;
 
 gcc_attribute_specifier_list:
 	gcc_attribute_specifier
-|	gcc_attribute_specifier_list gcc_attribute_specifier
+|	gcc_attribute_specifier_list gcc_attribute_specifier {
+		$$ = (type_attributes){ .used = $1.used || $2.used };
+	}
 ;
 
 gcc_attribute_specifier:
@@ -2453,36 +2511,50 @@ gcc_attribute_specifier:
 		in_gcc_attribute = true;
 	} gcc_attribute_list {
 		in_gcc_attribute = false;
-	} T_RPAREN T_RPAREN
+	} T_RPAREN T_RPAREN {
+		$$ = $5;
+	}
 ;
 
 gcc_attribute_list:
 	gcc_attribute
-|	gcc_attribute_list T_COMMA gcc_attribute
+|	gcc_attribute_list T_COMMA gcc_attribute {
+		$$ = (type_attributes){ .used = $1.used || $3.used };
+	}
 ;
 
 gcc_attribute:
-	/* empty */
+	/* empty */ {
+		$$ = (type_attributes){ .used = false };
+	}
 |	T_NAME {
+		$$ = (type_attributes){ .used = false };
 		const char *name = $1->sb_name;
 		if (is_either(name, "packed", "__packed__"))
 			dcs_add_packed();
 		else if (is_either(name, "used", "__used__") ||
+		    is_either(name, "constructor", "__constructor__") ||
 		    is_either(name, "unused", "__unused__"))
-			dcs_set_used();
+			$$.used = true;
 		else if (is_either(name, "fallthrough", "__fallthrough__"))
 			suppress_fallthrough = true;
+		else if (is_either(name, "noreturn", "__noreturn__"))
+			$$.noreturn = true;
 	}
-|	T_NAME T_LPAREN T_RPAREN
+|	T_NAME T_LPAREN T_RPAREN {
+		$$ = (type_attributes){ .used = false };
+	}
 |	T_NAME T_LPAREN argument_expression_list T_RPAREN {
 		const char *name = $1->sb_name;
 		if (is_either(name, "aligned", "__aligned__")
 		    && $3->args_len == 1)
 			dcs_add_alignas($3->args[0]);
+		$$ = (type_attributes){ .used = false };
 	}
 |	type_qualifier {
 		if (!$1.tq_const)
 			yyerror("Bad attribute");
+		$$ = (type_attributes){ .used = false };
 	}
 ;
 

@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.README,v 1.447 2024/04/05 01:16:00 christos Exp $
+#	$NetBSD: bsd.README,v 1.453 2024/11/02 22:02:39 christos Exp $
 #	@(#)bsd.README	8.2 (Berkeley) 4/2/94
 
 This is the README file for the make "include" files for the NetBSD
@@ -651,6 +651,9 @@ TOOL_TBL		Format tables for groff.  [tbl]
 
 TOOL_UUDECODE		Uudecode a binary file.  [uudecode]
 
+TOOL_VAXMOPCOPY		Creates a MOP image from another executable format.
+			[vax-mopcopy]
+
 TOOL_VGRIND		Grind nice listings of programs.  [vgrind -f]
 
 TOOL_ZIC		Time zone compiler.  [zic]
@@ -1012,6 +1015,10 @@ LIB_EXPSYM	File listing all symbols expected to be defined by the
 		from the expected symbols to the actual symbols.
 		During development, you can update the expected symbols
 		from the actual ones with `make update-symbols'.
+
+VERSION_MAP	Path to an ld version script to use when linking the
+		library.  Resolved from .PATH like a target
+		prerequisite.
 
 
 The include file <bsd.lib.mk> includes the file named "../Makefile.inc"
@@ -1419,6 +1426,7 @@ DPADD		Additional dependencies for the program.  Usually used for
 		The following X-Windows libraries are predefined for DPADD:
 
 		LIBDPS?=		${DESTDIR}/usr/X11R7/lib/libdps.a
+		LIBEGL?=		${DESTDIR}/usr/X11R7/lib/libEGL.a
 		LIBFNTSTUBS?=		${DESTDIR}/usr/X11R7/lib/libfntstubs.a
 		LIBFONTCACHE?=		${DESTDIR}/usr/X11R7/lib/libfontcache.a
 		LIBFONTCONFIG?=		${DESTDIR}/usr/X11R7/lib/libfontconfig.a
@@ -1427,15 +1435,21 @@ DPADD		Additional dependencies for the program.  Usually used for
 		LIBFS?=			${DESTDIR}/usr/X11R7/lib/libFS.a
 		LIBGL?=			${DESTDIR}/usr/X11R7/lib/libGL.a
 		LIBGLU?=		${DESTDIR}/usr/X11R7/lib/libGLU.a
+		LIBGLW?=		${DESTDIR}/usr/X11R7/lib/libGLw.a
+		LIBI810XVMC		4{DESTDIR}/usr/X11R7/lib/libI810XvMC.a
 		LIBICE?=		${DESTDIR}/usr/X11R7/lib/libICE.a
+		LIBINTELXVMC		${DESTDIR}/usr/X11R7/lib/libIntelXvMC.a
 		LIBLBXUTIL?=		${DESTDIR}/usr/X11R7/lib/liblbxutil.a
 		LIBSM?=			${DESTDIR}/usr/X11R7/lib/libSM.a
-		LIBX11?=		${DESTDIR}/usr/X11R7/lib/libX11.a
 		LIBX11_XCB?=		${DESTDIR}/usr/X11R7/lib/libX11-xcb.a
+		LIBX11?=		${DESTDIR}/usr/X11R7/lib/libX11.a
+		LIBXRES?=		${DESTDIR}/usr/X11R7/lib/libXres.a
 		LIBXAU?=		${DESTDIR}/usr/X11R7/lib/libXau.a
+		LIBXAU7?=		${DESTDIR}/usr/X11R7/lib/libXau7.a
 		LIBXAW?=		${DESTDIR}/usr/X11R7/lib/libXaw.a
 		LIBXCB?=		${DESTDIR}/usr/X11R7/lib/libxcb.a
 		LIBXCOMPOSITE?=		${DESTDIR}/usr/X11R7/lib/libXcomposite.a
+		LIBXCURSOR?=		${DESTDIR}/usr/X11R7/lib/libXcursor.a
 		LIBXCVT?=		${DESTDIR}/usr/X11R7/lib/libxcvt.a
 		LIBXDAMAGE?=		${DESTDIR}/usr/X11R7/lib/libXdamage.a
 		LIBXDMCP?=		${DESTDIR}/usr/X11R7/lib/libXdmcp.a

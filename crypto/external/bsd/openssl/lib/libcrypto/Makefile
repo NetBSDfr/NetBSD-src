@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.33 2023/05/27 20:51:22 hgutch Exp $
+#	$NetBSD: Makefile,v 1.37 2024/07/15 06:34:17 riastradh Exp $
 
 # RCSid:
 #	Id: Makefile,v 1.33 1998/11/11 11:53:53 sjg Exp
@@ -246,7 +246,7 @@ COPTS.eng_padlock.c = -Wno-stack-protector
 
 INCSDIR=/usr/include/openssl
 
-LDFLAGS+=-Wl,--version-script=${.CURDIR}/crypto.map
+VERSION_MAP=	crypto.map
 
 PKGCONFIG=libcrypto
 .include "${.CURDIR}/../../pkgconfig.mk"

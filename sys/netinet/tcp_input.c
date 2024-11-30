@@ -1,4 +1,4 @@
-/*	$NetBSD: tcp_input.c,v 1.438 2022/11/04 09:01:53 ozaki-r Exp $	*/
+/*	$NetBSD: tcp_input.c,v 1.441 2024/10/08 06:17:14 rin Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -138,7 +138,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tcp_input.c,v 1.438 2022/11/04 09:01:53 ozaki-r Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tcp_input.c,v 1.441 2024/10/08 06:17:14 rin Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_inet.h"
@@ -230,6 +230,8 @@ int	tcp_do_autorcvbuf = 1;
 int	tcp_autorcvbuf_inc = 16 * 1024;
 int	tcp_autorcvbuf_max = 256 * 1024;
 int	tcp_msl = (TCPTV_MSL / PR_SLOWHZ);
+
+int tcp_reass_maxqueuelen = 100;
 
 static int tcp_rst_ppslim_count = 0;
 static struct timeval tcp_rst_ppslim_last;
@@ -462,7 +464,7 @@ tcp_reass(struct tcpcb *tp, const struct tcphdr *th, struct mbuf *m, int tlen)
 #ifdef TCP_REASS_COUNTERS
 	u_int count = 0;
 #endif
-	uint64_t *tcps;
+	net_stat_ref_t tcps;
 
 	so = tp->t_inpcb->inp_socket;
 
@@ -585,8 +587,8 @@ tcp_reass(struct tcpcb *tp, const struct tcphdr *th, struct mbuf *m, int tlen)
 		if (SEQ_LEQ(q->ipqe_seq, pkt_seq) &&
 		    SEQ_GEQ(q->ipqe_seq + q->ipqe_len, pkt_seq + pkt_len)) {
 			tcps = TCP_STAT_GETREF();
-			tcps[TCP_STAT_RCVDUPPACK]++;
-			tcps[TCP_STAT_RCVDUPBYTE] += pkt_len;
+			_NET_STATINC_REF(tcps, TCP_STAT_RCVDUPPACK);
+			_NET_STATADD_REF(tcps, TCP_STAT_RCVDUPBYTE, pkt_len);
 			TCP_STAT_PUTREF();
 			tcp_new_dsack(tp, pkt_seq, pkt_len);
 			m_freem(m);
@@ -707,6 +709,13 @@ tcp_reass(struct tcpcb *tp, const struct tcphdr *th, struct mbuf *m, int tlen)
 #endif
 
 insert_it:
+	/* limit tcp segments per reassembly queue */
+	if (tp->t_segqlen > tcp_reass_maxqueuelen) {
+		TCP_STATINC(TCP_STAT_RCVMEMDROP);
+		m_freem(m);
+		goto out;
+	}
+
 	/*
 	 * Allocate a new queue entry (block) since the received segment
 	 * did not collapse onto any other out-of-order block. If it had
@@ -728,11 +737,12 @@ insert_it:
 	 */
 	tp->t_rcvoopack++;
 	tcps = TCP_STAT_GETREF();
-	tcps[TCP_STAT_RCVOOPACK]++;
-	tcps[TCP_STAT_RCVOOBYTE] += rcvoobyte;
+	_NET_STATINC_REF(tcps, TCP_STAT_RCVOOPACK);
+	_NET_STATADD_REF(tcps, TCP_STAT_RCVOOBYTE, rcvoobyte);
 	if (rcvpartdupbyte) {
-	    tcps[TCP_STAT_RCVPARTDUPPACK]++;
-	    tcps[TCP_STAT_RCVPARTDUPBYTE] += rcvpartdupbyte;
+		_NET_STATINC_REF(tcps, TCP_STAT_RCVPARTDUPPACK);
+		_NET_STATADD_REF(tcps, TCP_STAT_RCVPARTDUPBYTE,
+		    rcvpartdupbyte);
 	}
 	TCP_STAT_PUTREF();
 
@@ -981,7 +991,7 @@ static void tcp_vtw_input(struct tcphdr *th, vestigial_inpcb_t *vp,
 	int tiflags;
 	int todrop;
 	uint32_t t_flags = 0;
-	uint64_t *tcps;
+	net_stat_ref_t tcps;
 
 	tiflags = th->th_flags;
 	todrop  = vp->rcv_nxt - th->th_seq;
@@ -1011,8 +1021,8 @@ static void tcp_vtw_input(struct tcphdr *th, vestigial_inpcb_t *vp,
 			t_flags |= TF_ACKNOW;
 			todrop = tlen;
 			tcps = TCP_STAT_GETREF();
-			tcps[TCP_STAT_RCVDUPPACK] += 1;
-			tcps[TCP_STAT_RCVDUPBYTE] += todrop;
+			_NET_STATINC_REF(tcps, TCP_STAT_RCVDUPPACK);
+			_NET_STATADD_REF(tcps, TCP_STAT_RCVDUPBYTE, todrop);
 			TCP_STAT_PUTREF();
 		} else if ((tiflags & TH_RST) &&
 		    th->th_seq != vp->rcv_nxt) {
@@ -1023,8 +1033,9 @@ static void tcp_vtw_input(struct tcphdr *th, vestigial_inpcb_t *vp,
 			goto dropafterack_ratelim;
 		} else {
 			tcps = TCP_STAT_GETREF();
-			tcps[TCP_STAT_RCVPARTDUPPACK] += 1;
-			tcps[TCP_STAT_RCVPARTDUPBYTE] += todrop;
+			_NET_STATINC_REF(tcps, TCP_STAT_RCVPARTDUPPACK);
+			_NET_STATADD_REF(tcps, TCP_STAT_RCVPARTDUPBYTE,
+			    todrop);
 			TCP_STAT_PUTREF();
 		}
 
@@ -1198,7 +1209,7 @@ tcp_input(struct mbuf *m, int off, int proto)
 	struct mbuf *tcp_saveti = NULL;
 	uint32_t ts_rtt;
 	uint8_t iptos;
-	uint64_t *tcps;
+	net_stat_ref_t tcps;
 	vestigial_inpcb_t vestige;
 
 	vestige.valid = 0;
@@ -1482,10 +1493,8 @@ findpcb:
 #ifdef INET6
 	/* save packet options if user wanted */
 	if (inp->inp_af == AF_INET6 && (inp->inp_flags & IN6P_CONTROLOPTS)) {
-		if (inp->inp_options) {
-			m_freem(inp->inp_options);
-			inp->inp_options = NULL;
-		}
+		m_freem(inp->inp_options);
+		inp->inp_options = NULL;
 		ip6_savecontrol(inp, &inp->inp_options, ip6, m);
 	}
 #endif
@@ -1841,9 +1850,10 @@ after_listen:
 					  tcp_now - tp->t_rtttime);
 				acked = th->th_ack - tp->snd_una;
 				tcps = TCP_STAT_GETREF();
-				tcps[TCP_STAT_PREDACK]++;
-				tcps[TCP_STAT_RCVACKPACK]++;
-				tcps[TCP_STAT_RCVACKBYTE] += acked;
+				_NET_STATINC_REF(tcps, TCP_STAT_PREDACK);
+				_NET_STATINC_REF(tcps, TCP_STAT_RCVACKPACK);
+				_NET_STATADD_REF(tcps, TCP_STAT_RCVACKBYTE,
+				    acked);
 				TCP_STAT_PUTREF();
 				nd_hint(tp);
 
@@ -1895,8 +1905,7 @@ after_listen:
 					(void)tcp_output(tp);
 					KERNEL_UNLOCK_ONE(NULL);
 				}
-				if (tcp_saveti)
-					m_freem(tcp_saveti);
+				m_freem(tcp_saveti);
 				return;
 			}
 		} else if (th->th_ack == tp->snd_una &&
@@ -1924,9 +1933,9 @@ after_listen:
 			tp->snd_wl1 = th->th_seq;
 
 			tcps = TCP_STAT_GETREF();
-			tcps[TCP_STAT_PREDDAT]++;
-			tcps[TCP_STAT_RCVPACK]++;
-			tcps[TCP_STAT_RCVBYTE] += tlen;
+			_NET_STATINC_REF(tcps, TCP_STAT_PREDDAT);
+			_NET_STATINC_REF(tcps, TCP_STAT_RCVPACK);
+			_NET_STATADD_REF(tcps, TCP_STAT_RCVBYTE, tlen);
 			TCP_STAT_PUTREF();
 			nd_hint(tp);
 		/*
@@ -2006,8 +2015,7 @@ after_listen:
 				(void)tcp_output(tp);
 				KERNEL_UNLOCK_ONE(NULL);
 			}
-			if (tcp_saveti)
-				m_freem(tcp_saveti);
+			m_freem(tcp_saveti);
 			return;
 		}
 	}
@@ -2139,8 +2147,9 @@ after_listen:
 			tlen = tp->rcv_wnd;
 			tiflags &= ~TH_FIN;
 			tcps = TCP_STAT_GETREF();
-			tcps[TCP_STAT_RCVPACKAFTERWIN]++;
-			tcps[TCP_STAT_RCVBYTEAFTERWIN] += todrop;
+			_NET_STATINC_REF(tcps, TCP_STAT_RCVPACKAFTERWIN);
+			_NET_STATADD_REF(tcps, TCP_STAT_RCVBYTEAFTERWIN,
+			    todrop);
 			TCP_STAT_PUTREF();
 		}
 		tp->snd_wl1 = th->th_seq - 1;
@@ -2188,9 +2197,9 @@ after_listen:
 			tp->ts_recent = 0;
 		} else {
 			tcps = TCP_STAT_GETREF();
-			tcps[TCP_STAT_RCVDUPPACK]++;
-			tcps[TCP_STAT_RCVDUPBYTE] += tlen;
-			tcps[TCP_STAT_PAWSDROP]++;
+			_NET_STATINC_REF(tcps, TCP_STAT_RCVDUPPACK);
+			_NET_STATADD_REF(tcps, TCP_STAT_RCVDUPBYTE, tlen);
+			_NET_STATINC_REF(tcps, TCP_STAT_PAWSDROP);
 			TCP_STAT_PUTREF();
 			tcp_new_dsack(tp, th->th_seq, tlen);
 			goto dropafterack;
@@ -2230,8 +2239,8 @@ after_listen:
 			todrop = tlen;
 			dupseg = true;
 			tcps = TCP_STAT_GETREF();
-			tcps[TCP_STAT_RCVDUPPACK]++;
-			tcps[TCP_STAT_RCVDUPBYTE] += todrop;
+			_NET_STATINC_REF(tcps, TCP_STAT_RCVDUPPACK);
+			_NET_STATADD_REF(tcps, TCP_STAT_RCVDUPBYTE, todrop);
 			TCP_STAT_PUTREF();
 		} else if ((tiflags & TH_RST) && th->th_seq != tp->rcv_nxt) {
 			/*
@@ -2241,8 +2250,9 @@ after_listen:
 			goto dropafterack_ratelim;
 		} else {
 			tcps = TCP_STAT_GETREF();
-			tcps[TCP_STAT_RCVPARTDUPPACK]++;
-			tcps[TCP_STAT_RCVPARTDUPBYTE] += todrop;
+			_NET_STATINC_REF(tcps, TCP_STAT_RCVPARTDUPPACK);
+			_NET_STATADD_REF(tcps, TCP_STAT_RCVPARTDUPBYTE,
+			    todrop);
 			TCP_STAT_PUTREF();
 		}
 		tcp_new_dsack(tp, th->th_seq, todrop);
@@ -2396,8 +2406,7 @@ after_listen:
 		if (tp->rcv_nxt == th->th_seq) {
 			tcp_respond(tp, m, m, th, (tcp_seq)0, th->th_ack - 1,
 			    TH_ACK);
-			if (tcp_saveti)
-				m_freem(tcp_saveti);
+			m_freem(tcp_saveti);
 			return;
 		}
 
@@ -2521,8 +2530,8 @@ after_listen:
 		}
 		acked = th->th_ack - tp->snd_una;
 		tcps = TCP_STAT_GETREF();
-		tcps[TCP_STAT_RCVACKPACK]++;
-		tcps[TCP_STAT_RCVACKBYTE] += acked;
+		_NET_STATINC_REF(tcps, TCP_STAT_RCVACKPACK);
+		_NET_STATADD_REF(tcps, TCP_STAT_RCVACKBYTE, acked);
 		TCP_STAT_PUTREF();
 
 		/*
@@ -2759,8 +2768,8 @@ dodata:
 			tp->rcv_nxt += tlen;
 			tiflags = th->th_flags & TH_FIN;
 			tcps = TCP_STAT_GETREF();
-			tcps[TCP_STAT_RCVPACK]++;
-			tcps[TCP_STAT_RCVBYTE] += tlen;
+			_NET_STATINC_REF(tcps, TCP_STAT_RCVPACK);
+			_NET_STATADD_REF(tcps, TCP_STAT_RCVBYTE, tlen);
 			TCP_STAT_PUTREF();
 			nd_hint(tp);
 			if (so->so_state & SS_CANTRCVMORE) {
@@ -2850,8 +2859,7 @@ dodata:
 		(void)tcp_output(tp);
 		KERNEL_UNLOCK_ONE(NULL);
 	}
-	if (tcp_saveti)
-		m_freem(tcp_saveti);
+	m_freem(tcp_saveti);
 
 	if (tp->t_state == TCPS_TIME_WAIT
 	    && (so->so_state & SS_NOFDREF)
@@ -2896,8 +2904,7 @@ dropafterack2:
 	KERNEL_LOCK(1, NULL);
 	(void)tcp_output(tp);
 	KERNEL_UNLOCK_ONE(NULL);
-	if (tcp_saveti)
-		m_freem(tcp_saveti);
+	m_freem(tcp_saveti);
 	return;
 
 dropwithreset_ratelim:
@@ -2928,8 +2935,7 @@ dropwithreset:
 		(void)tcp_respond(tp, m, m, th, th->th_seq + tlen, (tcp_seq)0,
 		    TH_RST|TH_ACK);
 	}
-	if (tcp_saveti)
-		m_freem(tcp_saveti);
+	m_freem(tcp_saveti);
 	return;
 
 badcsum:
@@ -2944,8 +2950,7 @@ drop:
 			tcp_trace(TA_DROP, ostate, tp, tcp_saveti, 0);
 #endif
 	}
-	if (tcp_saveti)
-		m_freem(tcp_saveti);
+	m_freem(tcp_saveti);
 	m_freem(m);
 	return;
 }

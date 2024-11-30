@@ -1,4 +1,4 @@
-/*	$NetBSD: keysock.c,v 1.70 2019/06/12 22:23:50 christos Exp $	*/
+/*	$NetBSD: keysock.c,v 1.72 2024/07/05 04:31:54 rin Exp $	*/
 /*	$FreeBSD: keysock.c,v 1.3.2.1 2003/01/24 05:11:36 sam Exp $	*/
 /*	$KAME: keysock.c,v 1.25 2001/08/13 20:07:41 itojun Exp $	*/
 
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: keysock.c,v 1.70 2019/06/12 22:23:50 christos Exp $");
+__KERNEL_RCSID(0, "$NetBSD: keysock.c,v 1.72 2024/07/05 04:31:54 rin Exp $");
 
 /* This code has derived from sys/net/rtsock.c on FreeBSD2.2.5 */
 
@@ -113,9 +113,9 @@ key_output(struct mbuf *m, struct socket *so)
 	KASSERT(m != NULL);
 
 	{
-		uint64_t *ps = PFKEY_STAT_GETREF();
-		ps[PFKEY_STAT_OUT_TOTAL]++;
-		ps[PFKEY_STAT_OUT_BYTES] += m->m_pkthdr.len;
+		net_stat_ref_t ps = PFKEY_STAT_GETREF();
+		_NET_STATINC_REF(ps, PFKEY_STAT_OUT_TOTAL);
+		_NET_STATADD_REF(ps, PFKEY_STAT_OUT_BYTES, m->m_pkthdr.len);
 		PFKEY_STAT_PUTREF();
 	}
 
@@ -153,8 +153,7 @@ key_output(struct mbuf *m, struct socket *so)
 	m = NULL;
 	splx(s);
 end:
-	if (m)
-		m_freem(m);
+	m_freem(m);
 	return error;
 }
 
@@ -249,9 +248,9 @@ _key_sendup_mbuf(struct socket *so, struct mbuf *m,
 	}
 
 	{
-		uint64_t *ps = PFKEY_STAT_GETREF();
-		ps[PFKEY_STAT_IN_TOTAL]++;
-		ps[PFKEY_STAT_IN_BYTES] += m->m_pkthdr.len;
+		net_stat_ref_t ps = PFKEY_STAT_GETREF();
+		_NET_STATINC_REF(ps, PFKEY_STAT_IN_TOTAL);
+		_NET_STATADD_REF(ps, PFKEY_STAT_IN_BYTES, m->m_pkthdr.len);
 		PFKEY_STAT_PUTREF();
 	}
 	if (m->m_len < sizeof(struct sadb_msg)) {

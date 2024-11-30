@@ -1,5 +1,5 @@
-/*	$NetBSD: sshconnect2.c,v 1.47 2024/06/25 16:36:54 christos Exp $	*/
-/* $OpenBSD: sshconnect2.c,v 1.372 2024/01/08 00:34:34 djm Exp $ */
+/*	$NetBSD: sshconnect2.c,v 1.49 2024/09/24 21:32:19 christos Exp $	*/
+/* $OpenBSD: sshconnect2.c,v 1.375 2024/09/09 02:39:57 djm Exp $ */
 
 /*
  * Copyright (c) 2000 Markus Friedl.  All rights reserved.
@@ -27,7 +27,7 @@
  */
 
 #include "includes.h"
-__RCSID("$NetBSD: sshconnect2.c,v 1.47 2024/06/25 16:36:54 christos Exp $");
+__RCSID("$NetBSD: sshconnect2.c,v 1.49 2024/09/24 21:32:19 christos Exp $");
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
@@ -89,8 +89,6 @@ static int userauth_kerberos(struct ssh *);
 #endif
 
 /* import */
-extern char *client_version_string;
-extern char *server_version_string;
 extern Options options;
 
 /* tty_flag is set in ssh.c. use this in ssh_userauth2 */
@@ -288,6 +286,7 @@ ssh_kex2(struct ssh *ssh, char *host, struct sockaddr *hostaddr, u_short port,
 #endif
 	ssh->kex->kex[KEX_C25519_SHA256] = kex_gen_client;
 	ssh->kex->kex[KEX_KEM_SNTRUP761X25519_SHA512] = kex_gen_client;
+	ssh->kex->kex[KEX_KEM_MLKEM768X25519_SHA256] = kex_gen_client;
 	ssh->kex->verify_host_key=&verify_host_key_callback;
 
 	ssh_dispatch_run_fatal(ssh, DISPATCH_BLOCK, &ssh->kex->done);

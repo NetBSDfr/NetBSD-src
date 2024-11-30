@@ -26,7 +26,7 @@
 #if 0
 static char rcsid[] = "Id: entry.c,v 1.17 2004/01/23 18:56:42 vixie Exp";
 #else
-__RCSID("$NetBSD: entry.c,v 1.11 2020/04/18 19:32:19 christos Exp $");
+__RCSID("$NetBSD: entry.c,v 1.13 2024/08/19 23:50:23 christos Exp $");
 #endif
 #endif
 

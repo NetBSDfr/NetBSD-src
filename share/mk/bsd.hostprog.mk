@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.hostprog.mk,v 1.84 2021/03/27 02:46:45 simonb Exp $
+#	$NetBSD: bsd.hostprog.mk,v 1.86 2024/11/02 22:02:39 christos Exp $
 #	@(#)bsd.prog.mk	8.2 (Berkeley) 4/2/94
 
 .include <bsd.hostinit.mk>

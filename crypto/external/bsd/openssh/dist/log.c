@@ -1,5 +1,5 @@
-/*	$NetBSD: log.c,v 1.27 2023/12/20 17:15:20 christos Exp $	*/
-/* $OpenBSD: log.c,v 1.61 2023/12/06 21:06:48 djm Exp $ */
+/*	$NetBSD: log.c,v 1.30 2024/07/08 22:33:43 christos Exp $	*/
+/* $OpenBSD: log.c,v 1.62 2024/06/27 22:36:44 djm Exp $ */
 
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
@@ -37,7 +37,7 @@
  */
 
 #include "includes.h"
-__RCSID("$NetBSD: log.c,v 1.27 2023/12/20 17:15:20 christos Exp $");
+__RCSID("$NetBSD: log.c,v 1.30 2024/07/08 22:33:43 christos Exp $");
 #include <sys/types.h>
 #include <sys/uio.h>
 
@@ -309,9 +309,7 @@ static void
 do_log(LogLevel level, int force, const char *suffix, const char *fmt,
     va_list args)
 {
-#ifdef SYSLOG_DATA_INIT
 	struct syslog_data sdata = SYSLOG_DATA_INIT;
-#endif
 	char msgbuf[MSGBUFSIZ], *msgbufp;
 	char visbuf[MSGBUFSIZ * 4 + 1];
 	size_t len, len2;
@@ -389,15 +387,9 @@ do_log(LogLevel level, int force, const char *suffix, const char *fmt,
 		    (int)sizeof msgbuf - 10, visbuf);
 		(void)write(log_stderr_fd, msgbuf, strlen(msgbuf));
 	} else {
-#ifdef SYSLOG_DATA_INIT
 		openlog_r(progname, LOG_PID, log_facility, &sdata);
 		syslog_r(pri, &sdata, "%.500s", visbuf);
 		closelog_r(&sdata);
-#else
-		openlog(progname, LOG_PID, log_facility);
-		syslog(pri, "%.500s", visbuf);
-		closelog();
-#endif
 	}
 	errno = saved_errno;
 }
@@ -424,19 +416,6 @@ sshlogdie(const char *file, const char *func, int line, int showfunc,
 	    suffix, fmt, args);
 	va_end(args);
 	cleanup_exit(254);
-}
-
-void
-sshsigdie(const char *file, const char *func, int line, int showfunc,
-    LogLevel level, const char *suffix, const char *fmt, ...)
-{
-	va_list args;
-
-	va_start(args, fmt);
-	sshlogv(file, func, line, showfunc, SYSLOG_LEVEL_FATAL,
-	    suffix, fmt, args);
-	va_end(args);
-	_exit(1);
 }
 
 void

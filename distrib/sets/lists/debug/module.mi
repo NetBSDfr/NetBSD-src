@@ -1,4 +1,5 @@
-# $NetBSD: module.mi,v 1.25 2023/08/27 13:20:09 kardel Exp $
+# $NetBSD: module.mi,v 1.29 2024/11/05 07:58:44 martin Exp $
+#
 ./usr/libdata/debug/@MODULEDIR@					modules-base-kernel	kmod,debug
 ./usr/libdata/debug/@MODULEDIR@/accf_dataready			modules-base-kernel	kmod,debug
 ./usr/libdata/debug/@MODULEDIR@/accf_dataready/accf_dataready.kmod.debug	modules-base-kernel	kmod,debug
@@ -124,6 +125,8 @@
 ./usr/libdata/debug/@MODULEDIR@/dm/dm.kmod.debug			modules-base-kernel	lvm,kmod,debug
 ./usr/libdata/debug/@MODULEDIR@/drvctl				modules-base-kernel	kmod,debug
 ./usr/libdata/debug/@MODULEDIR@/drvctl/drvctl.kmod.debug		modules-base-kernel	kmod,debug
+./usr/libdata/debug/@MODULEDIR@/ds2482ow				modules-base-kernel	kmod,debug
+./usr/libdata/debug/@MODULEDIR@/ds2482ow/ds2482ow.kmod.debug		modules-base-kernel	kmod,debug
 ./usr/libdata/debug/@MODULEDIR@/dtrace				modules-base-kernel	kmod,dtrace,debug
 ./usr/libdata/debug/@MODULEDIR@/dtrace/dtrace.kmod.debug		modules-base-kernel	kmod,dtrace,debug
 ./usr/libdata/debug/@MODULEDIR@/dtrace_fbt				modules-base-kernel	kmod,dtrace,debug
@@ -246,8 +249,8 @@
 ./usr/libdata/debug/@MODULEDIR@/iic/iic.kmod.debug			modules-base-kernel	kmod,debug
 ./usr/libdata/debug/@MODULEDIR@/ip_ecn				modules-base-kernel	kmod,debug
 ./usr/libdata/debug/@MODULEDIR@/ip_ecn/ip_ecn.kmod.debug 		modules-base-kernel	kmod,debug
-./usr/libdata/debug/@MODULEDIR@/ipl				modules-base-kernel	kmod,debug
-./usr/libdata/debug/@MODULEDIR@/ipl/ipl.kmod.debug 			modules-base-kernel	kmod,debug
+./usr/libdata/debug/@MODULEDIR@/ipl				modules-base-kernel	kmod,debug,ipfilter
+./usr/libdata/debug/@MODULEDIR@/ipl/ipl.kmod.debug 			modules-base-kernel	kmod,debug,ipfilter
 ./usr/libdata/debug/@MODULEDIR@/iscsi				modules-base-kernel	kmod,iscsi,debug
 ./usr/libdata/debug/@MODULEDIR@/iscsi/iscsi.kmod.debug			modules-base-kernel	kmod,iscsi,debug
 ./usr/libdata/debug/@MODULEDIR@/kernfs				modules-base-kernel	kmod,debug

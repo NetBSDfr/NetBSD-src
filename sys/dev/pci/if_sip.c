@@ -1,4 +1,4 @@
-/*	$NetBSD: if_sip.c,v 1.191 2024/02/10 09:30:06 andvar Exp $	*/
+/*	$NetBSD: if_sip.c,v 1.193 2024/07/05 04:31:51 rin Exp $	*/
 
 /*-
  * Copyright (c) 2001, 2002 The NetBSD Foundation, Inc.
@@ -73,7 +73,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_sip.c,v 1.191 2024/02/10 09:30:06 andvar Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_sip.c,v 1.193 2024/07/05 04:31:51 rin Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -1638,8 +1638,7 @@ sipcom_start(struct ifnet *ifp)
 			 * packet.
 			 */
 			bus_dmamap_unload(sc->sc_dmat, dmamap);
-			if (m != NULL)
-				m_freem(m);
+			m_freem(m);
 			SIP_EVCNT_INCR(&sc->sc_ev_txdstall);
 			break;
 		}
@@ -2071,9 +2070,9 @@ sipcom_txintr(struct sip_softc *sc)
 		net_stat_ref_t nsr = IF_STAT_GETREF(ifp);
 		if (cmdsts & (CMDSTS_Tx_TXA | CMDSTS_Tx_TFU | CMDSTS_Tx_ED |
 		    CMDSTS_Tx_EC)) {
-			if_statinc_ref(nsr, if_oerrors);
+			if_statinc_ref(ifp, nsr, if_oerrors);
 			if (cmdsts & CMDSTS_Tx_EC)
-				if_statadd_ref(nsr, if_collisions, 16);
+				if_statadd_ref(ifp, nsr, if_collisions, 16);
 			if (ifp->if_flags & IFF_DEBUG) {
 				if (cmdsts & CMDSTS_Tx_ED)
 					printf("%s: excessive deferral\n",
@@ -2084,9 +2083,9 @@ sipcom_txintr(struct sip_softc *sc)
 			}
 		} else {
 			/* Packet was transmitted successfully. */
-			if_statinc_ref(nsr, if_opackets);
+			if_statinc_ref(ifp, nsr, if_opackets);
 			if (CMDSTS_COLLISIONS(cmdsts))
-				if_statadd_ref(nsr, if_collisions,
+				if_statadd_ref(ifp, nsr, if_collisions,
 				    CMDSTS_COLLISIONS(cmdsts));
 		}
 		IF_STAT_PUTREF(ifp);
@@ -2171,8 +2170,7 @@ gsip_rxintr(struct sip_softc *sc)
 			sip_init_rxdesc(sc, i);
 			if (cmdsts & CMDSTS_MORE)
 				sc->sc_rxdiscard = 1;
-			if (sc->sc_rxhead != NULL)
-				m_freem(sc->sc_rxhead);
+			m_freem(sc->sc_rxhead);
 			sip_rxchain_reset(sc);
 			continue;
 		}

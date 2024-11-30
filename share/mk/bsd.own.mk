@@ -1,4 +1,4 @@
-#	$NetBSD: bsd.own.mk,v 1.1383 2024/06/22 23:26:37 mrg Exp $
+#	$NetBSD: bsd.own.mk,v 1.1408 2024/10/23 00:50:47 kalvisd Exp $
 
 # This needs to be before bsd.init.mk
 .if defined(BSD_MK_COMPAT_FILE)
@@ -78,7 +78,11 @@ TOOLCHAIN_MISSING?=	no
 .if \
     ${MACHINE_CPU} == "aarch64" || \
     ${MACHINE_CPU} == "arm" || \
+    ${MACHINE_CPU} == "m68k" || \
+    ${MACHINE_CPU} == "mips" || \
+    ${MACHINE_CPU} == "powerpc" || \
     ${MACHINE_CPU} == "riscv" || \
+    ${MACHINE_CPU} == "sh3" || \
     ${MACHINE_ARCH} == "x86_64" || \
     ${MACHINE_ARCH} == "i386" || \
     ${MACHINE} == "hppa" || \
@@ -113,13 +117,21 @@ MKGCCCMDS?=	no
 .endif	# MKGCC == no							# }
 
 #
+# Build GCC with the "isl" library enabled.
+# The alpha port does not work with it, see GCC PR's 84204 and 84353.
+#
+.if ${MACHINE} == "alpha"
+NOGCCISL=	# defined
+.endif
+
+#
 # What binutils is used?
 #
-HAVE_BINUTILS?=	239
+HAVE_BINUTILS?= 242
 
-.if ${HAVE_BINUTILS} == 239
+.if ${HAVE_BINUTILS} == 242
 EXTERNAL_BINUTILS_SUBDIR=	binutils
-.elif ${HAVE_BINUTILS} == 234
+.elif ${HAVE_BINUTILS} == 239
 EXTERNAL_BINUTILS_SUBDIR=	binutils.old
 .else
 EXTERNAL_BINUTILS_SUBDIR=	/does/not/exist
@@ -128,15 +140,20 @@ EXTERNAL_BINUTILS_SUBDIR=	/does/not/exist
 #
 # What GDB is used?
 #
-HAVE_GDB?=	1320
+HAVE_GDB?=	1510
 
-.if ${HAVE_GDB} == 1320
+.if ${HAVE_GDB} == 1510
 EXTERNAL_GDB_SUBDIR=		gdb
-.elif ${HAVE_GDB} == 1100
+.elif ${HAVE_GDB} == 1320
 EXTERNAL_GDB_SUBDIR=		gdb.old
 .else
 EXTERNAL_GDB_SUBDIR=		/does/not/exist
 .endif
+
+.if ${MACHINE_ARCH} == "x86_64"
+MKGDBSERVER?=	yes
+.endif
+MKGDBSERVER?=	no
 
 #
 # What OpenSSL is used?
@@ -234,8 +251,18 @@ USE_SSP?=	yes
 #
 .if ${MACHINE_ARCH} == "vax" || ${MACHINE} == "sun2"
 HAVE_JEMALLOC?=		100
+.elif ${MACHINE_ARCH} == "x86_64" || ${MACHINE_ARCH} == "i386"
+HAVE_JEMALLOC?=		530
 .else
 HAVE_JEMALLOC?=		510
+.endif
+
+.if ${HAVE_JEMALLOC} == 530
+EXTERNAL_JEMALLOC_SUBDIR = jemalloc
+.elif ${HAVE_JEMALLOC} == 510 || ${HAVE_JEMALLOC} == 100
+EXTERNAL_JEMALLOC_SUBDIR = jemalloc.old
+.else
+EXTERNAL_JEMALLOC_SUBDIR = /does/not/exist
 .endif
 
 .if empty(.MAKEFLAGS:tW:M*-V .OBJDIR*)
@@ -487,6 +514,7 @@ TOOL_LLVM_TBLGEN=	${TOOLDIR}/bin/${_TOOL_PREFIX}llvm-tblgen
 TOOL_M4=		${TOOLDIR}/bin/${_TOOL_PREFIX}m4
 TOOL_MACPPCFIXCOFF=	${TOOLDIR}/bin/${_TOOL_PREFIX}macppc-fixcoff
 TOOL_MACPPCINSTALLBOOT=	${TOOLDIR}/bin/${_TOOL_PREFIX}macppc_installboot
+TOOL_MACPPCMKBOOTHFS=	${TOOLDIR}/bin/${_TOOL_PREFIX}macppc_mkboothfs
 TOOL_MAKEFS=		${TOOLDIR}/bin/${_TOOL_PREFIX}makefs
 TOOL_MAKEINFO=		${TOOLDIR}/bin/${_TOOL_PREFIX}makeinfo
 TOOL_MAKEKEYS=		${TOOLDIR}/bin/${_TOOL_PREFIX}makekeys
@@ -541,6 +569,7 @@ TOOL_SUNLABEL=		${TOOLDIR}/bin/${_TOOL_PREFIX}sunlabel
 TOOL_TBL=		${TOOLDIR}/bin/${_TOOL_PREFIX}tbl
 TOOL_TIC=		${TOOLDIR}/bin/${_TOOL_PREFIX}tic
 TOOL_UUDECODE=		${TOOLDIR}/bin/${_TOOL_PREFIX}uudecode
+TOOL_VAXMOPCOPY=	${TOOLDIR}/bin/${_TOOL_PREFIX}vax-mopcopy
 TOOL_VGRIND=		${TOOLDIR}/bin/${_TOOL_PREFIX}vgrind -f
 TOOL_VFONTEDPR=		${TOOLDIR}/libexec/${_TOOL_PREFIX}vfontedpr
 TOOL_ZIC=		${TOOLDIR}/bin/${_TOOL_PREFIX}zic
@@ -657,6 +686,7 @@ TOOL_SUNLABEL=		sunlabel
 TOOL_TBL=		tbl
 TOOL_TIC=		tic
 TOOL_UUDECODE=		uudecode
+TOOL_VAXMOPCOPY=	vax-mopcopy
 TOOL_VGRIND=		vgrind -f
 TOOL_VFONTEDPR=		/usr/libexec/vfontedpr
 TOOL_ZIC=		zic
@@ -1354,7 +1384,7 @@ HAVE_XORG_SERVER_VER?=120
 # Newer Mesa does not build with old X server
 # VAX build triggers a gcc internal error
 .if ${HAVE_XORG_SERVER_VER} != "120" || ${MACHINE} == "vax"
-HAVE_MESA_VER=19
+HAVE_MESA_VER?=19
 .endif
 
 HAVE_MESA_VER?=	21
@@ -1590,7 +1620,7 @@ OBJECT_FMTS=
 OBJECT_FMTS+=	elf32
 .endif
 .if	${MACHINE_ARCH} == "alpha" || ${MACHINE_ARCH:M*64*} != ""
-. if !(${MKCOMPAT:Uyes} == "no" && ${MACHINE_CPU} == "mips")
+. if !(${MKCOMPAT:Uyes} == "no" && ${MACHINE_ARCH:Mmips64*} != "")
 OBJECT_FMTS+=	elf64
 . endif
 .endif
@@ -1748,7 +1778,10 @@ HAVE_XORG_GLAMOR?=	no
 	font-bitstream-100dpi font-bitstream-75dpi font-bitstream-type1 \
 	font-cursor-misc font-daewoo-misc font-dec-misc font-ibm-type1 \
 	font-isas-misc font-jis-misc font-misc-misc font-mutt-misc \
-	font-sony-misc font-util ttf-bitstream-vera encodings
+	font-sony-misc font-util ttf-bitstream-vera encodings \
+	font-arabic-misc font-micro-misc font-schumacher-misc \
+	font-sun-misc font-cronyx-cyrillic font-misc-cyrillic \
+	font-screen-cyrillic font-winitzki-cyrillic font-xfree86-type1
 X11SRCDIR.${_dir}?=		${X11SRCDIRMIT}/${_dir}/dist
 .endfor
 
@@ -1771,8 +1804,8 @@ EXTRA_DRIVERS=	modesetting
 .for _v in \
 	ag10e amdgpu apm ark ast ati ati-kms chips cirrus crime \
 	geode glint i128 i740 igs imstt intel intel-old intel-2014 \
-	${EXTRA_DRIVERS} mach64 mga \
-	neomagic newport nouveau nsc nv openchrome pnozz \
+	${EXTRA_DRIVERS} mach64 mga mgx \
+	neomagic newport ngle nouveau nsc nv openchrome pnozz \
 	r128 rendition \
 	s3 s3virge savage siliconmotion sis suncg14 \
 	suncg6 sunffb sunleo suntcx \

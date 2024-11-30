@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.19 2023/08/01 05:57:54 mrg Exp $
+#	$NetBSD: Makefile,v 1.22 2024/09/29 16:45:29 kalvisd Exp $
 
 MYOBJS=		${G_OBJC_OBJS} ${G_C_AND_OBJC_OBJS} 
 PROG=		cc1obj
@@ -29,32 +29,32 @@ CHECKSUM_OBJS=	${BACKENDOBJ}/libbackend.a \
 # XXX check this out
 # LDFLAGS+=	-rdynamic
 
-.if 0
-COPTS.c-ada-spec.cc+=			-Wno-stack-protector
-COPTS.c-attribs.cc+=			-Wno-stack-protector
-COPTS.c-aux-info.cc+=			-Wno-stack-protector
-COPTS.c-common.cc+=			-Wno-stack-protector
-COPTS.c-cppbuiltin.cc+=			-Wno-stack-protector
-COPTS.c-decl.cc+=			-Wno-stack-protector
-COPTS.c-format.cc+=			-Wno-stack-protector
-COPTS.c-lex.cc+=			-Wno-stack-protector
-COPTS.c-ppoutput.cc+=			-Wno-stack-protector
-COPTS.c-pragma.cc+=			-Wno-stack-protector
-COPTS.c-typeck.cc+=			-Wno-stack-protector
-COPTS.objc-act.cc+=			-Wno-stack-protector
-COPTS.objc-gnu-runtime-abi-01.cc+=	-Wno-stack-protector
-COPTS.objc-next-runtime-abi-01.cc+=	-Wno-stack-protector
-.endif
+COPTS.c-ada-spec.cc+=			-Wno-error=stack-protector
+COPTS.c-attribs.cc+=			-Wno-error=stack-protector
+COPTS.c-aux-info.cc+=			-Wno-error=stack-protector
+COPTS.c-common.cc+=			-Wno-error=stack-protector
+COPTS.c-cppbuiltin.cc+=			-Wno-error=stack-protector
+COPTS.c-decl.cc+=			-Wno-error=stack-protector
+COPTS.c-format.cc+=			-Wno-error=stack-protector
+COPTS.c-lex.cc+=			-Wno-error=stack-protector
+COPTS.c-omp.cc+=			-Wno-error=stack-protector
+COPTS.c-ppoutput.cc+=			-Wno-error=stack-protector
+COPTS.c-pragma.cc+=			-Wno-error=stack-protector
+COPTS.c-pretty-print.cc+=		-Wno-error=stack-protector
+COPTS.c-typeck.cc+=			-Wno-error=stack-protector
+COPTS.objc-act.cc+=			-Wno-error=stack-protector
+COPTS.objc-gnu-runtime-abi-01.cc+=	-Wno-error=stack-protector
+COPTS.objc-next-runtime-abi-01.cc+=	-Wno-error=stack-protector
 
 .if ${MACHINE_ARCH} == "vax" && 0
-COPTS.c-decl.c+=-O0
-COPTS.c-typeck.c+=-O0
-COPTS.c-array-notation.c+=-O0
-COPTS.c-common.c+=-O0
-COPTS.c-ada-spec.c+=-O0
-COPTS.cilk.c+=-O0
-COPTS.c-ubsan.c+=-O0
-COPTS.cc1obj-checksum.c+=-O0
+#COPTS.c-decl.c+=-O0
+#COPTS.c-typeck.c+=-O0
+#COPTS.c-array-notation.c+=-O0
+#COPTS.c-common.c+=-O0
+#COPTS.c-ada-spec.c+=-O0
+#COPTS.cilk.c+=-O0
+#COPTS.c-ubsan.c+=-O0
+#COPTS.cc1obj-checksum.c+=-O0
 .endif
 
 .if ${MACHINE_ARCH} == "mipseb" || ${MACHINE_ARCH} == "mipsel"

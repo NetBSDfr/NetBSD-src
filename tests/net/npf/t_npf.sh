@@ -1,4 +1,4 @@
-# $NetBSD: t_npf.sh,v 1.4 2020/06/01 11:08:57 martin Exp $
+# $NetBSD: t_npf.sh,v 1.7 2024/10/30 11:19:38 riastradh Exp $
 #
 # Copyright (c) 2008, 2010 The NetBSD Foundation, Inc.
 # All rights reserved.

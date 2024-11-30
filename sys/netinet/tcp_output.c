@@ -1,4 +1,4 @@
-/*	$NetBSD: tcp_output.c,v 1.219 2023/09/13 15:54:28 bouyer Exp $	*/
+/*	$NetBSD: tcp_output.c,v 1.222 2024/09/08 09:36:52 rillig Exp $	*/
 
 /*
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
@@ -135,7 +135,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: tcp_output.c,v 1.219 2023/09/13 15:54:28 bouyer Exp $");
+__KERNEL_RCSID(0, "$NetBSD: tcp_output.c,v 1.222 2024/09/08 09:36:52 rillig Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_inet.h"
@@ -402,18 +402,18 @@ tcp_build_datapkt(struct tcpcb *tp, struct socket *so, int off,
     long len, int hdrlen, struct mbuf **mp)
 {
 	struct mbuf *m, *m0;
-	uint64_t *tcps;
+	net_stat_ref_t tcps;
 
 	tcps = TCP_STAT_GETREF();
 	if (tp->t_force && len == 1)
-		tcps[TCP_STAT_SNDPROBE]++;
+		_NET_STATINC_REF(tcps, TCP_STAT_SNDPROBE);
 	else if (SEQ_LT(tp->snd_nxt, tp->snd_max)) {
 		tp->t_sndrexmitpack++;
-		tcps[TCP_STAT_SNDREXMITPACK]++;
-		tcps[TCP_STAT_SNDREXMITBYTE] += len;
+		_NET_STATINC_REF(tcps, TCP_STAT_SNDREXMITPACK);
+		_NET_STATADD_REF(tcps, TCP_STAT_SNDREXMITBYTE, len);
 	} else {
-		tcps[TCP_STAT_SNDPACK]++;
-		tcps[TCP_STAT_SNDBYTE] += len;
+		_NET_STATINC_REF(tcps, TCP_STAT_SNDPACK);
+		_NET_STATADD_REF(tcps, TCP_STAT_SNDBYTE, len);
 	}
 	TCP_STAT_PUTREF();
 
@@ -534,7 +534,7 @@ tcp_output(struct tcpcb *tp)
 #ifdef TCP_SIGNATURE
 	int sigoff = 0;
 #endif
-	uint64_t *tcps;
+	net_stat_ref_t tcps;
 
 	so = tp->t_inpcb->inp_socket;
 	ro = &tp->t_inpcb->inp_route;
@@ -867,7 +867,7 @@ again:
 	 * scaling has the drawback of growing the send buffer beyond
 	 * what is strictly necessary to make full use of a given
 	 * delay*bandwidth product.  However testing has shown this not
-	 * to be much of an problem.  At worst we are trading wasting
+	 * to be much of a problem.  At worst we are trading wasting
 	 * of available bandwidth (the non-use of it) for wasting some
 	 * socket buffer memory.
 	 *
@@ -1245,13 +1245,13 @@ reset:			TCP_REASS_UNLOCK(tp);
 	} else {
 		tcps = TCP_STAT_GETREF();
 		if (tp->t_flags & TF_ACKNOW)
-			tcps[TCP_STAT_SNDACKS]++;
+			_NET_STATINC_REF(tcps, TCP_STAT_SNDACKS);
 		else if (flags & (TH_SYN|TH_FIN|TH_RST))
-			tcps[TCP_STAT_SNDCTRL]++;
+			_NET_STATINC_REF(tcps, TCP_STAT_SNDCTRL);
 		else if (SEQ_GT(tp->snd_up, tp->snd_una))
-			tcps[TCP_STAT_SNDURG]++;
+			_NET_STATINC_REF(tcps, TCP_STAT_SNDURG);
 		else
-			tcps[TCP_STAT_SNDWINUP]++;
+			_NET_STATINC_REF(tcps, TCP_STAT_SNDWINUP);
 		TCP_STAT_PUTREF();
 
 		MGETHDR(m, M_DONTWAIT, MT_HEADER);
@@ -1405,8 +1405,7 @@ reset:			TCP_REASS_UNLOCK(tp);
 
 		sav = tcp_signature_getsav(m);
 		if (sav == NULL) {
-			if (m)
-				m_freem(m);
+			m_freem(m);
 			return EPERM;
 		}
 
@@ -1633,9 +1632,9 @@ out:
 		tp->t_pmtud_mtu_sent = packetlen;
 
 	tcps = TCP_STAT_GETREF();
-	tcps[TCP_STAT_SNDTOTAL]++;
+	_NET_STATINC_REF(tcps, TCP_STAT_SNDTOTAL);
 	if (tp->t_flags & TF_DELACK)
-		tcps[TCP_STAT_DELACK]++;
+		_NET_STATINC_REF(tcps, TCP_STAT_DELACK);
 	TCP_STAT_PUTREF();
 
 	/*

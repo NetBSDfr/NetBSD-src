@@ -1,4 +1,4 @@
-/*	$NetBSD: elf2aout.c,v 1.23 2019/05/19 09:14:13 wiz Exp $	*/
+/*	$NetBSD: elf2aout.c,v 1.25 2024/11/01 00:35:53 gutteridge Exp $	*/
 
 /*
  * Copyright (c) 1995
@@ -43,6 +43,7 @@
 #endif
 
 #include <sys/types.h>
+#include <sys/endian.h>
 #include <sys/exec_aout.h>
 #include <sys/exec_elf.h>
 
@@ -370,7 +371,7 @@ main(int argc, char **argv)
 
 	/* We now have enough information to cons up an a.out header... */
 	mid = get_mid(&ex);
-	aex.a_midmag = (u_long)htonl(((u_long)symflag << 26)
+	aex.a_midmag = (u_long)htobe32(((u_long)symflag << 26)
 	    | ((u_long)mid << 16) | magic);
 
 	aex.a_text = text.len;

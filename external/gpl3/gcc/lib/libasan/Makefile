@@ -1,4 +1,4 @@
-# $NetBSD: Makefile,v 1.35 2023/08/04 08:58:42 mrg Exp $
+# $NetBSD: Makefile,v 1.37 2024/09/30 00:32:12 kalvisd Exp $
 
 UNSUPPORTED_COMPILER.clang=	# defined
 NOSANITIZER=	# defined
@@ -50,14 +50,6 @@ LIBDPLIBS+= rt ${NETBSDSRCDIR}/lib/librt
 LIBDPLIBS+= m  ${NETBSDSRCDIR}/lib/libm
 LIBDPLIBS+= pthread ${NETBSDSRCDIR}/lib/libpthread
 CPPFLAGS+=-DCAN_SANITIZE_UB=0
-
-.if ${MACHINE_ARCH} == "vax"
-COPTS.asan_allocator.cpp += -O1
-COPTS.asan_report.cpp += -O1
-COPTS.sanitizer_file.cpp += -O1
-COPTS.ubsan_diag.cpp += -O1
-COPTS.ubsan_init.cpp += -O1
-.endif
 
 .if ${MACHINE_ARCH} == "mipsel" || ${MACHINE_ARCH} == "mipseb"
 COPTS.asan_interceptors.cpp += -O1

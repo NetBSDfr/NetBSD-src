@@ -1,4 +1,4 @@
-/*	$NetBSD: smc83c170.c,v 1.97 2024/02/10 09:30:06 andvar Exp $	*/
+/*	$NetBSD: smc83c170.c,v 1.99 2024/09/07 06:17:37 andvar Exp $	*/
 
 /*-
  * Copyright (c) 1998, 1999 The NetBSD Foundation, Inc.
@@ -36,7 +36,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: smc83c170.c,v 1.97 2024/02/10 09:30:06 andvar Exp $");
+__KERNEL_RCSID(0, "$NetBSD: smc83c170.c,v 1.99 2024/09/07 06:17:37 andvar Exp $");
 
 
 #include <sys/param.h>
@@ -760,11 +760,11 @@ epic_intr(void *arg)
 			 */
 			net_stat_ref_t nsr = IF_STAT_GETREF(ifp);
 			if ((txstatus & ET_TXSTAT_PACKETTX) == 0)
-				if_statinc_ref(nsr, if_oerrors);
+				if_statinc_ref(ifp, nsr, if_oerrors);
 			else
-				if_statinc_ref(nsr, if_opackets);
+				if_statinc_ref(ifp, nsr, if_opackets);
 			if (TXSTAT_COLLISIONS(txstatus))
-				if_statadd_ref(nsr, if_collisions,
+				if_statadd_ref(ifp, nsr, if_collisions,
 				    TXSTAT_COLLISIONS(txstatus));
 			if (txstatus & ET_TXSTAT_CARSENSELOST)
 				printf("%s: lost carrier\n",
@@ -1400,7 +1400,7 @@ epic_statchg(struct ifnet *ifp)
 		txcon &= ~(TXCON_LOOPBACK_D1 | TXCON_LOOPBACK_D2);
 	bus_space_write_4(sc->sc_st, sc->sc_sh, EPIC_TXCON, txcon);
 
-	/* On some cards we need manualy set fullduplex led */
+	/* On some cards we need manually set fullduplex led */
 	if (sc->sc_hwflags & EPIC_DUPLEXLED_ON_694) {
 		miicfg = bus_space_read_4(sc->sc_st, sc->sc_sh, EPIC_MIICFG);
 		if (IFM_OPTIONS(sc->sc_mii.mii_media_active) & IFM_FDX)

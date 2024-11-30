@@ -1,4 +1,4 @@
-/*	$NetBSD: varsyntax_calc1.tab.h,v 1.1.1.3 2016/01/09 21:59:45 christos Exp $	*/
+/*	$NetBSD: varsyntax_calc1.tab.h,v 1.2 2024/09/14 21:29:05 christos Exp $	*/
 
 #define DREG 257
 #define VREG 258
@@ -10,7 +10,7 @@
 #endif
 #ifndef YYSTYPE_IS_DECLARED
 #define YYSTYPE_IS_DECLARED 1
-typedef union
+typedef union YYSTYPE
 {
 	int ival;	/* dreg & vreg array index values*/
 	double dval;	/* floating point values*/

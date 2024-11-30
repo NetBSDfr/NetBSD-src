@@ -1,4 +1,4 @@
-#	$NetBSD: Makefile,v 1.9 2022/12/23 17:09:51 christos Exp $
+#	$NetBSD: Makefile,v 1.11 2024/06/30 16:14:19 christos Exp $
 
 CPPFLAGS+=	-I${.CURDIR}/arch/${BINUTILS_MACHINE_ARCH} \
 		-I${DIST}/ld \
@@ -8,9 +8,9 @@ CPPFLAGS+=	-I${.CURDIR}/arch/${BINUTILS_MACHINE_ARCH} \
 		-DBINDIR=\"/usr/bin\" \
 		-DTOOLBINDIR=\"/usr/bin\" \
 		-DENABLE_PLUGINS \
-		-DELF_LIST_OPTIONS=TRUE \
-		-DELF_SHLIB_LIST_OPTIONS=TRUE \
-		-DELF_PLT_UNWIND_LIST_OPTIONS=TRUE
+		-DELF_LIST_OPTIONS=true \
+		-DELF_SHLIB_LIST_OPTIONS=true \
+		-DELF_PLT_UNWIND_LIST_OPTIONS=true
 
 .include "${.CURDIR}/../common/Makefile.inc"
 .include "${.CURDIR}/arch/${BINUTILS_MACHINE_ARCH}/defs.mk"
@@ -47,7 +47,8 @@ ${PROG}.info: configdoc.texi bfdver.texi
 
 .depend.${f}: ${f}.sh
 	${_MKTARGET_CREATE}
-	(srcdir=${DIST}/ld EMULATION_NAME=$f . ${>:M*.sh} && \
+	(alias source_sh=.; \
+	 srcdir=${DIST}/ld EMULATION_NAME=$f . ${>:M*.sh} && \
 		if [ x"$$TEMPLATE_NAME" != x ]; then \
 			temp_name=$$TEMPLATE_NAME.em; \
 		else \
@@ -82,6 +83,13 @@ e${f}.c: ${DIST}/ld/genscripts.sh ${.CURDIR}/Makefile stringify.sed
     !empty(BINUTILS_MACHINE_ARCH:Mmips64*) || \
     !empty(BINUTILS_MACHINE_ARCH:Mmipsn64*)
 .  for e in x xbn xc xd xdc xdw xn xr xs xsc xsw xu xw
+.   if exists(ldscripts/${f}.${e})
+FILES+= ${f}.${e}
+.   endif
+.  endfor
+. endif
+. if ${BINUTILS_MACHINE_ARCH} == "x86_64"
+.  for e in xce xdce xde xdwe xe xsce xse xswe xwe
 .   if exists(ldscripts/${f}.${e})
 FILES+= ${f}.${e}
 .   endif

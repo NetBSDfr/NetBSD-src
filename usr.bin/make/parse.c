@@ -1,4 +1,4 @@
-/*	$NetBSD: parse.c,v 1.731 2024/06/15 19:43:56 rillig Exp $	*/
+/*	$NetBSD: parse.c,v 1.736 2024/10/31 09:12:13 rillig Exp $	*/
 
 /*
  * Copyright (c) 1988, 1989, 1990, 1993
@@ -105,7 +105,7 @@
 #include "pathnames.h"
 
 /*	"@(#)parse.c	8.3 (Berkeley) 3/19/94"	*/
-MAKE_RCSID("$NetBSD: parse.c,v 1.731 2024/06/15 19:43:56 rillig Exp $");
+MAKE_RCSID("$NetBSD: parse.c,v 1.736 2024/10/31 09:12:13 rillig Exp $");
 
 /* Detects a multiple-inclusion guard in a makefile. */
 typedef enum {
@@ -231,7 +231,7 @@ static StringList targCmds = LST_INIT;
  */
 static GNode *order_pred;
 
-static int parseErrors;
+int parseErrors;
 
 /*
  * The include chain of makefiles.  At index 0 is the top-level makefile from
@@ -395,6 +395,8 @@ PrintStackTrace(bool includingInnermost)
 	const IncludedFile *entries;
 	size_t i, n;
 
+	EvalStack_PrintDetails();
+
 	n = includes.len;
 	if (n == 0)
 		return;
@@ -424,6 +426,8 @@ PrintStackTrace(bool includingInnermost)
 		} else
 			debug_printf("\tin %s:%u\n", fname, entry->lineno);
 	}
+	if (makelevel > 0)
+		debug_printf("\tin directory %s\n", curdir);
 }
 
 /* Check if the current character is escaped on the current line. */
@@ -523,7 +527,6 @@ ParseVErrorInternal(FILE *f, bool useVars, const GNode *gn,
 	PrintLocation(f, useVars, gn);
 	if (level == PARSE_WARNING)
 		(void)fprintf(f, "warning: ");
-	fprintf(f, "%s", EvalStack_Details());
 	(void)vfprintf(f, fmt, ap);
 	(void)fprintf(f, "\n");
 	(void)fflush(f);
@@ -538,7 +541,7 @@ ParseVErrorInternal(FILE *f, bool useVars, const GNode *gn,
 		parseErrors++;
 	}
 
-	if (DEBUG(PARSE))
+	if (level == PARSE_FATAL || DEBUG(PARSE))
 		PrintStackTrace(false);
 }
 
@@ -2614,7 +2617,8 @@ ReadHighLevelLine(void)
 		if (line == NULL)
 			return NULL;
 
-		DEBUG2(PARSE, "Parsing line %u: %s\n", curFile->lineno, line);
+		DEBUG3(PARSE, "Parsing %s:%u: %s\n",
+		    curFile->name.str, curFile->lineno, line);
 		if (curFile->guardState != GS_NO
 		    && ((curFile->guardState == GS_START && line[0] != '.')
 			|| curFile->guardState == GS_DONE))
@@ -2972,11 +2976,11 @@ Parse_Init(void)
 	HashTable_Init(&guards);
 }
 
+#ifdef CLEANUP
 /* Clean up the parsing module. */
 void
 Parse_End(void)
 {
-#ifdef CLEANUP
 	HashIter hi;
 
 	Lst_DoneFree(&targCmds);
@@ -2993,8 +2997,8 @@ Parse_End(void)
 		free(guard);
 	}
 	HashTable_Done(&guards);
-#endif
 }
+#endif
 
 
 /* Populate the list with the single main target to create, or error out. */
@@ -3009,10 +3013,4 @@ Parse_MainName(GNodeList *mainList)
 		Lst_AppendAll(mainList, &mainNode->cohorts);
 
 	Global_Append(".TARGETS", mainNode->name);
-}
-
-int
-Parse_NumErrors(void)
-{
-	return parseErrors;
 }

@@ -1,4 +1,4 @@
-/*	$NetBSD: if_igc.c,v 1.14 2024/06/12 06:21:37 rin Exp $	*/
+/*	$NetBSD: if_igc.c,v 1.17 2024/11/24 11:07:03 mlelstv Exp $	*/
 /*	$OpenBSD: if_igc.c,v 1.13 2023/04/28 10:18:57 bluhm Exp $	*/
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
@@ -30,7 +30,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_igc.c,v 1.14 2024/06/12 06:21:37 rin Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_igc.c,v 1.17 2024/11/24 11:07:03 mlelstv Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_if_igc.h"
@@ -1713,7 +1713,7 @@ igc_tx_common_locked(struct ifnet *ifp, struct tx_ring *txr, int caller)
 			if (caller == IGC_TX_TRANSMIT)
 				IGC_QUEUE_EVENT(q, tx_pcq_drop, 1);
 			m_freem(m);
-			if_statinc_ref(nsr, if_oerrors);
+			if_statinc_ref(ifp, nsr, if_oerrors);
 			continue;
 		}
 
@@ -1757,9 +1757,9 @@ igc_tx_common_locked(struct ifnet *ifp, struct tx_ring *txr, int caller)
 
 		bpf_mtap(ifp, m, BPF_D_OUT);
 
-		if_statadd_ref(nsr, if_obytes, m->m_pkthdr.len);
+		if_statadd_ref(ifp, nsr, if_obytes, m->m_pkthdr.len);
 		if (m->m_flags & M_MCAST)
-			if_statinc_ref(nsr, if_omcasts);
+			if_statinc_ref(ifp, nsr, if_omcasts);
 		IGC_QUEUE_EVENT(q, tx_packets, 1);
 		IGC_QUEUE_EVENT(q, tx_bytes, m->m_pkthdr.len);
 
@@ -2140,10 +2140,8 @@ igc_rxeof(struct rx_ring *rxr, u_int limit)
 		    BUS_DMASYNC_PREREAD | BUS_DMASYNC_PREWRITE);
 
 		if (__predict_false(staterr & IGC_RXDEXT_STATERR_RXE)) {
-			if (rxbuf->fmp) {
-				m_freem(rxbuf->fmp);
-				rxbuf->fmp = NULL;
-			}
+			m_freem(rxbuf->fmp);
+			rxbuf->fmp = NULL;
 
 			m_freem(mp);
 			m = NULL;
@@ -2598,6 +2596,7 @@ igc_get_buf(struct rx_ring *rxr, int id, bool strict)
 		IGC_QUEUE_EVENT(q, rx_no_mbuf, 1);
 		return ENOBUFS;
 	}
+	MCLAIM(m, &sc->sc_ec.ec_rx_mowner);
 
 	MCLGET(m, M_DONTWAIT);
 	if (__predict_false(!(m->m_flags & M_EXT))) {
@@ -3148,10 +3147,8 @@ igc_withdraw_transmit_packets(struct tx_ring *txr, bool destroy)
 			    0, map->dm_mapsize, BUS_DMASYNC_POSTWRITE);
 			bus_dmamap_unload(txr->txdma.dma_tag, map);
 		}
-		if (txbuf->m_head != NULL) {
-			m_freem(txbuf->m_head);
-			txbuf->m_head = NULL;
-		}
+		m_freem(txbuf->m_head);
+		txbuf->m_head = NULL;
 		if (map != NULL && destroy) {
 			bus_dmamap_destroy(txr->txdma.dma_tag, map);
 			txbuf->map = NULL;

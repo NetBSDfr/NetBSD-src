@@ -1,4 +1,4 @@
-/*	$NetBSD: rtl8169.c,v 1.175 2022/09/25 18:43:32 thorpej Exp $	*/
+/*	$NetBSD: rtl8169.c,v 1.179 2024/08/12 21:27:34 christos Exp $	*/
 
 /*
  * Copyright (c) 1997, 1998-2003
@@ -33,7 +33,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: rtl8169.c,v 1.175 2022/09/25 18:43:32 thorpej Exp $");
+__KERNEL_RCSID(0, "$NetBSD: rtl8169.c,v 1.179 2024/08/12 21:27:34 christos Exp $");
 /* $FreeBSD: /repoman/r/ncvs/src/sys/dev/re/if_re.c,v 1.20 2004/04/11 20:34:08 ru Exp $ */
 
 /*
@@ -588,8 +588,7 @@ re_diag(struct rtk_softc *sc)
 	sc->re_testmode = 0;
 	ifp->if_flags &= ~IFF_PROMISC;
 	re_stop(ifp, 0);
-	if (m0 != NULL)
-		m_freem(m0);
+	m_freem(m0);
 
 	return error;
 }
@@ -670,6 +669,8 @@ re_attach(struct rtk_softc *sc)
 			break;
 		case RTK_HWREV_8168E_VL:
 		case RTK_HWREV_8168F:
+			sc->sc_quirk |= RTKQ_EARLYOFF;
+			/*FALLTHROUGH*/
 		case RTK_HWREV_8411:
 			sc->sc_quirk |= RTKQ_DESCV2 | RTKQ_NOEECMD |
 			    RTKQ_MACSTAT | RTKQ_CMDSTOP | RTKQ_NOJUMBO;
@@ -1180,8 +1181,7 @@ re_newbuf(struct rtk_softc *sc, int idx, struct mbuf *m)
 
 	return 0;
  out:
-	if (n != NULL)
-		m_freem(n);
+	m_freem(n);
 	return ENOMEM;
 }
 
@@ -1471,11 +1471,11 @@ re_txeof(struct rtk_softc *sc)
 
 		net_stat_ref_t nsr = IF_STAT_GETREF(ifp);
 		if (txstat & (RE_TDESC_STAT_EXCESSCOL | RE_TDESC_STAT_COLCNT))
-			if_statinc_ref(nsr, if_collisions);
+			if_statinc_ref(ifp, nsr, if_collisions);
 		if (txstat & RE_TDESC_STAT_TXERRSUM)
-			if_statinc_ref(nsr, if_oerrors);
+			if_statinc_ref(ifp, nsr, if_oerrors);
 		else
-			if_statinc_ref(nsr, if_opackets);
+			if_statinc_ref(ifp, nsr, if_opackets);
 		IF_STAT_PUTREF(ifp);
 	}
 
@@ -1971,6 +1971,10 @@ re_init(struct ifnet *ifp)
 	/* Set the individual bit to receive frames for this host only. */
 	rxcfg = CSR_READ_4(sc, RTK_RXCFG);
 	rxcfg |= RTK_RXCFG_RX_INDIV;
+	if (sc->sc_quirk & RTKQ_EARLYOFF)
+		rxcfg |= RTK_RXCFG_EARLYOFF;
+	else if (sc->sc_quirk & RTKQ_RXDV_GATED)
+		rxcfg |= RTK_RXCFG_EARLYOFFV2;
 
 	/* If we want promiscuous mode, set the allframes bit. */
 	if (ifp->if_flags & IFF_PROMISC)
@@ -2174,6 +2178,21 @@ re_stop(struct ifnet *ifp, int disable)
 	callout_stop(&sc->rtk_tick_ch);
 
 	mii_down(&sc->mii);
+
+	/*
+	 * Disable accepting frames to put RX MAC into idle state.
+	 * Otherwise it's possible to get frames while stop command
+	 * execution is in progress and controller can DMA the frame
+	 * to already freed RX buffer during that period.
+	 */
+	CSR_WRITE_4(sc, RTK_RXCFG, CSR_READ_4(sc, RTK_RXCFG) &
+	    ~(RTK_RXCFG_RX_ALLPHYS | RTK_RXCFG_RX_INDIV | RTK_RXCFG_RX_MULTI |
+	    RTK_RXCFG_RX_BROAD));
+
+	if (sc->sc_quirk & RTKQ_RXDV_GATED) {
+		CSR_WRITE_4(sc, RTK_MISC,
+		    CSR_READ_4(sc, RTK_MISC) | RTK_MISC_RXDV_GATED_EN);
+	}
 
 	if ((sc->sc_quirk & RTKQ_CMDSTOP) != 0)
 		CSR_WRITE_1(sc, RTK_COMMAND, RTK_CMD_STOPREQ | RTK_CMD_TX_ENB |

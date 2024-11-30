@@ -1,4 +1,4 @@
-/*	$NetBSD: nd6_nbr.c,v 1.183 2023/03/29 13:01:44 kardel Exp $	*/
+/*	$NetBSD: nd6_nbr.c,v 1.185 2024/11/13 09:25:52 roy Exp $	*/
 /*	$KAME: nd6_nbr.c,v 1.61 2001/02/10 16:06:14 jinmei Exp $	*/
 
 /*
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: nd6_nbr.c,v 1.183 2023/03/29 13:01:44 kardel Exp $");
+__KERNEL_RCSID(0, "$NetBSD: nd6_nbr.c,v 1.185 2024/11/13 09:25:52 roy Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_inet.h"
@@ -685,7 +685,8 @@ nd6_na_input(struct mbuf *m, int off, int icmp6len)
 
 		if (lladdr && ((ifp->if_addrlen + 2 + 7) & ~7) != lladdrlen) {
 			nd6log(LOG_INFO, "lladdrlen mismatch for %s "
-			    "(if %d, NA packet %d)\n", IN6_PRINT(ip6buf, &taddr6),
+			    "(if %d, NA packet %d)\n",
+			    IN6_PRINT(ip6buf, &taddr6),
 			    ifp->if_addrlen, lladdrlen - 2);
 			goto bad;
 		}

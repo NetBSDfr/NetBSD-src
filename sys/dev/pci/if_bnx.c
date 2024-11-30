@@ -1,4 +1,4 @@
-/*	$NetBSD: if_bnx.c,v 1.114 2024/04/23 15:34:07 hans Exp $	*/
+/*	$NetBSD: if_bnx.c,v 1.116 2024/11/10 11:44:23 mlelstv Exp $	*/
 /*	$OpenBSD: if_bnx.c,v 1.101 2013/03/28 17:21:44 brad Exp $	*/
 
 /*-
@@ -35,7 +35,7 @@
 #if 0
 __FBSDID("$FreeBSD: src/sys/dev/bce/if_bce.c,v 1.3 2006/04/13 14:12:26 ru Exp $");
 #endif
-__KERNEL_RCSID(0, "$NetBSD: if_bnx.c,v 1.114 2024/04/23 15:34:07 hans Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_bnx.c,v 1.116 2024/11/10 11:44:23 mlelstv Exp $");
 
 /*
  * The following controllers are supported by this driver:
@@ -4023,6 +4023,7 @@ bnx_get_buf(struct bnx_softc *sc, uint16_t *prod,
 			rc = ENOBUFS;
 			goto bnx_get_buf_exit;
 		}
+		MCLAIM(m_new, &sc->bnx_ec.ec_rx_mowner);
 
 		DBRUNIF(1, sc->rx_mbuf_alloc++);
 
@@ -5680,7 +5681,8 @@ bnx_stats_update(struct bnx_softc *sc)
 	 * hardware statistics.
 	 */
 	value = (u_long)stats->stat_EtherStatsCollisions;
-	if_statadd_ref(nsr, if_collisions, value - sc->if_stat_collisions);
+	if_statadd_ref(ifp, nsr, if_collisions,
+	    value - sc->if_stat_collisions);
 	sc->if_stat_collisions = value;
 
 	value = (u_long)stats->stat_EtherStatsUndersizePkts +
@@ -5688,14 +5690,14 @@ bnx_stats_update(struct bnx_softc *sc)
 	    (u_long)stats->stat_IfInMBUFDiscards +
 	    (u_long)stats->stat_Dot3StatsAlignmentErrors +
 	    (u_long)stats->stat_Dot3StatsFCSErrors;
-	if_statadd_ref(nsr, if_ierrors, value - sc->if_stat_ierrors);
+	if_statadd_ref(ifp, nsr, if_ierrors, value - sc->if_stat_ierrors);
 	sc->if_stat_ierrors = value;
 
 	value = (u_long)
 	    stats->stat_emac_tx_stat_dot3statsinternalmactransmiterrors +
 	    (u_long)stats->stat_Dot3StatsExcessiveCollisions +
 	    (u_long)stats->stat_Dot3StatsLateCollisions;
-	if_statadd_ref(nsr, if_oerrors, value - sc->if_stat_oerrors);
+	if_statadd_ref(ifp, nsr, if_oerrors, value - sc->if_stat_oerrors);
 	sc->if_stat_oerrors = value;
 
 	/*
@@ -5705,7 +5707,7 @@ bnx_stats_update(struct bnx_softc *sc)
 	 */
 	if (!(BNX_CHIP_NUM(sc) == BNX_CHIP_NUM_5706) &&
 	    !(BNX_CHIP_ID(sc) == BNX_CHIP_ID_5708_A0)) {
-		if_statadd_ref(nsr, if_oerrors,
+		if_statadd_ref(ifp, nsr, if_oerrors,
 		    (u_long) stats->stat_Dot3StatsCarrierSenseErrors);
 	}
 

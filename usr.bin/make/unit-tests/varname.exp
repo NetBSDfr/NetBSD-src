@@ -5,7 +5,7 @@ Var_Parse: ${VARNAME} (eval)
 Global: VAR((( = 3 open parentheses
 Var_Parse: ${VAR(((}}}}" != "3 open parentheses}}}" (eval)
 Global: .ALLTARGETS =  VAR(((=)
-make: "varname.mk" line 32: No closing parenthesis in archive specification
+make: "varname.mk" line 32: Missing ')' in archive specification
 make: "varname.mk" line 32: Error in archive specification: "VAR"
 Var_Parse: ${:UVAR\(\(\(}=	try2 (eval-defined)
 Evaluating modifier ${:U...} on value "" (eval-defined, undefined)
@@ -17,5 +17,5 @@ Global: VAR((( = try3
 Global: .MAKEFLAGS =  -r -k -d v -d
 Global: .MAKEFLAGS =  -r -k -d v -d 0
 make: Fatal errors encountered -- cannot continue
-make: stopped in unit-tests
+make: stopped making "all" in unit-tests
 exit status 1

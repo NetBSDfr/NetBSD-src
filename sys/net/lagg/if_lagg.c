@@ -1,4 +1,4 @@
-/*	$NetBSD: if_lagg.c,v 1.70 2024/04/05 06:48:22 yamaguchi Exp $	*/
+/*	$NetBSD: if_lagg.c,v 1.72 2024/07/05 04:31:53 rin Exp $	*/
 
 /*
  * Copyright (c) 2005, 2006 Reyk Floeter <reyk@openbsd.org>
@@ -20,7 +20,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: if_lagg.c,v 1.70 2024/04/05 06:48:22 yamaguchi Exp $");
+__KERNEL_RCSID(0, "$NetBSD: if_lagg.c,v 1.72 2024/07/05 04:31:53 rin Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_inet.h"
@@ -1069,9 +1069,7 @@ lagg_output(struct lagg_softc *sc, struct lagg_port *lp, struct mbuf *m)
 
 	error = pfil_run_hooks(ifp->if_pfil, &m, ifp, PFIL_OUT);
 	if (error != 0) {
-		if (m != NULL) {
-			m_freem(m);
-		}
+		m_freem(m);
 		return;
 	}
 	bpf_mtap(ifp, m, BPF_D_OUT);
@@ -1082,10 +1080,10 @@ lagg_output(struct lagg_softc *sc, struct lagg_port *lp, struct mbuf *m)
 		if_statinc(ifp, if_oerrors);
 	} else {
 		net_stat_ref_t nsr = IF_STAT_GETREF(ifp);
-		if_statinc_ref(nsr, if_opackets);
-		if_statadd_ref(nsr, if_obytes, len);
+		if_statinc_ref(ifp, nsr, if_opackets);
+		if_statadd_ref(ifp, nsr, if_obytes, len);
 		if (mflags & M_MCAST)
-			if_statinc_ref(nsr, if_omcasts);
+			if_statinc_ref(ifp, nsr, if_omcasts);
 		IF_STAT_PUTREF(ifp);
 	}
 }
@@ -1180,10 +1178,8 @@ lagg_input_ethernet(struct ifnet *ifp_port, struct mbuf *m)
 
 	if (pfil_run_hooks(ifp_port->if_pfil, &m,
 	    ifp_port, PFIL_IN) != 0) {
-		if (m != NULL) {
-			m_freem(m);
-			m = NULL;
-		}
+		m_freem(m);
+		m = NULL;
 		goto out;
 	}
 
