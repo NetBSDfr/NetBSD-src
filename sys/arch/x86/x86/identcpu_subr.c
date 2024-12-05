@@ -74,7 +74,11 @@ tsc_freq_cpuid_vm(struct cpu_info *ci)
 	x86_cpuid(0x40000010, descs);
 
 	freq = descs[0];
-	if (freq == 0)
+	/*
+	 * on NVMM, some CPUs reply with erroneous frequencies.
+	 * Assume anything < 10MHz to be bogus.
+	 * */
+	if (freq == 0 || freq < 10000)
 		return 0;
 
 	aprint_verbose(
