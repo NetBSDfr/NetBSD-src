@@ -51,6 +51,7 @@ __KERNEL_RCSID(0, "$NetBSD: identcpu_subr.c,v 1.9 2021/10/07 13:04:18 msaitoh Ex
 #include <machine/cpufunc.h>
 #include <machine/cputypes.h>
 #include <machine/specialreg.h>
+#include <x86/x86/hypervreg.h>
 #else
 #include <stdarg.h>
 #include <stdbool.h>
@@ -306,6 +307,9 @@ cpu_tsc_freq_cpuid(struct cpu_info *ci)
 	/* Try AMD MSR's */
 	if (freq == 0 && cpu_vendor == CPUVENDOR_AMD)
 		freq = tsc_freq_amd_msr(ci);
+	/* HyperV */
+	if (freq == 0 && vm_guest == VM_GUEST_HV)
+		freq = rdmsr(MSR_HV_TSC_FREQUENCY);
 	/* VMware compatible tsc query */
 	if (freq == 0 && vm_guest != VM_GUEST_NO)
 		freq = tsc_freq_cpuid_vm(ci);
