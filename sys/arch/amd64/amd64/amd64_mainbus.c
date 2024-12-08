@@ -245,9 +245,18 @@ amd64_mainbus_attach(device_t parent, device_t self, void *aux)
 #endif
 
 #if NPVBUS > 0
-	mba.mba_pvba.pvba_busname = "pvbus";
-	config_found(self, &mba.mba_pvba.pvba_busname, NULL,
-		CFARGS(.iattr = "pvbus"));
+	/* add here more VM guests types that would benefit from a pv bus */
+	switch(vm_guest) {
+	/* FALLTHROUGH */
+	case VM_GUEST_GENPVH:
+	case VM_GUEST_KVM:
+		mba.mba_pvba.pvba_busname = "pvbus";
+		config_found(self, &mba.mba_pvba.pvba_busname, NULL,
+			CFARGS(.iattr = "pvbus"));
+		break;
+	default:
+		break;
+	}
 #endif
 
 	if (!pmf_device_register(self, NULL, NULL))
