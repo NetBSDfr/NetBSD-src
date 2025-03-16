@@ -540,7 +540,7 @@ void
 cpu_bootconf(void)
 {
 #ifdef XEN
-	if (vm_guest == VM_GUEST_XENPVH) {
+	if (vm_guest_is_pvh()) {
 		xen_bootconf();
 		return;
 	}

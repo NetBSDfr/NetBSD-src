@@ -514,6 +514,7 @@ typedef enum vm_guest {
 	VM_GUEST_VMWARE,
 	VM_GUEST_KVM,
 	VM_GUEST_VIRTUALBOX,
+	VM_GUEST_GENPVH,
 	VM_LAST
 } vm_guest_t;
 extern vm_guest_t vm_guest;
@@ -537,6 +538,18 @@ vm_guest_is_xenpvh_or_pvhvm(void)
 	switch(vm_guest) {
 	case VM_GUEST_XENPVH:
 	case VM_GUEST_XENPVHVM:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static __inline bool __unused
+vm_guest_is_pvh(void)
+{
+	switch(vm_guest) {
+	case VM_GUEST_XENPVH:
+	case VM_GUEST_GENPVH:
 		return true;
 	default:
 		return false;

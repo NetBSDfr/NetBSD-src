@@ -913,7 +913,7 @@ init_x86_clusters(void)
 	 * the boot program).
 	 */
 #ifdef XEN
-	if (vm_guest == VM_GUEST_XENPVH) {
+	if (vm_guest_is_pvh()) {
 		x86_add_xen_clusters();
 	}
 #endif /* XEN */
