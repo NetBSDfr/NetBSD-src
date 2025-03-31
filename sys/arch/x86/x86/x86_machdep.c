@@ -215,6 +215,60 @@ mm_md_physacc(paddr_t pa, vm_prot_t prot)
 }
 
 #ifdef MODULAR
+#ifdef XEN
+void x86_add_xen_modules(void);
+void x86_add_xen_modules(void)
+{
+#if defined(XENPVHVM) || defined(XENPVH)
+	uint32_t i;
+	struct hvm_modlist_entry *modlist;
+
+	if (hvm_start_info->nr_modules == 0) {
+		aprint_verbose("No Xen module info at boot\n");
+		return;
+	}
+	modlist = (void *)((uintptr_t)hvm_start_info->modlist_paddr + KERNBASE);
+	for (i = 0; i < hvm_start_info->nr_modules; i++) {
+		if (memcmp(
+			    (char *)((uintptr_t)modlist[i].paddr + KERNBASE),
+			    "\177ELF", 4) == 0) {
+			aprint_debug("Prep module path=%s len=%lu pa=%p\n",
+			    "pvh-module",
+			    modlist[i].size,
+			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE));
+			module_prime(
+			    "pvh-module",
+			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE),
+			    modlist[i].size);
+#ifdef SPLASHSCREEN
+		} else if (memcmp(
+			    (char *)((uintptr_t)modlist[i].paddr + KERNBASE),
+			    "\211PNG\r\n\032\n", 8) == 0 ||
+			   memcmp(
+			    (char *)((uintptr_t)modlist[i].paddr + KERNBASE),
+			    "\377\330\377", 3) == 0) {
+			aprint_debug("Splash image path=%s len=%lu pa=%p\n",
+			    "pvh-image", modlist[i].size,
+			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE));
+			splash_setimage(
+			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE),
+			    modlist[i].size);
+#endif
+#if defined(MEMORY_DISK_HOOKS) && defined(MEMORY_DISK_DYNAMIC)
+		} else {
+			aprint_debug("File-system image path=%s len=%lu pa=%p\n",
+			    "pvh-filesystem",
+			    modlist[i].size,
+			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE));
+			md_root_setconf(
+			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE),
+			    modlist[i].size);
+#endif
+		}
+	}
+#endif
+}
+#endif	/* XEN */
 /*
  * Push any modules loaded by the boot loader.
  */
@@ -223,6 +277,14 @@ module_init_md(void)
 {
 	struct btinfo_modulelist *biml;
 	struct bi_modulelist_entry *bi, *bimax;
+
+#ifdef XEN
+	if (pvh_boot) {
+#ifdef MODULAR
+		x86_add_xen_modules();
+#endif
+	}
+#endif /* XEN */
 
 	biml = lookup_bootinfo(BTINFO_MODULELIST);
 	if (biml == NULL) {

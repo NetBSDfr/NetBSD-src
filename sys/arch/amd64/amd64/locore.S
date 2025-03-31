@@ -1120,10 +1120,60 @@ ENTRY(start_pvh)
 	shrl $2, %ecx
 	rep movsl
 
-	/* Copy cmdline_paddr after hvm_start_info */
+	/* Copy hvm_modlist_entry[] after hvm_start_info */
+	movl $RELOC(__kernel_end), %ebx
+	movl START_INFO_MODLIST_PADDR(%ebx), %esi
+	movl %edi, START_INFO_MODLIST_PADDR(%ebx)   /* Set new modlist_paddr in hvm_start_info */
+	movl START_INFO_NR_MODULES(%ebx), %eax /* Get nr_modules */
+	movl $HVM_MODLIST_ENTRY_SIZE, %ecx /* ecx = sizeof(hvm_modlist_entry) */
+	mull %ecx			 /* eax * ecx => edx:eax */
+	movl %eax, %ecx
+	shrl $2, %ecx
+	rep movsl
+
+	/* Copy the modules after the hvm_modlist_entry[] */
+	xorl %ecx, %ecx			/* ecx = i = 0 */
+	.modlist_copy:
+	movl $RELOC(__kernel_end), %ebx	/* ebx = &hvm_start_info */
+	movl START_INFO_NR_MODULES(%ebx), %eax /* eax = nr_modules */
+	cmpl %eax, %ecx			/* if (ecx == nr_modules) */
+	je .modlist_copy_done		/*   goto modlist_copy_done */
+	push %ecx
+	/* Copy the module */
+	movl START_INFO_MODLIST_PADDR(%ebx), %ebx /* ebx = &hvm_modlist_entry[0] */
+	movl $HVM_MODLIST_ENTRY_SIZE, %eax /* eax = sizeof(hvm_modlist_entry) */
+	mull %ecx			/* eax *= ecx */
+	addl %eax, %ebx			/* ebx = &hvm_modlist_entry[i] */
+	/* Copy the module's cmdline */
+	movl MODLIST_ENTRY_CMDLINE(%ebx), %esi
+	xorl %eax, %eax
+	movl %eax, MODLIST_ENTRY_CMDLINE(%ebx)
+	cmpl %eax, %esi
+	je .modlist_cmdline_copy_done
+
+	movl %edi, MODLIST_ENTRY_CMDLINE(%ebx)	/* Set new cmdline_paddr in hvm_modlist_entry */
+	.modlist_cmdline_copy:
+	movb (%esi), %al
+	movsb
+	cmp $0, %al
+	jne .modlist_cmdline_copy
+	.modlist_cmdline_copy_done:
+
+	/* Copy the module's content */
+	movl MODLIST_ENTRY_PADDR(%ebx), %esi /* esi = hvm_modlist_entry[i].paddr */
+	movl %edi, MODLIST_ENTRY_PADDR(%ebx) /* Set new paddr in hvm_modlist_entry */
+	movl MODLIST_ENTRY_SIZE(%ebx), %ecx /* ecx = hvm_modlist_entry[i].size */
+	rep movsb
+
+	pop %ecx			/* i++ */
+	inc %ecx
+	jmp .modlist_copy
+	.modlist_copy_done:
+
+	/* Copy cmdline_paddr after the modules */
+	movl $RELOC(__kernel_end), %ebx
 	movl CMDLINE_PADDR(%ebx), %esi
-	movl $RELOC(__kernel_end), %ecx
-	movl %edi, CMDLINE_PADDR(%ecx)	/* Set new cmdline_paddr in hvm_start_info */
+	movl %edi, CMDLINE_PADDR(%ebx)	/* Set new cmdline_paddr in hvm_start_info */
 	.cmdline_copy:
 	movb (%esi), %al
 	movsb
@@ -1150,11 +1200,17 @@ ENTRY(start_pvh)
 	/* announce ourself */
 	movl	$VM_GUEST_GENPVH, RELOC(vm_guest)
 
+	/* determine the amount of data needed */
+	movl	%edi, %edx
+	subl	$RELOC(__kernel_end), %edx
+
 	jmp .save_hvm_start_paddr
 
 .start_xen32:
 	pop %ebx
 	movl	$VM_GUEST_XENPVH, RELOC(vm_guest)
+	/* XXX assume hvm_start_info+dependent structure fits in a single page */
+	movl	$PAGE_SIZE, %edx
 
 .save_hvm_start_paddr:
  	/*
@@ -1177,9 +1233,8 @@ ENTRY(start_pvh)
 	movl	$RELOC(HYPERVISOR_shared_info_pa),%ebp
 	movl	%ebx,(%ebp)
 	movl	$0,4(%ebp)
-	/* XXX assume hvm_start_info+dependant structure fits in a single page */
 .add_hvm_start_info_page:
-	addl	$PAGE_SIZE, %ebx
+	addl	%edx, %ebx
 	addl	$PGOFSET,%ebx
 	andl	$~PGOFSET,%ebx
 	addl	$KERNBASE_LO,%ebx
