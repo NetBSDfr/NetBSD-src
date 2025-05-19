@@ -32,6 +32,7 @@ __KERNEL_RCSID(0, "$NetBSD: consinit.c,v 1.41 2025/04/30 05:15:08 imil Exp $");
 #include "opt_kgdb.h"
 #include "opt_puc.h"
 #include "opt_xen.h"
+#include "opt_viocon.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -102,6 +103,13 @@ __KERNEL_RCSID(0, "$NetBSD: consinit.c,v 1.41 2025/04/30 05:15:08 imil Exp $");
 #ifdef XENPVHVM
 #include <xen/hypervisor.h>
 #include <xen/xen.h>
+#endif
+
+#ifdef VIOCON_CONSOLE
+#include <dev/virtio/virtio_vioconvar.h>
+#include <dev/virtio/virtio_mmiovar.h>
+#include <dev/virtio/arch/x86/virtio_mmio_parse.h>
+#include <uvm/uvm_extern.h> /* for kernel_map */
 #endif
 
 #ifndef CONSDEVNAME
@@ -263,6 +271,22 @@ dokbd:
 			       error);
 		return;
 	}
+#ifdef VIOCON_CONSOLE
+	if (!strcmp(console_devname, "viocon")) {
+		/* We need uvm to be ready before we can map the MMIO region */
+		if (!kernel_map) {
+			initted = 0;
+			return;
+		}
+		/*
+		 * In x86 microvm, mmio device enumeration is done by parsing
+		 * the kernel command line
+		 */
+		enumerate_mmio_devices = mmio_args_parse;
+		if (!viocon_earlyinit())
+			return;
+	}
+#endif
 #if (NCOM > 0)
 	if (!strcmp(console_devname, "com")) {
 		int addr = consinfo->addr;

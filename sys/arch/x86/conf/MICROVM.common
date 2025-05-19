@@ -118,3 +118,5 @@ pseudo-device	drvctl
 
 file-system	PUFFS
 pseudo-device	putter
+
+options		VIOCON_CONSOLE

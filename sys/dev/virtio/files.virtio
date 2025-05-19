@@ -5,6 +5,7 @@ include "dev/pci/files.virtio"
 
 file	dev/virtio/virtio_mmio.c	virtio_mmio
 
+defflag opt_viocon.h	VIOCON_CONSOLE
 device	viocon
 attach	viocon at virtio
 file	dev/virtio/viocon.c		viocon
