@@ -33,8 +33,16 @@ __KERNEL_RCSID(0, "$NetBSD: viocon.c,v 1.10 2024/08/05 19:13:34 riastradh Exp $"
 #include <sys/systm.h>
 #include <sys/tty.h>
 
+#include "opt_viocon.h"
+
+#ifdef VIOCON_CONSOLE
+#include <dev/cons.h>
+#include <uvm/uvm_extern.h>
+#include <dev/virtio/virtio_vioconvar.h>
+#endif
+
 #include <dev/pci/virtioreg.h>
-#include <dev/pci/virtiovar.h>
+#include <dev/virtio/virtio_mmiovar.h>
 
 #include "ioconf.h"
 
@@ -117,6 +125,13 @@ struct viocon_port {
 	uint16_t		 vp_cols;
 	u_char			*vp_rx_buf;
 	u_char			*vp_tx_buf;
+
+#ifdef VIOCON_CONSOLE
+	struct consdev		 vp_cntab;
+	unsigned int		 vp_pollpos;
+	unsigned int		 vp_polllen;
+	bool			 vp_polling;
+#endif
 };
 
 struct viocon_softc {
@@ -153,6 +168,26 @@ void	vioconstop(struct tty *, int);
 int	vioconioctl(dev_t, u_long, void *, int, struct lwp *);
 struct tty	*viocontty(dev_t dev);
 
+#ifdef VIOCON_CONSOLE
+static void viocon_cnpollc(dev_t, int);
+static int viocon_cngetc(dev_t);
+static void viocon_cnputc(dev_t, int);
+static void viocon_early_putc(dev_t, int);
+
+static uint32_t *early_console;
+static vaddr_t viocon_mmio_vaddr = 0;
+
+int (*enumerate_mmio_devices)(struct mmio_args *) = NULL;
+
+static struct consdev viocon_early_consdev = {
+    .cn_putc = viocon_early_putc,
+    .cn_getc = NULL,
+    .cn_pollc = NULL,
+    .cn_dev = NODEV,
+    .cn_pri = CN_NORMAL
+};
+#endif
+
 CFATTACH_DECL_NEW(viocon, sizeof(struct viocon_softc),
     viocon_match, viocon_attach, /*detach*/NULL, /*activate*/NULL);
 
@@ -183,7 +218,88 @@ dev2port(dev_t dev)
 	return dev2sc(dev)->sc_ports[VIOCONPORT(dev)];
 }
 
-int viocon_match(struct device *parent, struct cfdata *match, void *aux)
+#ifdef VIOCON_CONSOLE
+static void
+viocon_early_putc(dev_t dev, int c)
+{
+	*early_console = c;
+}
+
+static void
+free_viocon_mmio_vaddr(void)
+{
+	if (!viocon_mmio_vaddr)
+		return;
+
+	pmap_kremove(viocon_mmio_vaddr, PAGE_SIZE);
+	pmap_update(pmap_kernel());
+	uvm_km_free(kernel_map, viocon_mmio_vaddr, PAGE_SIZE, UVM_KMF_VAONLY);
+	viocon_mmio_vaddr = 0;
+}
+
+int
+viocon_earlyinit(void)
+{
+	struct mmio_args margs;
+	paddr_t mmio_baseaddr = 0;
+	struct virtio_mmio_softc sc;
+
+	if (enumerate_mmio_devices == NULL)
+		return -1;
+
+	while ((*enumerate_mmio_devices)(&margs)) {
+		if (!mmio_baseaddr) {
+			/* Fetch a page for early MMIO mapping */
+			viocon_mmio_vaddr = uvm_km_alloc(kernel_map, PAGE_SIZE, 0,
+			    UVM_KMF_VAONLY | UVM_KMF_NOWAIT);
+			if (!viocon_mmio_vaddr)
+				return -1;
+			/* map a page for early virtio console */
+			mmio_baseaddr = margs.baseaddr & ~(PAGE_SIZE - 1);
+			pmap_kenter_pa(viocon_mmio_vaddr, mmio_baseaddr,
+			    VM_PROT_READ|VM_PROT_WRITE, PMAP_NOCACHE);
+			pmap_update(pmap_kernel());
+		}
+
+		sc.sc_iot = margs.bst;
+		/*
+		 * viocon_mmio_vaddr = reserved page
+		 * margs.baseaddr = pa
+		 * mmio_baseaddr = MMIO base address
+		 */
+		sc.sc_ioh = viocon_mmio_vaddr + (margs.baseaddr - mmio_baseaddr);
+		sc.sc_iosize = margs.sz;
+		sc.sc_le_regs = (BYTE_ORDER == LITTLE_ENDIAN);
+
+		aprint_verbose("mmio addr:%#" PRIxPADDR "\n", margs.baseaddr);
+
+		if (bus_space_read_4(sc.sc_iot, sc.sc_ioh,
+		    VIRTIO_MMIO_MAGIC_VALUE) != VIRTIO_MMIO_MAGIC)
+			continue;
+		if (virtio_mmio_reg_read(&sc, VIRTIO_MMIO_DEVICE_ID) !=
+		    VIRTIO_DEVICE_ID_CONSOLE)
+			continue;
+		if (!(virtio_mmio_reg_read(&sc, VIRTIO_MMIO_DEVICE_FEATURES) &
+		    VIRTIO_CONSOLE_F_EMERG_WRITE))
+			continue;
+
+		early_console =
+		    (uint32_t *)(sc.sc_ioh +
+		    VIRTIO_MMIO_CONFIG + VIRTIO_CONSOLE_EMERG_WR);
+
+		cn_tab = &viocon_early_consdev;
+
+		return 0;
+	}
+
+	free_viocon_mmio_vaddr();
+
+	return -1;
+}
+#endif
+
+int
+viocon_match(struct device *parent, struct cfdata *match, void *aux)
 {
 	struct virtio_attach_args *va = aux;
 	if (va->sc_childdevid == VIRTIO_DEVICE_ID_CONSOLE)
@@ -228,6 +344,22 @@ viocon_attach(struct device *parent, struct device *self, void *aux)
 		goto err;
 
 	viocon_rx_fill(sc->sc_ports[0]);
+
+#ifdef VIOCON_CONSOLE
+	if (cn_tab == NULL || cn_tab->cn_dev == NODEV) {
+		sc->sc_ports[0]->vp_cntab = (struct consdev) {
+			.cn_pollc = viocon_cnpollc,
+			.cn_getc = viocon_cngetc,
+			.cn_putc = viocon_cnputc,
+			.cn_dev = VIOCONDEV(device_unit(self), 0),
+			.cn_pri = CN_REMOTE,
+		};
+		aprint_normal_dev(sc->sc_dev, "console\n");
+		cn_tab = &sc->sc_ports[0]->vp_cntab;
+		/* if a page was mapped for early console, free it */
+		free_viocon_mmio_vaddr();
+	}
+#endif
 
 	return;
 err:
@@ -634,3 +766,75 @@ vioconioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 		return error2;
 	return ENOTTY;
 }
+
+#ifdef VIOCON_CONSOLE
+static void
+viocon_cnpollc(dev_t dev, int on)
+{
+	struct viocon_port *vp = dev2port(dev);
+	int s;
+
+	KASSERT((bool)on != vp->vp_polling);
+
+	s = spltty();
+	vp->vp_polling = on;
+	vioconhwiflow(vp->vp_tty, on);
+	splx(s);
+}
+
+static int
+viocon_cngetc(dev_t dev)
+{
+	struct viocon_softc *sc = dev2sc(dev);
+	struct viocon_port *vp = dev2port(dev);
+	struct virtqueue *vq = vp->vp_rx;
+	struct virtio_softc *vsc = sc->sc_virtio;
+	int slot, len;
+
+	KASSERT(vp->vp_polling);
+	while (vp->vp_polllen == 0) {
+		if (virtio_dequeue(vsc, vq, &slot, &len) == 0) {
+			KASSERTMSG(slot >= 0, "slot=%d", slot);
+			KASSERTMSG(slot < vq->vq_num, "slot=%d", slot);
+			KASSERTMSG(len > 0, "len=%d", len);
+			KASSERTMSG(len <= BUFSIZE, "len=%d", len);
+			bus_dmamap_sync(virtio_dmat(vsc), vp->vp_dmamap,
+			    slot * BUFSIZE, BUFSIZE, BUS_DMASYNC_POSTREAD);
+			vp->vp_polllen = len;
+			vp->vp_pollpos = slot * BUFSIZE;
+		}
+	}
+	KASSERT(vp->vp_pollpos <= vq->vq_num * BUFSIZE);
+	vp->vp_polllen--;
+	return vp->vp_rx_buf[vp->vp_pollpos++];
+}
+
+static void
+viocon_cnputc(dev_t dev, int c)
+{
+	struct viocon_softc *sc = dev2sc(dev);
+	struct viocon_port *vp = dev2port(dev);
+	struct virtqueue *vq = vp->vp_tx;
+	struct virtio_softc *vsc = sc->sc_virtio;
+	int slot;
+	int s, error;
+
+	s = spltty();
+	KERNEL_LOCK(1, NULL);
+	(void)viocon_tx_drain(vp, vq);
+	error = virtio_enqueue_prep(vsc, vq, &slot);
+	if (error == 0) {
+		error = virtio_enqueue_reserve(vsc, vq, slot, 1);
+		KASSERTMSG(error == 0, "error=%d", error);
+		vp->vp_tx_buf[slot * BUFSIZE] = c;
+		bus_dmamap_sync(virtio_dmat(vsc), vp->vp_dmamap,
+		    vp->vp_tx_buf - vp->vp_rx_buf + slot * BUFSIZE, 1,
+		    BUS_DMASYNC_PREWRITE);
+		virtio_enqueue_p(vsc, vq, slot, vp->vp_dmamap,
+		    vp->vp_tx_buf - vp->vp_rx_buf + slot * BUFSIZE, 1, 1);
+		virtio_enqueue_commit(vsc, vq, slot, 1);
+	}
+	KERNEL_UNLOCK_ONE(NULL);
+	splx(s);
+}
+#endif
