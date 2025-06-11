@@ -32,7 +32,6 @@ __KERNEL_RCSID(0, "$NetBSD: consinit.c,v 1.44 2025/11/29 01:33:40 manu Exp $");
 #include "opt_kgdb.h"
 #include "opt_puc.h"
 #include "opt_xen.h"
-#include "opt_viocon.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -110,11 +109,13 @@ __KERNEL_RCSID(0, "$NetBSD: consinit.c,v 1.44 2025/11/29 01:33:40 manu Exp $");
 #include <xen/xen.h>
 #endif
 
-#ifdef VIOCON_CONSOLE
+#include "viocon.h"
+#if (NVIOCON > 0)
 #include <dev/virtio/virtio_vioconvar.h>
 #include <dev/virtio/virtio_mmiovar.h>
 #include <dev/virtio/arch/x86/virtio_mmio_parse.h>
 #include <uvm/uvm_extern.h> /* for kernel_map */
+#include <pvbus.h> /* VirtIO MMIO */
 #endif
 
 #ifndef CONSDEVNAME
@@ -276,7 +277,7 @@ dokbd:
 			       error);
 		return;
 	}
-#ifdef VIOCON_CONSOLE
+#if (NVIOCON > 0) && (NPVBUS > 0) /* XXX only on pvbus / VirtIO MMIO for now */
 	if (!strcmp(console_devname, "viocon")) {
 		/* We need uvm to be ready before we can map the MMIO region */
 		if (!kernel_map) {
@@ -288,7 +289,7 @@ dokbd:
 		 * the kernel command line
 		 */
 		enumerate_mmio_devices = mmio_args_parse;
-		if (!viocon_earlyinit())
+		if (viocon_earlyinit() == 0)
 			return;
 	}
 #endif
