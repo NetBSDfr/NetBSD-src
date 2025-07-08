@@ -110,12 +110,10 @@ __KERNEL_RCSID(0, "$NetBSD: consinit.c,v 1.44 2025/11/29 01:33:40 manu Exp $");
 #endif
 
 #include "viocon.h"
-#if (NVIOCON > 0)
+#include "virtio_mmio.h"
+#if (NVIOCON > 0) && (NVIRTIO_MMIO > 0)
 #include <dev/virtio/virtio_vioconvar.h>
-#include <dev/virtio/virtio_mmiovar.h>
-#include <dev/virtio/arch/x86/virtio_mmio_parse.h>
 #include <uvm/uvm_extern.h> /* for kernel_map */
-#include <pvbus.h> /* VirtIO MMIO */
 #endif
 
 #ifndef CONSDEVNAME
@@ -277,18 +275,13 @@ dokbd:
 			       error);
 		return;
 	}
-#if (NVIOCON > 0) && (NPVBUS > 0) /* XXX only on pvbus / VirtIO MMIO for now */
+#if (NVIOCON > 0) && (NVIRTIO_MMIO > 0)
 	if (!strcmp(console_devname, "viocon")) {
 		/* We need uvm to be ready before we can map the MMIO region */
 		if (!kernel_map) {
 			initted = 0;
 			return;
 		}
-		/*
-		 * In x86 microvm, mmio device enumeration is done by parsing
-		 * the kernel command line
-		 */
-		enumerate_mmio_devices = mmio_args_parse;
 		if (viocon_earlyinit() == 0)
 			return;
 	}

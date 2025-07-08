@@ -38,14 +38,18 @@ __KERNEL_RCSID(0, "$NetBSD: viocon.c,v 1.10 2024/08/05 19:13:34 riastradh Exp $"
 #include <dev/cons.h>
 #include <uvm/uvm_extern.h>
 #include <dev/virtio/virtio_vioconvar.h>
+#include <dev/virtio/virtio_mmiovar.h>
 
 #include <dev/pci/virtioreg.h>
-#include <dev/virtio/virtio_mmiovar.h>
 
 #include <prop/proplib.h>
 
-#include "pvbus.h"
 #include "ioconf.h"
+#include "virtio_mmio.h"
+#include "pv.h"
+#if NPV > 0
+#include <dev/virtio/arch/x86/virtio_mmio_parse.h>
+#endif
 
 /* OpenBSD compat shims */
 #define	ttymalloc(speed)	tty_alloc()
@@ -199,7 +203,7 @@ static void viocon_console(struct viocon_softc *, int);
 static void viocon_cnpollc(dev_t, int);
 static int viocon_cngetc(dev_t);
 static void viocon_cnputc(dev_t, int);
-#if (NPVBUS > 0)
+#if NVIRTIO_MMIO > 0
 static void free_viocon_mmio_vaddr(void);;
 static void viocon_early_putc(dev_t, int);
 
@@ -243,8 +247,8 @@ viocon_vqidx2portidx(int vq)
 {
 	return (vq >= 4) ? (vq - VIOCON_PORT_NQS) / VIOCON_PORT_NQS : 0;
 }
-
-#if (NPVBUS > 0) /* XXX only on pvbus / VirtIO MMIO for now */
+/* XXX only on pvbus / VirtIO MMIO for now */
+#if NVIRTIO_MMIO > 0
 static void
 free_viocon_mmio_vaddr(void)
 {
@@ -276,6 +280,10 @@ viocon_earlyinit(void)
 	    .cn_dev = NODEV,
 	    .cn_pri = CN_NORMAL
 	};
+
+#if NPV > 0
+	enumerate_mmio_devices = mmio_args_parse;
+#endif
 
 	if (enumerate_mmio_devices == NULL) {
 		aprint_error("%s: no MMIO device enumeration function\n", __func__);
@@ -784,7 +792,7 @@ viocon_console(struct viocon_softc *sc, int portidx)
 	};
 	aprint_normal_dev(sc->sc_dev, "console\n");
 	cn_tab = &sc->sc_ports[portidx]->vp_cntab;
-#if (NPVBUS > 0)
+#if NVIRTIO_MMIO > 0
 	/* if a page was mapped for early console, free it */
 	free_viocon_mmio_vaddr();
 #endif
