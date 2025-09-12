@@ -503,8 +503,6 @@ viocon_ports_vq_alloc(struct viocon_softc *sc, int maxports)
 		}
 
 		vp = kmem_zalloc(sizeof(*vp), KM_SLEEP);
-		if (vp == NULL)
-			return ENOMEM;
 
 		sc->sc_ports[i] = vp;
 		vp->vp_sc = sc;
