@@ -379,7 +379,7 @@ viocon_attach(struct device *parent, struct device *self, void *aux)
 		maxports = virtio_read_device_config_4(vsc,
 		    VIRTIO_CONSOLE_MAX_NR_PORTS);
 		aprint_verbose_dev(self,
-		    "has multiport feature, max ports: %u\n", maxports);
+		    "has multiport feature, max_ports: %u\n", maxports);
 		sc->has_multiport = true;
 	} else
 		sc->has_multiport = false;
@@ -390,7 +390,7 @@ viocon_attach(struct device *parent, struct device *self, void *aux)
 	if (sc->has_multiport)
 		nvqs += 2; /* rx and tx control */
 
-	prop_dictionary_set_uint32(dict, "max ports", sc->sc_max_ports);
+	prop_dictionary_set_uint32(dict, "max_ports", sc->sc_max_ports);
 	namearray = prop_array_create_with_capacity(sc->sc_max_ports);
 	prop_dictionary_set(dict, "port names", namearray);
 
@@ -639,7 +639,7 @@ viocon_control_rx_intr(struct virtqueue *vq)
 				vp->vp_name[namelen] = '\0';
 				aprint_normal_dev(sc->sc_dev, "port %u name: %s\n",
 				    id, vp->vp_name);
-				namearray = prop_dictionary_get(properties, "port names");
+				namearray = prop_dictionary_get(properties, "port_names");
 				prop_array_set_string_nocopy(namearray, id, vp->vp_name);
 			}
 			break;
@@ -748,7 +748,7 @@ viocon_port_create(struct viocon_softc *sc, int portidx)
 
 	viocon_rx_fill(sc->sc_ports[portidx]);
 
-	namearray = prop_dictionary_get(properties, "port names");
+	namearray = prop_dictionary_get(properties, "port_names");
 	prop_array_set_string_nocopy(namearray, portidx, vp->vp_name);
 
 	return 0;
