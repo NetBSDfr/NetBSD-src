@@ -612,12 +612,9 @@ viocon_control_rx_intr(struct virtqueue *vq)
 		/* https://docs.oasis-open.org/virtio/virtio/v1.3/csd01/virtio-v1.3-csd01.html#x1-3290006 */
 		case VIRTIO_CONSOLE_DEVICE_ADD:
 			aprint_verbose_dev(sc->sc_dev, "adding port %u\n", id);
-			if (viocon_port_create(sc, id) == 0) {
+			if (viocon_port_create(sc, id) == 0)
 				viocon_control_send(sc, id,
 				    VIRTIO_CONSOLE_PORT_READY, 1);
-				/* Give time to catch CONSOLE_PORT and PORT_OPEN */
-				DELAY(50);
-			}
 			break;
 		case VIRTIO_CONSOLE_CONSOLE_PORT:
 			aprint_verbose_dev(sc->sc_dev, "%u is a console port\n", id);
