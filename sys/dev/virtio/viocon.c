@@ -204,11 +204,10 @@ static void viocon_cnpollc(dev_t, int);
 static int viocon_cngetc(dev_t);
 static void viocon_cnputc(dev_t, int);
 #if NVIRTIO_MMIO > 0
-static void free_viocon_mmio_vaddr(void);;
+static int early_console_offet = VIRTIO_MMIO_CONFIG + VIRTIO_CONSOLE_EMERG_WR;
 static void viocon_early_putc(dev_t, int);
 
-static uint32_t *early_console;
-static vaddr_t viocon_mmio_vaddr = 0;
+struct virtio_mmio_softc msc;
 
 int (*enumerate_mmio_devices)(struct mmio_args *) = NULL;
 #endif
@@ -250,29 +249,16 @@ viocon_vqidx2portidx(int vq)
 /* XXX only on pvbus / VirtIO MMIO for now */
 #if NVIRTIO_MMIO > 0
 static void
-free_viocon_mmio_vaddr(void)
-{
-	if (!viocon_mmio_vaddr)
-		return;
-
-	pmap_kremove(viocon_mmio_vaddr, PAGE_SIZE);
-	pmap_update(pmap_kernel());
-	uvm_km_free(kernel_map, viocon_mmio_vaddr, PAGE_SIZE, UVM_KMF_VAONLY);
-	viocon_mmio_vaddr = 0;
-}
-
-static void
 viocon_early_putc(dev_t dev, int c)
 {
-	*early_console = c;
+	bus_space_write_4(msc.sc_iot, msc.sc_ioh,
+	    early_console_offet, c);
 }
 
 int
 viocon_earlyinit(void)
 {
 	struct mmio_args margs;
-	paddr_t mmio_baseaddr = 0;
-	struct virtio_mmio_softc sc;
 	static struct consdev viocon_early_consdev = {
 	    .cn_putc = viocon_early_putc,
 	    .cn_getc = NULL,
@@ -291,54 +277,41 @@ viocon_earlyinit(void)
 	}
 
 	while ((*enumerate_mmio_devices)(&margs)) {
-		if (!mmio_baseaddr) {
-			/* Fetch a page for early MMIO mapping */
-			viocon_mmio_vaddr = uvm_km_alloc(kernel_map, PAGE_SIZE, 0,
-			    UVM_KMF_VAONLY | UVM_KMF_NOWAIT);
-			if (!viocon_mmio_vaddr) {
-				aprint_error("%s: failed to allocate MMIO page\n",
-				    __func__);
-				return -1;
-			}
-			/* map a page for early virtio console */
-			mmio_baseaddr = margs.baseaddr & ~(PAGE_SIZE - 1);
-			pmap_kenter_pa(viocon_mmio_vaddr, mmio_baseaddr,
-			    VM_PROT_READ|VM_PROT_WRITE, PMAP_NOCACHE);
-			pmap_update(pmap_kernel());
+		msc.sc_iot = margs.bst;
+
+		if (_x86_memio_map(msc.sc_iot, margs.baseaddr, margs.sz, 0,
+		    &msc.sc_ioh) != 0) {
+			aprint_error("%s: failed to map MMIO region at %#" PRIxPADDR "\n",
+			    __func__, margs.baseaddr);
+			continue;
 		}
 
-		sc.sc_iot = margs.bst;
-		/*
-		 * viocon_mmio_vaddr = reserved page
-		 * margs.baseaddr = pa
-		 * mmio_baseaddr = MMIO base address
-		 */
-		sc.sc_ioh = viocon_mmio_vaddr + (margs.baseaddr - mmio_baseaddr);
-		sc.sc_iosize = margs.sz;
-		sc.sc_le_regs = (BYTE_ORDER == LITTLE_ENDIAN);
+		msc.sc_iosize = margs.sz;
+		msc.sc_le_regs = (BYTE_ORDER == LITTLE_ENDIAN);
 
 		aprint_verbose("mmio addr:%#" PRIxPADDR "\n", margs.baseaddr);
 
-		if (bus_space_read_4(sc.sc_iot, sc.sc_ioh,
-		    VIRTIO_MMIO_MAGIC_VALUE) != VIRTIO_MMIO_MAGIC)
+		if (bus_space_read_4(msc.sc_iot, msc.sc_ioh,
+		    VIRTIO_MMIO_MAGIC_VALUE) != VIRTIO_MMIO_MAGIC) {
+			_x86_memio_unmap(msc.sc_iot, msc.sc_ioh, msc.sc_iosize, NULL);
 			continue;
-		if (virtio_mmio_reg_read(&sc, VIRTIO_MMIO_DEVICE_ID) !=
-		    VIRTIO_DEVICE_ID_CONSOLE)
+		}
+		if (virtio_mmio_reg_read(&msc, VIRTIO_MMIO_DEVICE_ID) !=
+		    VIRTIO_DEVICE_ID_CONSOLE) {
+			_x86_memio_unmap(msc.sc_iot, msc.sc_ioh, msc.sc_iosize, NULL);
 			continue;
-		if (!(virtio_mmio_reg_read(&sc, VIRTIO_MMIO_DEVICE_FEATURES) &
-		    VIRTIO_CONSOLE_F_EMERG_WRITE))
+		}
+		if (!(virtio_mmio_reg_read(&msc, VIRTIO_MMIO_DEVICE_FEATURES) &
+		    VIRTIO_CONSOLE_F_EMERG_WRITE)) {
+			_x86_memio_unmap(msc.sc_iot, msc.sc_ioh, msc.sc_iosize, NULL);
 			continue;
-
-		early_console =
-		    (uint32_t *)(sc.sc_ioh +
-		    VIRTIO_MMIO_CONFIG + VIRTIO_CONSOLE_EMERG_WR);
+		}
 
 		cn_tab = &viocon_early_consdev;
 
 		return 0;
 	}
 
-	free_viocon_mmio_vaddr();
 	aprint_error("%s: no valid virtio console device found", __func__);
 	return -1;
 }
@@ -788,8 +761,8 @@ viocon_console(struct viocon_softc *sc, int portidx)
 	aprint_normal_dev(sc->sc_dev, "console\n");
 	cn_tab = &sc->sc_ports[portidx]->vp_cntab;
 #if NVIRTIO_MMIO > 0
-	/* if a page was mapped for early console, free it */
-	free_viocon_mmio_vaddr();
+	/* if an early console was mapped, unmap it */
+	_x86_memio_unmap(msc.sc_iot, msc.sc_ioh, msc.sc_iosize, NULL);
 #endif
 }
 
