@@ -36,20 +36,16 @@ __KERNEL_RCSID(0, "$NetBSD: viocon.c,v 1.10 2024/08/05 19:13:34 riastradh Exp $"
 #include <sys/poll.h>
 
 #include <dev/cons.h>
-#include <uvm/uvm_extern.h>
 #include <dev/virtio/virtio_vioconvar.h>
-#include <dev/virtio/virtio_mmiovar.h>
+#include <dev/virtio/virtio_mmioreg.h>
 
+#define VIRTIO_PRIVATE
 #include <dev/pci/virtioreg.h>
+#include <dev/pci/virtiovar.h>
 
 #include <prop/proplib.h>
 
 #include "ioconf.h"
-#include "virtio_mmio.h"
-#include "pv.h"
-#if NPV > 0
-#include <dev/virtio/arch/x86/virtio_mmio_parse.h>
-#endif
 
 /* OpenBSD compat shims */
 #define	ttymalloc(speed)	tty_alloc()
@@ -203,14 +199,7 @@ static void viocon_console(struct viocon_softc *, int);
 static void viocon_cnpollc(dev_t, int);
 static int viocon_cngetc(dev_t);
 static void viocon_cnputc(dev_t, int);
-#if NVIRTIO_MMIO > 0
-static int early_console_offet = VIRTIO_MMIO_CONFIG + VIRTIO_CONSOLE_EMERG_WR;
 static void viocon_early_putc(dev_t, int);
-
-struct virtio_mmio_softc msc;
-
-int (*enumerate_mmio_devices)(struct mmio_args *) = NULL;
-#endif
 
 CFATTACH_DECL_NEW(viocon, sizeof(struct viocon_softc),
     viocon_match, viocon_attach, /*detach*/NULL, /*activate*/NULL);
@@ -241,24 +230,29 @@ dev2port(dev_t dev)
 {
 	return dev2sc(dev)->sc_ports[VIOCONPORT(dev)];
 }
+
 static inline int
 viocon_vqidx2portidx(int vq)
 {
 	return (vq >= 4) ? (vq - VIOCON_PORT_NQS) / VIOCON_PORT_NQS : 0;
 }
-/* XXX only on pvbus / VirtIO MMIO for now */
-#if NVIRTIO_MMIO > 0
+
+static struct {
+	bus_space_tag_t		ec_bst;
+	bus_space_handle_t	ec_bsh;
+	bus_addr_t		ec_reg_offset;
+} early_console;
+
 static void
 viocon_early_putc(dev_t dev, int c)
 {
-	bus_space_write_4(msc.sc_iot, msc.sc_ioh,
-	    early_console_offet, c);
+	bus_space_write_4(early_console.ec_bst, early_console.ec_bsh,
+	    early_console.ec_reg_offset, c);
 }
 
 int
-viocon_earlyinit(void)
+viocon_earlyinit(bus_space_tag_t bst, bus_space_handle_t bsh)
 {
-	struct mmio_args margs;
 	static struct consdev viocon_early_consdev = {
 	    .cn_putc = viocon_early_putc,
 	    .cn_getc = NULL,
@@ -267,55 +261,38 @@ viocon_earlyinit(void)
 	    .cn_pri = CN_NORMAL
 	};
 
-#if NPV > 0
-	enumerate_mmio_devices = mmio_args_parse;
-#endif
-
-	if (enumerate_mmio_devices == NULL) {
-		aprint_error("%s: no MMIO device enumeration function\n", __func__);
+	if (bus_space_read_4(bst, bsh, VIRTIO_MMIO_MAGIC_VALUE) !=
+	    VIRTIO_MMIO_MAGIC) {
 		return -1;
 	}
 
-	while ((*enumerate_mmio_devices)(&margs)) {
-		msc.sc_iot = margs.bst;
-
-		if (_x86_memio_map(msc.sc_iot, margs.baseaddr, margs.sz, 0,
-		    &msc.sc_ioh) != 0) {
-			aprint_error("%s: failed to map MMIO region at %#" PRIxPADDR "\n",
-			    __func__, margs.baseaddr);
-			continue;
-		}
-
-		msc.sc_iosize = margs.sz;
-		msc.sc_le_regs = (BYTE_ORDER == LITTLE_ENDIAN);
-
-		aprint_verbose("mmio addr:%#" PRIxPADDR "\n", margs.baseaddr);
-
-		if (bus_space_read_4(msc.sc_iot, msc.sc_ioh,
-		    VIRTIO_MMIO_MAGIC_VALUE) != VIRTIO_MMIO_MAGIC) {
-			_x86_memio_unmap(msc.sc_iot, msc.sc_ioh, msc.sc_iosize, NULL);
-			continue;
-		}
-		if (virtio_mmio_reg_read(&msc, VIRTIO_MMIO_DEVICE_ID) !=
-		    VIRTIO_DEVICE_ID_CONSOLE) {
-			_x86_memio_unmap(msc.sc_iot, msc.sc_ioh, msc.sc_iosize, NULL);
-			continue;
-		}
-		if (!(virtio_mmio_reg_read(&msc, VIRTIO_MMIO_DEVICE_FEATURES) &
-		    VIRTIO_CONSOLE_F_EMERG_WRITE)) {
-			_x86_memio_unmap(msc.sc_iot, msc.sc_ioh, msc.sc_iosize, NULL);
-			continue;
-		}
-
-		cn_tab = &viocon_early_consdev;
-
-		return 0;
+	if (bus_space_read_4(bst, bsh, VIRTIO_MMIO_DEVICE_ID) !=
+	    VIRTIO_DEVICE_ID_CONSOLE) {
+		return -1;
 	}
 
-	aprint_error("%s: no valid virtio console device found", __func__);
-	return -1;
+	if (!(bus_space_read_4(bst, bsh, VIRTIO_MMIO_DEVICE_FEATURES) &
+	    VIRTIO_CONSOLE_F_EMERG_WRITE)) {
+		return -1;
+	}
+
+	/*
+	 * https://docs.oasis-open.org/virtio/virtio/v1.3/csd01/virtio-v1.3-csd01.html#x1-3250004
+	 * emerg_wr is 32 bits long
+	 */
+	if (bus_space_subregion(bst, bsh,
+	    VIRTIO_MMIO_CONFIG + VIRTIO_CONSOLE_EMERG_WR_OFFSET,
+	    sizeof(uint32_t), &early_console.ec_bsh) != 0) {
+		return -1;
+	}
+
+	early_console.ec_bst = bst;
+	early_console.ec_reg_offset = 0; /* already adjusted by subregion */
+
+	cn_tab = &viocon_early_consdev;
+
+	return 0;
 }
-#endif
 
 int
 viocon_match(struct device *parent, struct cfdata *match, void *aux)
@@ -365,7 +342,7 @@ viocon_attach(struct device *parent, struct device *self, void *aux)
 
 	prop_dictionary_set_uint32(dict, "max_ports", sc->sc_max_ports);
 	namearray = prop_array_create_with_capacity(sc->sc_max_ports);
-	prop_dictionary_set(dict, "port names", namearray);
+	prop_dictionary_set(dict, "port_names", namearray);
 
 	sc->sc_vqs = kmem_zalloc(nvqs * sizeof(sc->sc_vqs[0]),
 	    KM_SLEEP);
@@ -398,7 +375,6 @@ viocon_attach(struct device *parent, struct device *self, void *aux)
 		virtio_start_vq_intr(vsc, sc->sc_c_vq_rx);
 		virtio_start_vq_intr(vsc, sc->sc_c_vq_tx);
 	}
-
 
 	return;
 err:
@@ -661,7 +637,6 @@ err:
 	return -1;
 }
 
-
 int
 viocon_port_create(struct viocon_softc *sc, int portidx)
 {
@@ -760,10 +735,6 @@ viocon_console(struct viocon_softc *sc, int portidx)
 	};
 	aprint_normal_dev(sc->sc_dev, "console\n");
 	cn_tab = &sc->sc_ports[portidx]->vp_cntab;
-#if NVIRTIO_MMIO > 0
-	/* if an early console was mapped, unmap it */
-	_x86_memio_unmap(msc.sc_iot, msc.sc_ioh, msc.sc_iosize, NULL);
-#endif
 }
 
 int
@@ -1185,4 +1156,3 @@ vioconpoll(dev_t dev, int events, struct lwp *l)
 
 	return revents;
 }
-
