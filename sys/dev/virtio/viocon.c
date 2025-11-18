@@ -580,7 +580,7 @@ viocon_control_rx_intr(struct virtqueue *vq)
 				vp = sc->sc_ports[id];
 				if (vp->vp_name != NULL)
 					kmem_free(vp->vp_name, strlen(vp->vp_name) + 1);
-				vp->vp_name = kmem_zalloc(namelen, KM_SLEEP);
+				vp->vp_name = kmem_zalloc(namelen + 1, KM_SLEEP);
 				memcpy(vp->vp_name, sc->sc_ctrl_rx[slot].buf, namelen);
 				vp->vp_name[namelen] = '\0';
 				aprint_normal_dev(sc->sc_dev, "port %u name: %s\n",
@@ -617,8 +617,9 @@ viocon_control_send(struct viocon_softc *sc, uint32_t id, uint16_t event,
 	sc->sc_tx.event = virtio_rw16(vsc, event);
 	sc->sc_tx.value = virtio_rw16(vsc, value);
 
-	bus_dmamap_load(virtio_dmat(vsc), sc->sc_dmamap_tx, sc->sc_tx_buf,
-	    8, NULL, BUS_DMA_NOWAIT|BUS_DMA_WRITE);
+	if (bus_dmamap_load(virtio_dmat(vsc), sc->sc_dmamap_tx, sc->sc_tx_buf,
+	    8, NULL, BUS_DMA_NOWAIT|BUS_DMA_WRITE) != 0)
+		goto err;
 	bus_dmamap_sync(virtio_dmat(vsc), sc->sc_dmamap_tx,
 	    0, 8, BUS_DMASYNC_PREWRITE);
 
