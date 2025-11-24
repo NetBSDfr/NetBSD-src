@@ -228,6 +228,7 @@ x86_add_xen_modules(void)
 		aprint_verbose("No Xen module info at boot\n");
 		return;
 	}
+	aprint_debug("%d Xen module(s) at boot\n", hvm_start_info->nr_modules);
 	modlist = (void *)((uintptr_t)hvm_start_info->modlist_paddr + KERNBASE);
 	for (i = 0; i < hvm_start_info->nr_modules; i++) {
 		if (memcmp(

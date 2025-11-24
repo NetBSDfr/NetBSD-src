@@ -1188,11 +1188,13 @@ ENTRY(start_pvh)
 	rep movsl
 
 	/* Copy hvm_modlist_entry[] after hvm_start_info */
-	movl %edi, START_INFO_MODLIST_PADDR(%eax) /* Set new modlist_paddr in hvm_start_info */
-	movl START_INFO_MODLIST_PADDR(%ebx), %esi
-	movl START_INFO_NR_MODULES(%ebx), %ecx	/* Get nr_modules */
+	xor %ecx, %ecx
+	mov %ecx, START_INFO_MODLIST_PADDR(%eax)
+	movl START_INFO_NR_MODULES(%eax), %ecx	/* Get nr_modules */
 	testl %ecx, %ecx			/* if(nr_modules == 0) */
 	jz .modlist_copy_done			/*   goto modlist_copy_done */
+	movl %edi, START_INFO_MODLIST_PADDR(%eax) /* Set new modlist_paddr in hvm_start_info */
+	movl START_INFO_MODLIST_PADDR(%ebx), %esi
 	pushl %eax
 	movl $HVM_MODLIST_ENTRY_SIZE, %eax	/* ecx = sizeof(hvm_modlist_entry) */
 	mull %ecx				/* eax * ecx => edx:eax */
@@ -1203,46 +1205,46 @@ ENTRY(start_pvh)
 
 	/* Copy the modules after the hvm_modlist_entry[] */
 	xorl %ecx, %ecx				/* ecx = i = 0 */
-.modlist_copy:
+.module_copy:
 	/* eax points to our hvm_start_info */
-	pushl %eax
-	movl START_INFO_NR_MODULES(%ebx), %eax	/* eax = nr_modules */
-	cmpl %eax, %ecx				/* if (ecx == nr_modules) */
-	popl %eax
-	je .modlist_copy_done			/*   goto modlist_copy_done */
-	pushl %eax
-	pushl %ecx
+	/* ecx is our counter (i) */
 	/* Copy the module */
-	movl START_INFO_MODLIST_PADDR(%ebx), %edx /* edx = &hvm_modlist_entry[0] */
+	movl START_INFO_MODLIST_PADDR(%eax), %edx /* edx = &hvm_modlist_entry[0] */
+	pushl %eax
 	movl $HVM_MODLIST_ENTRY_SIZE, %eax	/* eax = sizeof(hvm_modlist_entry) */
+	pushl %ecx
 	mull %ecx				/* eax *= ecx */
 	addl %eax, %edx				/* edx = &hvm_modlist_entry[i] */
+	popl %ecx
 	/* Copy the module's cmdline */
 	movl MODLIST_ENTRY_CMDLINE(%edx), %esi
 	xorl %eax, %eax
 	movl %eax, MODLIST_ENTRY_CMDLINE(%edx)	/* hvm_modlist_entry[i].cmdline = NULL */
 	cmpl %eax, %esi
-	popl %ecx
 	popl %eax
-	je .modlist_cmdline_copy_done
+	je .module_cmdline_copy_done
 	movl %edi, MODLIST_ENTRY_CMDLINE(%edx)	/* Set new cmdline_paddr in hvm_modlist_entry */
 	pushl %eax
-.modlist_cmdline_copy:
+.module_cmdline_copy:
 	movb (%esi), %al
 	movsb
 	cmp $0, %al
-	jne .modlist_cmdline_copy
+	jne .module_cmdline_copy
 	popl %eax
-.modlist_cmdline_copy_done:
+.module_cmdline_copy_done:
 	/* Copy the module's content */
+	movl MODLIST_ENTRY_PADDR(%edx), %esi	/* esi = hvm_modlist_entry[i].paddr */
+	movl %edi, MODLIST_ENTRY_PADDR(%edx)	/* Set new paddr in hvm_modlist_entry */
 	pushl %ecx
-	movl MODLIST_ENTRY_PADDR(%edx), %esi /* esi = hvm_modlist_entry[i].paddr */
-	movl %edi, MODLIST_ENTRY_PADDR(%edx) /* Set new paddr in hvm_modlist_entry */
-	movl MODLIST_ENTRY_SIZE(%edx), %ecx /* ecx = hvm_modlist_entry[i].size */
+	movl MODLIST_ENTRY_SIZE(%edx), %ecx	/* ecx = hvm_modlist_entry[i].size */
 	rep movsb
-	popl %ecx			/* i++ */
-	inc %ecx
-	jmp .modlist_copy
+	popl %ecx
+	inc %ecx				/* i++ */
+	pushl %eax
+	movl START_INFO_NR_MODULES(%ebx), %eax	/* eax = nr_modules */
+	cmpl %eax, %ecx				/* if (ecx != nr_modules) */
+	popl %eax
+	jne .module_copy			/*   goto module_copy */
 .modlist_copy_done:
 
 	/* Copy cmdline_paddr after the modules */
