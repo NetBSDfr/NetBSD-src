@@ -1196,7 +1196,7 @@ ENTRY(start_pvh)
 	movl %edi, START_INFO_MODLIST_PADDR(%eax) /* Set new modlist_paddr in hvm_start_info */
 	movl START_INFO_MODLIST_PADDR(%ebx), %esi
 	pushl %eax
-	movl $HVM_MODLIST_ENTRY_SIZE, %eax	/* ecx = sizeof(hvm_modlist_entry) */
+	movl $HVM_MODLIST_ENTRY_SIZE, %eax	/* eax = sizeof(hvm_modlist_entry) */
 	mull %ecx				/* eax * ecx => edx:eax */
 	movl %eax, %ecx
 	shrl $2, %ecx
@@ -1213,7 +1213,9 @@ ENTRY(start_pvh)
 	pushl %eax
 	movl $HVM_MODLIST_ENTRY_SIZE, %eax	/* eax = sizeof(hvm_modlist_entry) */
 	pushl %ecx
-	mull %ecx				/* eax *= ecx */
+	pushl %edx
+	mull %ecx				/* eax * ecx => edx:eax */
+	popl %edx
 	addl %eax, %edx				/* edx = &hvm_modlist_entry[i] */
 	popl %ecx
 	/* Copy the module's cmdline */
