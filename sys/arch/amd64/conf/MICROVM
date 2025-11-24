@@ -23,3 +23,7 @@ machine amd64 x86 xen
 include         "arch/x86/conf/MICROVM.common"
 
 options         EXEC_ELF64      # exec ELF binaries
+options 	MODULAR		# new style module(7) framework
+
+options 	MEMORY_DISK_HOOKS	# enable md specific hooks
+options 	MEMORY_DISK_DYNAMIC	# enable dynamic resizing
