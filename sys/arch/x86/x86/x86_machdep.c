@@ -234,7 +234,7 @@ x86_add_xen_modules(void)
 		if (memcmp(
 			    (char *)((uintptr_t)modlist[i].paddr + KERNBASE),
 			    "\177ELF", 4) == 0) {
-			aprint_debug("Prep module path=%s len=%lu pa=%p\n",
+			aprint_debug("Prep module path=%s len=%"PRIu64" pa=%p\n",
 			    "pvh-module",
 			    modlist[i].size,
 			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE));
@@ -249,7 +249,7 @@ x86_add_xen_modules(void)
 			   memcmp(
 			    (char *)((uintptr_t)modlist[i].paddr + KERNBASE),
 			    "\377\330\377", 3) == 0) {
-			aprint_debug("Splash image path=%s len=%lu pa=%p\n",
+			aprint_debug("Splash image path=%s len=%"PRIu64" pa=%p\n",
 			    "pvh-image", modlist[i].size,
 			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE));
 			splash_setimage(
@@ -258,7 +258,7 @@ x86_add_xen_modules(void)
 #endif
 #if defined(MEMORY_DISK_HOOKS) && defined(MEMORY_DISK_DYNAMIC)
 		} else {
-			aprint_debug("File-system image path=%s len=%lu pa=%p\n",
+			aprint_debug("File-system image path=%s len=%"PRIu64" pa=%p\n",
 			    "pvh-filesystem",
 			    modlist[i].size,
 			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE));
