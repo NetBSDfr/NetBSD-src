@@ -28,6 +28,8 @@
 #ifndef _VIRTIO_MMIOVAR_H_
 #define _VIRTIO_MMIOVAR_H_
 
+#define VIRTIO_PRIVATE
+
 #include <dev/pci/virtiovar.h> /* XXX: move to non-pci */
 
 struct virtio_mmio_softc {
@@ -46,9 +48,20 @@ struct virtio_mmio_softc {
 
 };
 
+struct mmio_args {
+	bus_space_tag_t		bst;
+	uint64_t		sz;
+	paddr_t			baseaddr;
+	uint64_t		irq;
+	uint64_t		id;
+};
+
+uint32_t virtio_mmio_reg_read(struct virtio_mmio_softc *, bus_addr_t);
 bool virtio_mmio_common_probe_present(struct virtio_mmio_softc *);
 void virtio_mmio_common_attach(struct virtio_mmio_softc *);
 int virtio_mmio_common_detach(struct virtio_mmio_softc *, int);
 int virtio_mmio_intr(void *);
+
+extern int (*enumerate_mmio_devices)(struct mmio_args *);
 
 #endif /* _VIRTIO_MMIOVAR_H_ */

@@ -109,6 +109,20 @@ __KERNEL_RCSID(0, "$NetBSD: consinit.c,v 1.44 2025/11/29 01:33:40 manu Exp $");
 #include <xen/xen.h>
 #endif
 
+#include "viocon.h"
+#include "virtio_mmio.h"
+#if (NVIOCON > 0) && (NVIRTIO_MMIO > 0)
+#include <dev/virtio/virtio_vioconvar.h>
+#include <dev/virtio/virtio_mmioreg.h>
+#include <dev/virtio/virtio_mmiovar.h>
+#include <uvm/uvm_extern.h> /* for kernel_map */
+#endif
+
+#include "pv.h"
+#if NPV > 0
+#include <dev/virtio/arch/x86/virtio_mmio_parse.h>
+#endif
+
 #ifndef CONSDEVNAME
 #define CONSDEVNAME "pc"
 #endif
@@ -158,6 +172,37 @@ int comkgdbmode = KGDB_DEVMODE;
 #endif /* NCOM */
 
 #endif /* KGDB */
+
+/* XXX only on VirtIO MMIO on pvbus for now, MMIO on ACPI could be added */
+#if (NVIOCON > 0) && (NVIRTIO_MMIO > 0)
+static int
+viocon_early_probe(int (*enum_func)(struct mmio_args *))
+{
+	struct mmio_args margs;
+
+	while ((*enum_func)(&margs)) {
+		bus_space_tag_t bst = margs.bst;
+		bus_space_handle_t bsh;
+
+		if (_x86_memio_map(bst, margs.baseaddr, margs.sz, 0,
+		    &bsh) != 0) {
+			aprint_error("%s: failed to map MMIO region at "
+			    "%#" PRIxPADDR "\n", __func__, margs.baseaddr);
+			continue;
+		}
+
+		aprint_verbose("mmio addr:%#" PRIxPADDR "\n", margs.baseaddr);
+
+		if (viocon_earlyinit(bst, bsh) == 0)
+			return 0;
+
+		_x86_memio_unmap(bst, bsh, margs.sz, NULL);
+	}
+
+	aprint_error("%s: no virtio console found\n", __func__);
+	return -1;
+}
+#endif
 
 /*
  * consinit:
@@ -268,6 +313,19 @@ dokbd:
 			       error);
 		return;
 	}
+#if (NVIOCON > 0) && (NVIRTIO_MMIO > 0)
+	if (!strcmp(console_devname, "viocon")) {
+		/* We need uvm to be ready before we can map the MMIO region */
+		if (!kernel_map) {
+			initted = 0;
+			return;
+		}
+#if NPV > 0
+		if (viocon_early_probe(mmio_args_parse) == 0)
+			return;
+#endif
+	}
+#endif
 #if (NCOM > 0)
 	if (!strcmp(console_devname, "com")) {
 		int addr = consinfo->addr;
