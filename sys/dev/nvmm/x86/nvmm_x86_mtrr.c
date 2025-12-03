@@ -97,6 +97,7 @@ nvmm_x86_mtrr_valid_type(uint8_t type)
 int
 nvmm_x86_mtrr_valid(struct nvmm_machine *mach, uint32_t msr, uint64_t data)
 {
+	uint64_t base;
 	uint8_t type;
 	int i;
 
@@ -125,20 +126,28 @@ nvmm_x86_mtrr_valid(struct nvmm_machine *mach, uint32_t msr, uint64_t data)
 	if (msr < MSR_MTRRphysBase0 || msr > MSR_MTRRphysBase15)
 		return EINVAL;
 
+	/* Rserved */
+	if (data & __BITS(52, 63))
+		return EINVAL;
+
+	/* clear out bits < 12 */
+	base = data & __BITS(12, 63);
+	/*
+	 * Check that:
+	 * 1. not targetting an address greater than gpa_end
+	 * 2. mask is not using bits greater than gpa_end
+	 */
+	if (base >= (mach->gpa_end - PAGE_SIZE))
+		return EINVAL;
+
 	/* Even / physBase registers */
 	if (!(msr & 1)) {
-		/* clear out bits < 12 */
-		uint64_t base = data & __BITS(12, 63);
-
 		/* Reserved bits [11:8] must be zero. */
 		if ((data & __BITS(8, 11)) != 0)
 			return EINVAL;
 		type = (uint8_t)(data & 0xff);
 		if (!nvmm_x86_mtrr_valid_type(type))
 			return EINVAL;
-		if (base >= mach->gpa_end)
-			return EINVAL;
-
 		return 0;
 	} else {
 		/*
@@ -176,10 +185,7 @@ int
 nvmm_x86_mtrr_get_msr(struct nvmm_x86_mtrr *mtrr, uint32_t msr,
     uint64_t *valp)
 {
-	const uint64_t *ptr;
-
-	if (valp == NULL)
-		return EFAULT;
+	uint64_t *ptr;
 
 	if (msr == MSR_MTRRcap) {
 		/*
