@@ -821,6 +821,7 @@ struct vmx_cpudata {
 	uint64_t drs[NVMM_X64_NDR];
 	uint64_t gtsc;
 	struct xsave_header gfpu __aligned(64);
+	struct nvmm_x86_mtrr mtrr;
 
 	/* VCPU configuration. */
 	bool cpuidpresent[VMX_NCPUIDS];
@@ -1891,6 +1892,13 @@ vmx_inkernel_handle_msr(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			cpudata->gprs[NVMM_X64_GPR_RDX] = (val >> 32);
 			goto handled;
 		}
+		/* MTRR MSRs. */
+		if (nvmm_x86_mtrr_get_msr(&cpudata->mtrr, exit->u.rdmsr.msr,
+		    &val) == 0) {
+			cpudata->gprs[NVMM_X64_GPR_RAX] = (val & 0xFFFFFFFF);
+			cpudata->gprs[NVMM_X64_GPR_RDX] = (val >> 32);
+			goto handled;
+		}
 		for (i = 0; i < __arraycount(msr_ignore_list); i++) {
 			if (msr_ignore_list[i] != exit->u.rdmsr.msr)
 				continue;
@@ -1915,6 +1923,11 @@ vmx_inkernel_handle_msr(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 		}
 		if (exit->u.wrmsr.msr == MSR_MISC_ENABLE) {
 			/* Don't care. */
+			goto handled;
+		}
+		/* MTRR MSRs. */
+		if (nvmm_x86_mtrr_set_msr(&cpudata->mtrr, exit->u.wrmsr.msr,
+		    exit->u.wrmsr.val) == 0) {
 			goto handled;
 		}
 		for (i = 0; i < __arraycount(msr_ignore_list); i++) {

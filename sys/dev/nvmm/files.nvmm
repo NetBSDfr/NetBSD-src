@@ -6,6 +6,7 @@ file	dev/nvmm/nvmm.c			nvmm
 
 ifdef amd64
 file	dev/nvmm/x86/nvmm_x86.c		nvmm
+file	dev/nvmm/x86/nvmm_x86_mtrr.c	nvmm
 file	dev/nvmm/x86/nvmm_x86_svm.c	nvmm
 file	dev/nvmm/x86/nvmm_x86_svmfunc.S	nvmm
 file	dev/nvmm/x86/nvmm_x86_vmx.c	nvmm

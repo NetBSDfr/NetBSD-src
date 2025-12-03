@@ -13,7 +13,7 @@ IOCONF=	nvmm.ioconf
 SRCS=	nvmm.c
 
 .if ${MACHINE_ARCH} == "x86_64"
-SRCS+=	nvmm_x86.c
+SRCS+=	nvmm_x86.c nvmm_x86_mtrr.c
 SRCS+=	nvmm_x86_svm.c nvmm_x86_svmfunc.S
 SRCS+=	nvmm_x86_vmx.c nvmm_x86_vmxfunc.S
 .endif
