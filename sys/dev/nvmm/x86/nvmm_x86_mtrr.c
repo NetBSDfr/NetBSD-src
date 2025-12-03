@@ -95,7 +95,7 @@ nvmm_x86_mtrr_valid_type(uint8_t type)
  * Validate an MTRR MSR value before accepting a write from the guest.
  */
 int
-nvmm_x86_mtrr_valid(uint32_t msr, uint64_t data)
+nvmm_x86_mtrr_valid(struct nvmm_machine *mach, uint32_t msr, uint64_t data)
 {
 	uint8_t type;
 	int i;
@@ -136,7 +136,7 @@ nvmm_x86_mtrr_valid(uint32_t msr, uint64_t data)
 		type = (uint8_t)(data & 0xff);
 		if (!nvmm_x86_mtrr_valid_type(type))
 			return EINVAL;
-		if (base >= NVMM_MAX_RAM)
+		if (base >= mach->gpa_end)
 			return EINVAL;
 
 		return 0;
@@ -156,7 +156,8 @@ nvmm_x86_mtrr_valid(uint32_t msr, uint64_t data)
 }
 
 int
-nvmm_x86_mtrr_set_msr(struct nvmm_x86_mtrr *mtrr, uint32_t msr, uint64_t data)
+nvmm_x86_mtrr_set_msr(struct nvmm_machine *mach, struct nvmm_x86_mtrr *mtrr,
+    uint32_t msr, uint64_t data)
 {
 	uint64_t *ptr;
 
@@ -164,7 +165,7 @@ nvmm_x86_mtrr_set_msr(struct nvmm_x86_mtrr *mtrr, uint32_t msr, uint64_t data)
 	if (ptr == NULL)
 		return ENOENT;
 
-	if (nvmm_x86_mtrr_valid(msr, data) != 0)
+	if (nvmm_x86_mtrr_valid(mach, msr, data) != 0)
 		return EINVAL;
 
 	*ptr = data;

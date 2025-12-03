@@ -1926,8 +1926,8 @@ vmx_inkernel_handle_msr(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			goto handled;
 		}
 		/* MTRR MSRs. */
-		if (nvmm_x86_mtrr_set_msr(&cpudata->mtrr, exit->u.wrmsr.msr,
-		    exit->u.wrmsr.val) == 0) {
+		if (nvmm_x86_mtrr_set_msr(mach, &cpudata->mtrr,
+		    exit->u.wrmsr.msr, exit->u.wrmsr.val) == 0) {
 			goto handled;
 		}
 		for (i = 0; i < __arraycount(msr_ignore_list); i++) {
