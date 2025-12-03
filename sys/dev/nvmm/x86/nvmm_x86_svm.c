@@ -1247,7 +1247,6 @@ svm_inkernel_handle_msr(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			cpudata->gprs[NVMM_X64_GPR_RDX] = (val >> 32);
 			goto handled;
 		}
-		/* MTRR MSRs. */
 		if (nvmm_x86_mtrr_get_msr(&cpudata->mtrr, exit->u.rdmsr.msr,
 		    &val) == 0) {
 			vmcb->state.rax = (val & 0xFFFFFFFF);
@@ -1280,7 +1279,6 @@ svm_inkernel_handle_msr(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			cpudata->gtsc_want_update = true;
 			goto handled;
 		}
-		/* MTRR MSRs. */
 		if (nvmm_x86_mtrr_set_msr(mach, &cpudata->mtrr,
 		    exit->u.wrmsr.msr, exit->u.wrmsr.val) == 0) {
 			goto handled;

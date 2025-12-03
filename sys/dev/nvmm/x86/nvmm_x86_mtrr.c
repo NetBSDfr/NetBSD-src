@@ -177,7 +177,11 @@ nvmm_x86_mtrr_set_msr(struct nvmm_machine *mach, struct nvmm_x86_mtrr *mtrr,
 	if (nvmm_x86_mtrr_valid(mach, msr, data) != 0)
 		return EINVAL;
 
+#ifdef NVMM_DEBUG
+	print("MTRR: writing 0x%016lx at MSR 0x%x\n", data, msr);
+#endif
 	*ptr = data;
+
 	return 0;
 }
 
@@ -203,5 +207,9 @@ nvmm_x86_mtrr_get_msr(struct nvmm_x86_mtrr *mtrr, uint32_t msr,
 		return ENOENT;
 
 	*valp = *ptr;
+
+#ifdef NVMM_DEBUG
+	printf("MTRR: reading 0x%016lx at MSR %x\n", *valp, msr);
+#endif
 	return 0;
 }
