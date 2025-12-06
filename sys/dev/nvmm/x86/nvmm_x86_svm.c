@@ -1231,7 +1231,7 @@ svm_inkernel_handle_msr(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 {
 	struct svm_cpudata *cpudata = vcpu->cpudata;
 	struct vmcb *vmcb = cpudata->vmcb;
-	uint64_t val;
+	uint64_t val = 0;
 	size_t i;
 
 	if (exit->reason == NVMM_VCPU_EXIT_RDMSR) {
@@ -1247,7 +1247,7 @@ svm_inkernel_handle_msr(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			cpudata->gprs[NVMM_X64_GPR_RDX] = (val >> 32);
 			goto handled;
 		}
-		if (nvmm_x86_mtrr_get_msr(&cpudata->mtrr, exit->u.rdmsr.msr,
+		if (mtrr_getset(mach, &cpudata->mtrr, exit->u.rdmsr.msr,
 		    &val) == 0) {
 			vmcb->state.rax = (val & 0xFFFFFFFF);
 			cpudata->gprs[NVMM_X64_GPR_RDX] = (val >> 32);
@@ -1279,8 +1279,8 @@ svm_inkernel_handle_msr(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			cpudata->gtsc_want_update = true;
 			goto handled;
 		}
-		if (nvmm_x86_mtrr_set_msr(mach, &cpudata->mtrr,
-		    exit->u.wrmsr.msr, exit->u.wrmsr.val) == 0) {
+		if (mtrr_getset(mach, &cpudata->mtrr,
+		    exit->u.wrmsr.msr, &exit->u.wrmsr.val) == 0) {
 			goto handled;
 		}
 		for (i = 0; i < __arraycount(msr_ignore_list); i++) {

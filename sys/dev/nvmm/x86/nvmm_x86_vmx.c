@@ -1892,7 +1892,7 @@ vmx_inkernel_handle_msr(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			cpudata->gprs[NVMM_X64_GPR_RDX] = (val >> 32);
 			goto handled;
 		}
-		if (nvmm_x86_mtrr_get_msr(&cpudata->mtrr, exit->u.rdmsr.msr,
+		if (mtrr_getset(mach, &cpudata->mtrr, exit->u.rdmsr.msr,
 		    &val) == 0) {
 			cpudata->gprs[NVMM_X64_GPR_RAX] = (val & 0xFFFFFFFF);
 			cpudata->gprs[NVMM_X64_GPR_RDX] = (val >> 32);
@@ -1924,8 +1924,8 @@ vmx_inkernel_handle_msr(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			/* Don't care. */
 			goto handled;
 		}
-		if (nvmm_x86_mtrr_set_msr(mach, &cpudata->mtrr,
-		    exit->u.wrmsr.msr, exit->u.wrmsr.val) == 0) {
+		if (mtrr_getset(mach, &cpudata->mtrr,
+		    exit->u.wrmsr.msr, &exit->u.wrmsr.val) == 0) {
 			goto handled;
 		}
 		for (i = 0; i < __arraycount(msr_ignore_list); i++) {

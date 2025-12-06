@@ -325,12 +325,11 @@ extern const struct nvmm_x86_cpuid_mask nvmm_cpuid_80000008;
 bool nvmm_x86_pat_validate(uint64_t);
 
 /*
- * MTRR (Memory Type Range Register) from https://wiki.osdev.org/MTRR
+ * MTRR (Memory Type Range Register)
  */
-#define NVMM_X86_NR_VAR_MTRR		8
 
 struct nvmm_x86_mtrr {
-	uint64_t var_ranges[NVMM_X86_NR_VAR_MTRR * 2];	/* base/mask pairs */
+	uint64_t var_ranges[16]; /* 8*2, base/mask pairs */
 	uint64_t fixed_64k;
 	uint64_t fixed_16k[2];
 	uint64_t fixed_4k[8];
@@ -339,10 +338,8 @@ struct nvmm_x86_mtrr {
 
 struct nvmm_machine;
 
-int nvmm_x86_mtrr_valid(struct nvmm_machine *, uint32_t, uint64_t);
-int nvmm_x86_mtrr_set_msr(struct nvmm_machine *, struct nvmm_x86_mtrr *,
-    uint32_t, uint64_t);
-int nvmm_x86_mtrr_get_msr(struct nvmm_x86_mtrr *, uint32_t, uint64_t *);
+int mtrr_getset(struct nvmm_machine *, struct nvmm_x86_mtrr *,
+    uint32_t, uint64_t *);
 
 #endif
 

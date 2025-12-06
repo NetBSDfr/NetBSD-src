@@ -28,7 +28,7 @@
 
 /*
  * MTRR (Memory Type Range Register) virtualization support for NVMM.
- * Adapted from Linux KVM implementation (arch/x86/kvm/mtrr.c).
+ * Intel 64 and IA-32 Architectures Software Developer’s Manual, p. 473 10.11
  */
 
 #include <sys/cdefs.h>
@@ -44,172 +44,114 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <dev/nvmm/nvmm_internal.h>
 #include <dev/nvmm/x86/nvmm_x86.h>
 
-
-static uint64_t *
-nvmm_x86_mtrr_find(struct nvmm_x86_mtrr *mtrr, uint32_t msr)
-{
-	u_int idx;
-
-	/* Variable-range MTRRs (PhysBase/PhysMask pairs) */
-	if (msr >= MSR_MTRRphysBase0 && msr <= MSR_MTRRphysMask15) {
-		idx = msr - MSR_MTRRphysBase0;
-		return &mtrr->var_ranges[idx];
-	}
-
-	/* Fixed-range MTRRs and default-type MSR */
-	switch (msr) {
-	case MSR_MTRRfix64K_00000:
-		return &mtrr->fixed_64k;
-	case MSR_MTRRfix16K_80000:
-	case MSR_MTRRfix16K_A0000:
-		idx = msr - MSR_MTRRfix16K_80000;
-		return &mtrr->fixed_16k[idx];
-	case MSR_MTRRfix4K_C0000:
-	case MSR_MTRRfix4K_C8000:
-	case MSR_MTRRfix4K_D0000:
-	case MSR_MTRRfix4K_D8000:
-	case MSR_MTRRfix4K_E0000:
-	case MSR_MTRRfix4K_E8000:
-	case MSR_MTRRfix4K_F0000:
-	case MSR_MTRRfix4K_F8000:
-		idx = msr - MSR_MTRRfix4K_C0000;
-		return &mtrr->fixed_4k[idx];
-	case MSR_MTRRdefType:
-		return &mtrr->deftype;
-	default:
-		return NULL;
-	}
-}
+#define NVMM_DEBUG 1
 
 static bool
-nvmm_x86_mtrr_valid_type(uint8_t type)
+mtrr_valid_memtype(uint8_t type)
 {
+	/*
+	 * Type is only one of those
+	 *
+	 * 0 - Uncacheable (UC)
+	 * 1 - Write Combining (WC)
+	 * 2 - Reserved
+	 * 3 - Reserved
+	 * 4 - Write Through (WT)
+	 * 5 - Write-protected (WP)
+	 * 6 - Writeback (WB)
+	 */
+	uint8_t valid = __BITS(0,1) | __BITS(4,6);
 
-	if (type >= 8)
+	if (type > 7 || !((1 << type) & valid))
 		return false;
-	/* Use a bitmask to test allowed values: bits 0,1,4,5,6 against 0x73 */
-	return ((1 << type) & 0x73) != 0;
+
+	return true;
 }
 
-/*
- * Validate an MTRR MSR value before accepting a write from the guest.
- */
 int
-nvmm_x86_mtrr_valid(struct nvmm_machine *mach, uint32_t msr, uint64_t data)
+mtrr_getset(struct nvmm_machine *mach, struct nvmm_x86_mtrr *mtrr, 
+    uint32_t msr, uint64_t *data)
 {
-	uint64_t base;
-	uint8_t type;
+	uint64_t *mtrraddr = NULL;
 	int i;
 
-	if (msr == MSR_MTRRdefType) {
-		/* Reserved bits above bit 11 and bits [9:8] must be zero */
-		if ((data & ~__BITS(0, 11)) != 0)
+	switch(msr) {
+	case MSR_MTRRdefType:
+		mtrraddr = &mtrr->deftype;
+		/* no payload passed, read register */
+		if (!*data)
+			break;
+		/* data was passed, we're writing
+		 *
+		 * [7:0]: Memory type
+		 * [9:8]: Reserved
+		 * 10: Fixed-range MTRRs enable/disable
+		 * 11: MTRR enable/disable
+		 * [63:12]: Reserved
+		 */
+		if (*data & (__BITS(8,9) | __BITS(12,63)))
 			return EINVAL;
-		if ((data & __BITS(8, 9)) != 0)
+		/* validate memory type */
+		if (!mtrr_valid_memtype((uint8_t)(*data & 0xff)))
 			return EINVAL;
-		type = (uint8_t)(data & __BITS(0, 7));
-		if (!nvmm_x86_mtrr_valid_type(type))
-			return EINVAL;
-		return 0;
-	}
-
-	if (msr >= MSR_MTRRfix64K_00000 && msr <= MSR_MTRRfix4K_F8000) {
+		break;
+	case MSR_MTRRfix64K_00000:
+		mtrraddr = &mtrr->fixed_64k;
+	/* FALLTHROUGH */
+	case MSR_MTRRfix16K_80000 ... MSR_MTRRfix16K_A0000:
+		if (mtrraddr == NULL)
+			mtrraddr = &mtrr->fixed_16k[msr - MSR_MTRRfix16K_80000];
+	/* FALLTHROUGH */
+	case MSR_MTRRfix4K_C0000 ... MSR_MTRRfix4K_F8000:
+		if (mtrraddr == NULL)
+			mtrraddr = &mtrr->fixed_4k[msr - MSR_MTRRfix4K_C0000];
+		if (!*data)
+			break;
+		/*
+		 * The fixed memory ranges are mapped with 11 fixed-range
+		 * registers of 64 bits each.
+		 * Each of these registers is divided into 8-bit fields that are
+		 * used to specify the memory type for each of the sub-ranges the
+		 * register controls.
+		 */
 		for (i = 0; i < 8; i++) {
-			type = (uint8_t)((data >> (i * 8)) & 0xff);
-			if (!nvmm_x86_mtrr_valid_type(type))
+			uint8_t type = (uint8_t)((*data >> (i * 8)) & 0xff);
+			if (!mtrr_valid_memtype(type))
 				return EINVAL;
 		}
-		return 0;
-	}
-
-	/* Lastly, variable-range registers */
-	if (msr < MSR_MTRRphysBase0 || msr > MSR_MTRRphysBase15)
-		return EINVAL;
-
-	/* Rserved */
-	if (data & __BITS(52, 63))
-		return EINVAL;
-
-	/* clear out bits < 12 */
-	base = data & __BITS(12, 63);
-	/*
-	 * Check that:
-	 * 1. not targetting an address greater than gpa_end
-	 * 2. mask is not using bits greater than gpa_end
-	 */
-	if (base >= (mach->gpa_end - PAGE_SIZE))
-		return EINVAL;
-
-	/* Even / physBase registers */
-	if (!(msr & 1)) {
-		/* Reserved bits [11:8] must be zero. */
-		if ((data & __BITS(8, 11)) != 0)
+		break;
+	case MSR_MTRRphysBase0 ... MSR_MTRRphysMask15:
+		mtrraddr = &mtrr->var_ranges[msr - MSR_MTRRphysBase0];
+		if (!*data)
+			break;
+		/* 63:MAXPHYSADD reserved, i.e. is data > MAX_RAM */
+		if ((*data & __BITS(12, 63)) > mach->gpa_end)
 			return EINVAL;
-		type = (uint8_t)(data & 0xff);
-		if (!nvmm_x86_mtrr_valid_type(type))
-			return EINVAL;
-		return 0;
-	} else {
-		/*
-		 * Odd physMask registers.
-		 *
-		 * Bits [10:0] must be zero
-		 */
-		if ((data & __BITS(0, 10)) != 0)
-			return EINVAL;
-
-		return 0;
-	}
-
-	return EINVAL;
-}
-
-int
-nvmm_x86_mtrr_set_msr(struct nvmm_machine *mach, struct nvmm_x86_mtrr *mtrr,
-    uint32_t msr, uint64_t data)
-{
-	uint64_t *ptr;
-
-	ptr = nvmm_x86_mtrr_find(mtrr, msr);
-	if (ptr == NULL)
+		if (msr | 1) { /* even: phyBase */
+			/* [11:8]: Reserved */
+			if (*data & (__BITS(8,11)))
+				return EINVAL;
+		} else { /* odd: phyMask */
+			/* [10:0]: Reserved */
+			if (*data & (__BITS(0,10)))
+				return EINVAL;
+		}
+		break;
+	default:
 		return ENOENT;
-
-	if (nvmm_x86_mtrr_valid(mach, msr, data) != 0)
-		return EINVAL;
-
-#ifdef NVMM_DEBUG
-	print("MTRR: writing 0x%016lx at MSR 0x%x\n", data, msr);
-#endif
-	*ptr = data;
-
-	return 0;
-}
-
-int
-nvmm_x86_mtrr_get_msr(struct nvmm_x86_mtrr *mtrr, uint32_t msr,
-    uint64_t *valp)
-{
-	uint64_t *ptr;
-
-	if (msr == MSR_MTRRcap) {
-		/*
-		 * Bits [7:0]: count of variable-size MTRRs supported
-		 * Bit 8: all fixed-size MTRRs are available
-		 * Bit 10: WC type is available
-		 */
-		*valp = (uint64_t)NVMM_X86_NR_VAR_MTRR |
-		    __BIT(8) | __BIT(10);
-		return 0;
 	}
 
-	ptr = nvmm_x86_mtrr_find(mtrr, msr);
-	if (ptr == NULL)
-		return ENOENT;
-
-	*valp = *ptr;
-
+	if (*data) { /* write mtrr */
 #ifdef NVMM_DEBUG
-	printf("MTRR: reading 0x%016lx at MSR %x\n", *valp, msr);
+		printf("MTRR: writing 0x%016lx at MSR 0x%x\n", *data, msr);
 #endif
+		*mtrraddr = *data;
+	} else { /* read mtrr */
+#ifdef NVMM_DEBUG
+		printf("MTRR: reading 0x%016lx at MSR %x\n", *mtrraddr, msr);
+#endif
+		*data = *mtrraddr;
+	}
+
 	return 0;
 }
