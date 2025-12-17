@@ -720,6 +720,8 @@ static kmutex_t vmx_asidlock __cacheline_aligned;
 #define VMX_XCR0_MASK_DEFAULT	(XCR0_X87|XCR0_SSE)
 static uint64_t vmx_xcr0_mask __read_mostly;
 
+static uint8_t vmx_physbits;
+
 #define VMX_NCPUIDS	32
 
 #define VMCS_NPAGES	1
@@ -1892,7 +1894,7 @@ vmx_inkernel_handle_msr(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			cpudata->gprs[NVMM_X64_GPR_RDX] = (val >> 32);
 			goto handled;
 		}
-		if (mtrr_getset(mach, &cpudata->mtrr, exit->u.rdmsr.msr,
+		if (nvmm_x86_mtrr_rdmsr(&cpudata->mtrr, exit->u.rdmsr.msr,
 		    &val) == 0) {
 			cpudata->gprs[NVMM_X64_GPR_RAX] = (val & 0xFFFFFFFF);
 			cpudata->gprs[NVMM_X64_GPR_RDX] = (val >> 32);
@@ -1924,8 +1926,8 @@ vmx_inkernel_handle_msr(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			/* Don't care. */
 			goto handled;
 		}
-		if (mtrr_getset(mach, &cpudata->mtrr,
-		    exit->u.wrmsr.msr, &exit->u.wrmsr.val) == 0) {
+		if (nvmm_x86_mtrr_wrmsr(&cpudata->mtrr,
+		    vmx_physbits, exit->u.wrmsr.msr, exit->u.wrmsr.val) == 0) {
 			goto handled;
 		}
 		for (i = 0; i < __arraycount(msr_ignore_list); i++) {
@@ -3020,6 +3022,10 @@ vmx_vcpu_init(struct nvmm_machine *mach, struct nvmm_cpu *vcpu)
 	cpudata->cstar = rdmsr(MSR_CSTAR);
 	cpudata->sfmask = rdmsr(MSR_SFMASK);
 
+	/* Initialize MTRR */
+	memset(&cpudata->mtrr, 0, sizeof(cpudata->mtrr));
+	cpudata->mtrr.deftype = 0x06; /* WB */
+
 	/* Install the RESET state. */
 	memcpy(&vcpu->comm->state, &nvmm_x86_reset_state,
 	    sizeof(nvmm_x86_reset_state));
@@ -3599,6 +3605,9 @@ vmx_init(void)
 	/* Init the max extended CPUID leaf. */
 	x86_cpuid(0x80000000, descs);
 	vmx_cpuid_max_extended = uimin(descs[0], VMX_CPUID_MAX_EXTENDED);
+
+	x86_cpuid(0x80000008, descs);
+	vmx_physbits = descs[0] & 0xff;
 
 	/* Init the TLB flush op, the EPT flush op and the EPTP type. */
 	msr = rdmsr(MSR_IA32_VMX_EPT_VPID_CAP);

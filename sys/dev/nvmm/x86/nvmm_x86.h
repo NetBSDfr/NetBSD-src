@@ -336,10 +336,8 @@ struct nvmm_x86_mtrr {
 	uint64_t deftype;
 };
 
-struct nvmm_machine;
-
-int mtrr_getset(struct nvmm_machine *, struct nvmm_x86_mtrr *,
-    uint32_t, uint64_t *);
+int nvmm_x86_mtrr_rdmsr(struct nvmm_x86_mtrr *, uint32_t, uint64_t *);
+int nvmm_x86_mtrr_wrmsr(struct nvmm_x86_mtrr *, uint8_t, uint32_t, uint64_t);
 
 #endif
 

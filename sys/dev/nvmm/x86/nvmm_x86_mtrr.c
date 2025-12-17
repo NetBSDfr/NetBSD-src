@@ -47,7 +47,7 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #define NVMM_DEBUG 1
 
 static bool
-mtrr_valid_memtype(uint8_t type)
+nvmm_x86_mtrr_valid_memtype(uint8_t type)
 {
 	/*
 	 * Type is only one of those
@@ -68,20 +68,31 @@ mtrr_valid_memtype(uint8_t type)
 	return true;
 }
 
-int
-mtrr_getset(struct nvmm_machine *mach, struct nvmm_x86_mtrr *mtrr, 
-    uint32_t msr, uint64_t *data)
+static int
+nvmm_x86_mtrr_getset(struct nvmm_x86_mtrr *mtrr, uint8_t physbits,
+    uint32_t msr, uint64_t *val, bool write)
 {
 	uint64_t *mtrraddr = NULL;
 	int i;
 
+#ifdef NVMM_DEBUG
+	printf("MTRR RECV MSR: %x (%u)\n", msr, write);
+#endif
+
 	switch(msr) {
+	case MSR_MTRRcap:
+		/*
+		 * [7:0]: Number of variable range registers (8)
+		 * 8: Fixed range registers supported
+		 * 10: Write-combining memory type supported
+		 */
+		*val = __BIT(8) | __BIT(10) | 8;
+		return 0;
 	case MSR_MTRRdefType:
 		mtrraddr = &mtrr->deftype;
-		/* no payload passed, read register */
-		if (!*data)
+		if (!write)
 			break;
-		/* data was passed, we're writing
+		/* We're writing
 		 *
 		 * [7:0]: Memory type
 		 * [9:8]: Reserved
@@ -89,23 +100,23 @@ mtrr_getset(struct nvmm_machine *mach, struct nvmm_x86_mtrr *mtrr,
 		 * 11: MTRR enable/disable
 		 * [63:12]: Reserved
 		 */
-		if (*data & (__BITS(8,9) | __BITS(12,63)))
+		if (*val & (__BITS(8,9) | __BITS(12,63)))
 			return EINVAL;
 		/* validate memory type */
-		if (!mtrr_valid_memtype((uint8_t)(*data & 0xff)))
+		if (!nvmm_x86_mtrr_valid_memtype((uint8_t)(*val & 0xff)))
 			return EINVAL;
 		break;
 	case MSR_MTRRfix64K_00000:
 		mtrraddr = &mtrr->fixed_64k;
 	/* FALLTHROUGH */
 	case MSR_MTRRfix16K_80000 ... MSR_MTRRfix16K_A0000:
-		if (mtrraddr == NULL)
+		if (mtrraddr == NULL) /* mtrraddr not set by previous case */
 			mtrraddr = &mtrr->fixed_16k[msr - MSR_MTRRfix16K_80000];
 	/* FALLTHROUGH */
 	case MSR_MTRRfix4K_C0000 ... MSR_MTRRfix4K_F8000:
 		if (mtrraddr == NULL)
 			mtrraddr = &mtrr->fixed_4k[msr - MSR_MTRRfix4K_C0000];
-		if (!*data)
+		if (!write)
 			break;
 		/*
 		 * The fixed memory ranges are mapped with 11 fixed-range
@@ -115,25 +126,27 @@ mtrr_getset(struct nvmm_machine *mach, struct nvmm_x86_mtrr *mtrr,
 		 * register controls.
 		 */
 		for (i = 0; i < 8; i++) {
-			uint8_t type = (uint8_t)((*data >> (i * 8)) & 0xff);
-			if (!mtrr_valid_memtype(type))
+			uint8_t type = (uint8_t)((*val >> (i * 8)) & 0xff);
+			if (!nvmm_x86_mtrr_valid_memtype(type))
 				return EINVAL;
 		}
 		break;
-	case MSR_MTRRphysBase0 ... MSR_MTRRphysMask15:
+	/* 8 PhysBase / PhysMask pairs */
+	case MSR_MTRRphysBase0 ... MSR_MTRRphysMask7:
+		printf("MTRR PhyBase / Mask: %x\n", msr);
 		mtrraddr = &mtrr->var_ranges[msr - MSR_MTRRphysBase0];
-		if (!*data)
+		if (!write)
 			break;
-		/* 63:MAXPHYSADD reserved, i.e. is data > MAX_RAM */
-		if ((*data & __BITS(12, 63)) > mach->gpa_end)
+		/* 63:MAXPHYSADDR reserved */
+		if (*val & (~__BITS(0, physbits - 1)))
 			return EINVAL;
-		if (msr | 1) { /* even: phyBase */
-			/* [11:8]: Reserved */
-			if (*data & (__BITS(8,11)))
-				return EINVAL;
-		} else { /* odd: phyMask */
+		if (msr & 1) { /* odd: phyMask */
 			/* [10:0]: Reserved */
-			if (*data & (__BITS(0,10)))
+			if (*val & (__BITS(0,10)))
+				return EINVAL;
+		} else { /* even: phyBase */
+			/* [11:8]: Reserved */
+			if (*val & (__BITS(8,11)))
 				return EINVAL;
 		}
 		break;
@@ -141,17 +154,32 @@ mtrr_getset(struct nvmm_machine *mach, struct nvmm_x86_mtrr *mtrr,
 		return ENOENT;
 	}
 
-	if (*data) { /* write mtrr */
+	if (write) { /* write mtrr */
 #ifdef NVMM_DEBUG
-		printf("MTRR: writing 0x%016lx at MSR 0x%x\n", *data, msr);
+		printf("MTRR: writing 0x%016lx at MSR 0x%x\n", *val, msr);
 #endif
-		*mtrraddr = *data;
+		*mtrraddr = *val;
 	} else { /* read mtrr */
 #ifdef NVMM_DEBUG
 		printf("MTRR: reading 0x%016lx at MSR %x\n", *mtrraddr, msr);
 #endif
-		*data = *mtrraddr;
+		*val = *mtrraddr;
 	}
 
 	return 0;
+}
+
+int
+nvmm_x86_mtrr_rdmsr(struct nvmm_x86_mtrr *mtrr, uint32_t msr, uint64_t *val)
+{
+	return nvmm_x86_mtrr_getset(mtrr, 0, msr, val, false);
+
+}
+
+int
+nvmm_x86_mtrr_wrmsr(struct nvmm_x86_mtrr *mtrr, uint8_t physbits,
+    uint32_t msr, uint64_t val)
+{
+	return nvmm_x86_mtrr_getset(mtrr, physbits, msr, &val, true);
+
 }

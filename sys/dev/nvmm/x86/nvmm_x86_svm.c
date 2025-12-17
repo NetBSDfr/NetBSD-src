@@ -503,6 +503,8 @@ static uint32_t svm_ctrl_tlb_flush __read_mostly;
 #define SVM_XCR0_MASK_DEFAULT	(XCR0_X87|XCR0_SSE)
 static uint64_t svm_xcr0_mask __read_mostly;
 
+static uint8_t svm_physbits;
+
 #define SVM_NCPUIDS	32
 
 #define VMCB_NPAGES	1
@@ -602,6 +604,7 @@ struct svm_cpudata {
 	uint64_t gprs[NVMM_X64_NGPR];
 	uint64_t drs[NVMM_X64_NDR];
 	uint64_t gtsc;
+	uint8_t physbits;
 	struct xsave_header gfpu __aligned(64);
 	struct nvmm_x86_mtrr mtrr;
 
@@ -1247,7 +1250,7 @@ svm_inkernel_handle_msr(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			cpudata->gprs[NVMM_X64_GPR_RDX] = (val >> 32);
 			goto handled;
 		}
-		if (mtrr_getset(mach, &cpudata->mtrr, exit->u.rdmsr.msr,
+		if (nvmm_x86_mtrr_rdmsr(&cpudata->mtrr, exit->u.rdmsr.msr,
 		    &val) == 0) {
 			vmcb->state.rax = (val & 0xFFFFFFFF);
 			cpudata->gprs[NVMM_X64_GPR_RDX] = (val >> 32);
@@ -1279,8 +1282,8 @@ svm_inkernel_handle_msr(struct nvmm_machine *mach, struct nvmm_cpu *vcpu,
 			cpudata->gtsc_want_update = true;
 			goto handled;
 		}
-		if (mtrr_getset(mach, &cpudata->mtrr,
-		    exit->u.wrmsr.msr, &exit->u.wrmsr.val) == 0) {
+		if (nvmm_x86_mtrr_wrmsr(&cpudata->mtrr,
+		    svm_physbits, exit->u.wrmsr.msr, exit->u.wrmsr.val) == 0) {
 			goto handled;
 		}
 		for (i = 0; i < __arraycount(msr_ignore_list); i++) {
@@ -2310,6 +2313,10 @@ svm_vcpu_init(struct nvmm_machine *mach, struct nvmm_cpu *vcpu)
 	cpudata->cstar = rdmsr(MSR_CSTAR);
 	cpudata->sfmask = rdmsr(MSR_SFMASK);
 
+	/* Initialize MTRR */
+	memset(&cpudata->mtrr, 0, sizeof(cpudata->mtrr));
+	cpudata->mtrr.deftype = 0x06; /* WB */
+
 	/* Install the RESET state. */
 	memcpy(&vcpu->comm->state, &nvmm_x86_reset_state,
 	    sizeof(nvmm_x86_reset_state));
@@ -2630,6 +2637,9 @@ svm_init(void)
 	/* Init the max extended CPUID leaf. */
 	x86_cpuid(0x80000000, descs);
 	svm_cpuid_max_extended = uimin(descs[0], SVM_CPUID_MAX_EXTENDED);
+
+	x86_cpuid(0x80000008, descs);
+	svm_physbits = descs[0] & 0xff;
 
 	memset(hsave, 0, sizeof(hsave));
 	for (CPU_INFO_FOREACH(cii, ci)) {
