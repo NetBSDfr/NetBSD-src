@@ -28,7 +28,7 @@
 
 /*
  * MTRR (Memory Type Range Register) virtualization support for NVMM.
- * Intel 64 and IA-32 Architectures Software Developer’s Manual, p. 473 10.11
+ * Intel 64 and IA-32 Architectures Software Developer's Manual, p. 473 10.11
  */
 
 #include <sys/cdefs.h>
@@ -133,7 +133,6 @@ nvmm_x86_mtrr_getset(struct nvmm_x86_mtrr *mtrr, uint8_t physbits,
 		break;
 	/* 8 PhysBase / PhysMask pairs */
 	case MSR_MTRRphysBase0 ... MSR_MTRRphysMask7:
-		printf("MTRR PhyBase / Mask: %x\n", msr);
 		mtrraddr = &mtrr->var_ranges[msr - MSR_MTRRphysBase0];
 		if (!write)
 			break;
