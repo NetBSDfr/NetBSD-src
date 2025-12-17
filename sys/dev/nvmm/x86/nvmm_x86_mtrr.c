@@ -47,7 +47,6 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <dev/nvmm/nvmm_internal.h>
 #include <dev/nvmm/x86/nvmm_x86.h>
 
-#define NVMM_DEBUG 1
 
 static bool
 nvmm_x86_mtrr_valid_memtype(uint8_t type)
