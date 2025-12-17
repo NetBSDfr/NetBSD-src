@@ -28,7 +28,10 @@
 
 /*
  * MTRR (Memory Type Range Register) virtualization support for NVMM.
- * Intel 64 and IA-32 Architectures Software Developer's Manual, p. 473 10.11
+ *
+ * Intel 64 and IA-32 Architectures Software Developer's Manual
+ * Combined Volumes 3A, 3B, 3C, and 3D: System Programming Guide, ch. 13.11
+ * https://cdrdv2.intel.com/v1/dl/getContent/671447
  */
 
 #include <sys/cdefs.h>
@@ -80,14 +83,16 @@ nvmm_x86_mtrr_getset(struct nvmm_x86_mtrr *mtrr, uint8_t physbits,
 #endif
 
 	switch(msr) {
+	/* 13.11.1 MTRR Feature Identification */
 	case MSR_MTRRcap:
 		/*
 		 * [7:0]: Number of variable range registers (8)
 		 * 8: Fixed range registers supported
 		 * 10: Write-combining memory type supported
 		 */
-		*val = __BIT(8) | __BIT(10) | 8;
+		*val = 8 | __BIT(8) | __BIT(10);
 		return 0;
+	/* 13.11.2.1 IA32_MTRR_DEF_TYPE MSR */
 	case MSR_MTRRdefType:
 		mtrraddr = &mtrr->deftype;
 		if (!write)
@@ -106,6 +111,7 @@ nvmm_x86_mtrr_getset(struct nvmm_x86_mtrr *mtrr, uint8_t physbits,
 		if (!nvmm_x86_mtrr_valid_memtype((uint8_t)(*val & 0xff)))
 			return EINVAL;
 		break;
+	/* 13.11.2.2 Fixed Range MTRRs */
 	case MSR_MTRRfix64K_00000:
 		mtrraddr = &mtrr->fixed_64k;
 	/* FALLTHROUGH */
@@ -131,12 +137,15 @@ nvmm_x86_mtrr_getset(struct nvmm_x86_mtrr *mtrr, uint8_t physbits,
 				return EINVAL;
 		}
 		break;
-	/* 8 PhysBase / PhysMask pairs */
+	/*
+	 * 13.11.2.3 Variable Range MTRRs
+	 * 8 PhysBase / PhysMask pairs
+	 */
 	case MSR_MTRRphysBase0 ... MSR_MTRRphysMask7:
 		mtrraddr = &mtrr->var_ranges[msr - MSR_MTRRphysBase0];
 		if (!write)
 			break;
-		/* 63:MAXPHYSADDR reserved */
+		/* 63:MAXPHYADDR reserved */
 		if (*val & (~__BITS(0, physbits - 1)))
 			return EINVAL;
 		if (msr & 1) { /* odd: phyMask */
