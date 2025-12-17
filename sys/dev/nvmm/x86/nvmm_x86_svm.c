@@ -604,7 +604,6 @@ struct svm_cpudata {
 	uint64_t gprs[NVMM_X64_NGPR];
 	uint64_t drs[NVMM_X64_NDR];
 	uint64_t gtsc;
-	uint8_t physbits;
 	struct xsave_header gfpu __aligned(64);
 	struct nvmm_x86_mtrr mtrr;
 
