@@ -112,6 +112,9 @@ struct nvmm_ioc_gpa_map {
 	gpaddr_t gpa;
 	size_t size;
 	int prot;
+#ifdef NVMM_HAS_PREFAULT
+	bool prefault;
+#endif
 };
 
 struct nvmm_ioc_gpa_unmap {

@@ -48,6 +48,7 @@ typedef uint32_t	nvmm_cpuid_t;
 #endif
 
 #define NVMM_KERN_VERSION		2
+#define NVMM_HAS_PREFAULT		1
 
 /*
  * Version 1 - Initial release in NetBSD 9.0.

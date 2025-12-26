@@ -3,6 +3,7 @@ nvmm_assist_mem
 nvmm_capability
 nvmm_ctl
 nvmm_gpa_map
+nvmm_gpa_map_prefault
 nvmm_gpa_to_hva
 nvmm_gpa_unmap
 nvmm_gva_to_gpa

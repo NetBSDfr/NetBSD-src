@@ -431,9 +431,9 @@ nvmm_vcpu_run(struct nvmm_machine *mach, struct nvmm_vcpu *vcpu)
 	return 0;
 }
 
-int
-nvmm_gpa_map(struct nvmm_machine *mach, uintptr_t hva, gpaddr_t gpa,
-    size_t size, int prot)
+static int
+nvmm_gpa_map_private(struct nvmm_machine *mach, uintptr_t hva,
+    gpaddr_t gpa, size_t size, int prot, bool prefault)
 {
 	struct nvmm_ioc_gpa_map args;
 	int ret;
@@ -447,6 +447,9 @@ nvmm_gpa_map(struct nvmm_machine *mach, uintptr_t hva, gpaddr_t gpa,
 	args.gpa = gpa;
 	args.size = size;
 	args.prot = prot;
+#ifdef NVMM_HAS_PREFAULT
+	args.prefault = prefault;
+#endif
 
 	ret = ioctl(nvmm_fd, NVMM_IOC_GPA_MAP, &args);
 	if (ret == -1) {
@@ -456,6 +459,22 @@ nvmm_gpa_map(struct nvmm_machine *mach, uintptr_t hva, gpaddr_t gpa,
 
 	return 0;
 }
+
+int
+nvmm_gpa_map(struct nvmm_machine *mach, uintptr_t hva, gpaddr_t gpa,
+    size_t size, int prot)
+{
+	return nvmm_gpa_map_private(mach, hva, gpa, size, prot, false);
+}
+
+#ifdef NVMM_HAS_PREFAULT
+int
+nvmm_gpa_map_prefault(struct nvmm_machine *mach, uintptr_t hva,
+    gpaddr_t gpa, size_t size, int prot, bool prefault)
+{
+	return nvmm_gpa_map_private(mach, hva, gpa, size, prot, prefault);
+}
+#endif
 
 int
 nvmm_gpa_unmap(struct nvmm_machine *mach, uintptr_t hva, gpaddr_t gpa,

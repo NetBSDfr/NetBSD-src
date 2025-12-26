@@ -913,6 +913,12 @@ nvmm_gpa_map(struct nvmm_owner *owner, struct nvmm_ioc_gpa_map *args)
 		goto out;
 	}
 
+#ifdef NVMM_HAS_PREFAULT
+	if (args->prefault && uvm_map_pageable(&mach->vm->vm_map,
+	    gpa, gpa + args->size, false, 0) == 0)
+		error = uvm_map_pageable(&mach->vm->vm_map,
+		    gpa, gpa + args->size, true, 0);
+#endif
 out:
 	nvmm_machine_put(mach);
 	return error;
