@@ -467,14 +467,12 @@ nvmm_gpa_map(struct nvmm_machine *mach, uintptr_t hva, gpaddr_t gpa,
 	return nvmm_gpa_map_private(mach, hva, gpa, size, prot, false);
 }
 
-#ifdef NVMM_HAS_PREFAULT
 int
 nvmm_gpa_map_prefault(struct nvmm_machine *mach, uintptr_t hva,
     gpaddr_t gpa, size_t size, int prot, bool prefault)
 {
 	return nvmm_gpa_map_private(mach, hva, gpa, size, prot, prefault);
 }
-#endif
 
 int
 nvmm_gpa_unmap(struct nvmm_machine *mach, uintptr_t hva, gpaddr_t gpa,

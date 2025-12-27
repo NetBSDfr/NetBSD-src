@@ -113,10 +113,8 @@ int nvmm_vcpu_inject(struct nvmm_machine *, struct nvmm_vcpu *);
 int nvmm_vcpu_run(struct nvmm_machine *, struct nvmm_vcpu *);
 
 int nvmm_gpa_map(struct nvmm_machine *, uintptr_t, gpaddr_t, size_t, int);
-#ifdef NVMM_HAS_PREFAULT
 int nvmm_gpa_map_prefault(struct nvmm_machine *, uintptr_t, gpaddr_t, size_t,
     int, bool);
-#endif
 int nvmm_gpa_unmap(struct nvmm_machine *, uintptr_t, gpaddr_t, size_t);
 int nvmm_hva_map(struct nvmm_machine *, uintptr_t, size_t);
 int nvmm_hva_unmap(struct nvmm_machine *, uintptr_t, size_t);
