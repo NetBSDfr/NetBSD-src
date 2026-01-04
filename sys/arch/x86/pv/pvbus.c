@@ -81,6 +81,7 @@ pv_attach(device_t parent, device_t self, void *aux)
 	struct pv_attach_args pvaa;
 
 	pvaa.pvaa_memt = x86_bus_space_mem;
+	pvaa.pvaa_iot = x86_bus_space_io;
 	pvaa.pvaa_dmat = &pvbus_bus_dma_tag;
 
 	aprint_naive("\n");
