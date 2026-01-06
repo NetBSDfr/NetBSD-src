@@ -230,6 +230,14 @@ mmio_args_parse(struct mmio_args *margs)
 	return MMIO_NEXT_ARG;
 }
 
+static int
+mmio_cmdline_submatch(device_t parent, cfdata_t cf, const int *ldesc, void *aux)
+{
+	if (memcmp(cf->cf_atname, "mmio_cmdline", 12) != 0)
+		return 0;
+	return 1;
+}
+
 static void
 virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 {
@@ -252,7 +260,8 @@ virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 		return;
 
 	if (mmioarg == MMIO_NEXT_ARG)
-		config_found(parent, pvaa, NULL, CFARGS_NONE);
+		config_found(parent, pvaa, NULL,
+		    CFARGS(.submatch = mmio_cmdline_submatch));
 }
 
 static int
