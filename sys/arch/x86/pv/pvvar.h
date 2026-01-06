@@ -42,6 +42,7 @@ struct pvbus_attach_args {
 
 struct pv_attach_args {
 	bus_space_tag_t		pvaa_memt;
+	bus_space_tag_t		pvaa_iot;
 	bus_dma_tag_t		pvaa_dmat;
 };
 
