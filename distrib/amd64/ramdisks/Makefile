@@ -3,6 +3,7 @@
 SUBDIR=
 SUBDIR+=	ramdisk
 SUBDIR+=	ramdisk-cgdroot
+SUBDIR+=	${${MKZFS} != "no":?ramdisk-zfsinstall:}
 SUBDIR+=	${${MKZFS} != "no":?ramdisk-zfsroot:}
 
 TARGETS+=	release

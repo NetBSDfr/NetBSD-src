@@ -1,0 +1,205 @@
+#/bin/sh
+#
+#	$NetBSD$
+
+# Assumption - boot.cfg loads this ramdisk.
+# Assumption - network is configurable with any interface over DHCP.
+# Assumption - there is enough RAM for /tmp.
+# Assumption - the size and partitioning is identical for every disk.
+# Assumption - every disk found is active and added to the pool.
+# Assumption - pool layout: 1 simple, 2 mirror, 3-4 raidz1, 5-6 raidz2, 7+ raidz3.
+# Assumption - the root pool is set to legacy mount.
+
+# Configurable - define the ZFS root pool and ROOT.
+# XXX Can these be set in boot.cfg?
+rpool=rpool
+rroot=ROOT
+
+# Configurable - additional settings.
+ffsver=2
+kernel="GENERIC"
+machine=$(/usr/bin/uname -m)
+osname=$(/usr/bin/uname -s)
+osver=$(/usr/bin/uname -r)
+osver=${osver%%_*}
+# XXX https is not supported
+mirror="http://ftp.NetBSD.org/pub/$osname/$osname-$osver"
+modules="solaris zfs"
+ramdisk="zfsroot"
+ramdiskext=".fs"
+setext=".tar.xz"
+sets="base comp etc games gpufw man misc modules rescue text"
+
+_abort() {
+	[ -n "$@" ] && echo "Aborting: $@" 1>&2
+	exec /bin/sh
+}
+
+# Setup some stuff in case things go south and we drop to the shell
+export HOME=/
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin
+umask 022
+
+# Mount a few tempfs to allow modifications over the ramdisk contents
+mount -t tmpfs -o -m=1777 tmpfs /tmp				|| _abort
+mount -t tmpfs tmpfs /var					|| _abort
+mount -t tmpfs -o union tmpfs /etc				|| _abort
+
+# prepare important directories in the tmpfses, so dhcpcd and vi will work
+/bin/mkdir -p /var/run /var/db /var/tmp				|| _abort
+
+# Configure the network
+/sbin/dhcpcd --waitip=4
+
+# Locate the disks
+disknames=$(/sbin/sysctl -n hw.disknames)
+disks=
+dkidx=0
+sep=
+cnt=0
+for disk in $disknames; do
+	case $disk in
+		dk*)
+			# XXX assumes growing order
+			dkidx=${disk#dk}
+			dkidx=$((dkidx + 1))
+			;;
+		ld*|wd*)
+			disks="$disks$sep$disk"
+			sep=' '
+			cnt=$((cnt + 1))
+			;;
+	esac
+done
+
+pool=
+case $cnt in
+	0)
+		_abort "no disk found"
+		;;
+	1)
+		;;
+	2)
+		pool="mirror"
+		;;
+	3|4)
+		pool="raidz1"
+		;;
+	5|6)
+		pool="raidz2"
+		;;
+	*)
+		pool="raidz3"
+		;;
+esac
+
+# Download the sets, kernel, and ramdisk to RAM
+for set in $sets; do
+	seturl="$mirror/$machine/binary/sets/$set$setext"
+	(cd /tmp && /usr/bin/ftp "$seturl")			|| _abort
+done
+kernurl="$mirror/$machine/binary/kernel/netbsd-$kernel.gz"
+(cd /tmp && /usr/bin/ftp "$kernurl")				|| _abort
+ramdiskurl="$mirror/$machine/installation/ramdisk/ramdisk-$ramdisk$ramdiskext"
+(cd /tmp && /usr/bin/ftp "$ramdiskurl")				|| _abort
+
+# Partition the disks
+vdevs=
+sep=
+for disk in $disks; do
+	/sbin/gpt create -A $disk				|| _abort
+	/sbin/gpt add -s 2014 -t efi $disk			|| _abort
+	/sbin/gpt add -s 512m -t efi $disk			|| _abort
+	/sbin/gpt add -s 512m -t ffs $disk			|| _abort
+	/sbin/gpt add -t zfs $disk				|| _abort
+	/sbin/gpt remove -i 1 $disk				|| _abort
+	/sbin/gpt set -a bootme -i 3 $disk			|| _abort
+
+	# Format the partitions
+	/sbin/newfs_msdos /dev/rdk$dkidx			|| _abort
+	/sbin/newfs -V $ffsver /dev/rdk$((dkidx + 1))		|| _abort
+
+	# Setup the EFI partition
+	/sbin/mount /dev/dk$dkidx /altroot			|| _abort
+	/bin/mkdir -p /altroot/EFI/boot
+	/bin/cp /usr/mdec/bootx64.efi /usr/mdec/bootia32.efi /altroot/EFI/boot
+	/sbin/umount /altroot					|| _abort
+
+	# Setup the NetBSD boot partition
+	/sbin/mount /dev/dk$((dkidx + 1)) /altroot		|| _abort
+	cat > /altroot/boot.cfg << EOF
+menu=Boot normally:rndseed /etc/entropy-file;load solaris;load zfs;fs ramdisk-zfsroot$ramdiskext;boot netbsd.gz
+menu=Boot single user:rndseed /etc/entropy-file;load solaris;load zfs;fs ramdisk-zfsroot$ramdiskext;boot netbsd.gz -s
+menu=Drop to boot prompt:prompt
+default=1
+timeout=5
+clear=1
+EOF
+	/bin/cp /tmp/netbsd-$kernel.gz /altroot/netbsd.gz	|| _abort
+	/bin/cp /tmp/ramdisk-$ramdisk$ramdiskext \
+		/altroot/ramdisk-$ramdisk$ramdiskext		|| _abort
+	/bin/cp /usr/mdec/boot /altroot/boot
+	(cd /altroot && tar xzpf /tmp/modules$setext)		|| _abort
+
+	# Initialize ZFS while the modules are available
+	[ -n "$modules" ] && for module in $modules; do
+		# XXX ignore errors
+		/sbin/modload "$module"
+	done
+	modules=
+
+	/sbin/umount /altroot					|| _abort
+
+	/usr/sbin/installboot -m "$machine" /dev/dk$((dkidx + 1)) \
+		/usr/mdec/bootxx_ffsv$ffsver			|| _abort
+
+	vdevs="$vdevs${sep}dk$((dkidx + 2))"
+	sep=' '
+	dkidx=$((dkidx + 3))
+done
+
+# Create the ZFS pool
+/sbin/zpool create -f "$rpool" $pool $vdevs			|| _abort
+/sbin/zfs create "$rpool/$rroot"				|| _abort
+/sbin/zfs set mountpoint=legacy "$rpool/$rroot"			|| _abort
+/sbin/mount -t zfs "$rpool/$rroot" /altroot			|| _abort
+
+# Install the sets
+for set in $sets; do
+	(cd /altroot && /usr/bin/tar xzpf /tmp/$set$setext)	|| _abort
+done
+
+# Configure the system
+/bin/mkdir -p /altroot/kern /altroot/proc			|| _abort
+cat > /altroot/etc/fstab << EOF
+rpool/ROOT / zfs rw
+kernfs /kern kernfs rw
+ptyfs /dev/pts ptyfs rw
+procfs /proc procfs rw
+tmpfs /var/shm tmpfs rw,-m1777,-sram%25
+EOF
+(cd /altroot/dev && ./MAKEDEV all)				|| _abort
+cat >> /altroot/etc/rc.conf << EOF
+rc_configured=YES
+
+hostname="$(/usr/bin/uname -n)"
+zfs=YES
+
+#services
+dhcpcd=YES
+inetd=NO
+sshd=YES
+EOF
+
+# Export the ZFS pool
+/sbin/umount /altroot						|| _abort
+/sbin/zpool export "$rpool"					|| _abort
+
+# Start the system like zfsroot.rc
+echo "Importing $rpool"
+/sbin/zpool import -f -N "$rpool"				|| _abort
+
+echo "Mounting $rpool/$rroot to /altroot"
+/sbin/mount -t zfs "$rpool/$rroot" /altroot			|| _abort
+
+/sbin/sysctl -w init.root=/altroot				|| _abort
