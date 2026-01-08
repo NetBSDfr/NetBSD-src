@@ -35,7 +35,7 @@ static int
 fwcfg_pv_match(device_t parent, cfdata_t cf, void *aux)
 {
 	struct pv_attach_args *pvaa = (struct pv_attach_args *)aux;
-	static int fwcfg_found = 0;
+	int fwcfg_found = 0;
 	bus_space_tag_t iot = pvaa->pvaa_iot;
 	bus_space_handle_t ioh;
 	char sig[4];
@@ -52,7 +52,8 @@ fwcfg_pv_match(device_t parent, cfdata_t cf, void *aux)
 	if (memcmp(sig, "QEMU", 4) == 0) {
 		aprint_verbose("qemufwcfg: found signature at 0x%x\n",
 		    FWCFG_IO_BASE);
-		fwcfg_found = 1;
+		/* Attach at first match, higher priority than virtio */
+		fwcfg_found = 2;
 	}
 
 	bus_space_unmap(iot, ioh, FWCFG_IO_SIZE);

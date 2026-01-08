@@ -79,6 +79,13 @@ struct virtio_mmio_cmdline_softc {
 	struct mmio_args		margs;
 };
 
+static struct {
+	char cmdline_copy[LINE_MAX];
+	char *current_pos;
+	bool initialized;
+} cmdline_state = { "", NULL, false };
+
+static void	cmdline_init(void);
 static int	virtio_mmio_cmdline_match(device_t, cfdata_t, void *);
 static void	virtio_mmio_cmdline_attach(device_t, device_t, void *);
 static int	virtio_mmio_cmdline_do_attach(device_t,
@@ -94,10 +101,30 @@ CFATTACH_DECL3_NEW(mmio_cmdline,
     virtio_mmio_cmdline_detach, NULL,
     virtio_mmio_cmdline_rescan, NULL, 0);
 
+
+static void
+cmdline_init(void)
+{
+	if (cmdline_state.initialized)
+		return;
+
+	strlcpy(cmdline_state.cmdline_copy, xen_start_info.cmd_line,
+		sizeof(cmdline_state.cmdline_copy));
+	cmdline_state.current_pos = strstr(cmdline_state.cmdline_copy, VMMIOSTR);
+	cmdline_state.initialized = true;
+}
+
 static int
 virtio_mmio_cmdline_match(device_t parent, cfdata_t match, void *aux)
 {
-	if (strstr(xen_start_info.cmd_line, VMMIOSTR) == NULL)
+	static bool first_match_call = true;
+
+	if (first_match_call) {
+		first_match_call = cmdline_state.initialized = false;
+		cmdline_init();
+	}
+
+	if (cmdline_state.current_pos == NULL)
 		return 0;
 
 	return 1;
@@ -189,53 +216,39 @@ mmio_args_parse(struct mmio_args *margs)
 {
 	int keylen = strlen(VMMIOSTR);
 	char *next;
-	static char cmdline[LINE_MAX], *parg;
 
-	/* first pass, or emptied parg from last pass */
-	if (parg == NULL) {
-		strlcpy(cmdline, xen_start_info.cmd_line, sizeof(cmdline));
-		parg = strstr(cmdline, VMMIOSTR);
-	}
+	cmdline_init();
 
 	/* no args were found */
-	if (parg == NULL) {
+	if (cmdline_state.current_pos == NULL) {
 		return MMIO_NO_ARG;
 	}
 
 	/* useless, no parameters */
-	if (strlen(parg) <= keylen) {
-		parg = NULL;
+	if (strlen(cmdline_state.current_pos) <= keylen) {
+		cmdline_state.current_pos = NULL;
 		return MMIO_NO_ARG;
 	}
 
-	parg += keylen;
+	cmdline_state.current_pos += keylen;
 
-	next = parg;
+	next = cmdline_state.current_pos;
 	while (*next && *next != ' ') /* find end of argument */
 		next++;
 	if (*next) { /* space */
 		*next++ = '\0'; /* end the argument string */
 		next = strstr(next,VMMIOSTR);
 	}
-	parsearg(margs, parg);
+	parsearg(margs, cmdline_state.current_pos);
 
-	if (next != NULL)
-		parg = next;
-
-	if (!*parg) {
-		parg = NULL;
+	if (next == NULL || !*next) {
+		cmdline_state.current_pos = NULL;
 		return MMIO_LAST_ARG;
 	}
 
-	return MMIO_NEXT_ARG;
-}
+	cmdline_state.current_pos = next;
 
-static int
-mmio_cmdline_submatch(device_t parent, cfdata_t cf, const int *ldesc, void *aux)
-{
-	if (memcmp(cf->cf_atname, "mmio_cmdline", 12) != 0)
-		return 0;
-	return 1;
+	return MMIO_NEXT_ARG;
 }
 
 static void
@@ -258,10 +271,6 @@ virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 
 	if (virtio_mmio_cmdline_do_attach(self, pvaa, margs))
 		return;
-
-	if (mmioarg == MMIO_NEXT_ARG)
-		config_found(parent, pvaa, NULL,
-		    CFARGS(.submatch = mmio_cmdline_submatch));
 }
 
 static int
