@@ -85,5 +85,5 @@ pv_attach(device_t parent, device_t self, void *aux)
 	aprint_naive("\n");
 	aprint_normal("\n");
 
-	config_found(self, &pvaa, NULL, CFARGS_NONE);
+	while (config_found(self, &pvaa, NULL, CFARGS_NONE) != NULL);
 }
