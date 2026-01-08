@@ -207,6 +207,21 @@ PAX_v?=
 #
 copy-releasedir:
 	${RM} -f ${RELEASEDIR}/${CDROMS_RELEASEDIR}/${CDIMAGE}
+.if !empty(CD_SETS)
+	${MKDIR} ${MKDIRPERM} "${CUROBJDIR}/cdrom/etc/mtree"
+.for set in ${CD_SETS}
+	if [ -f ${CUROBJDIR:Q}/cdrom/etc/mtree/set.${set} ]; then	\
+		${CHMOD} +w ${CUROBJDIR:Q}/cdrom/etc/mtree/set.${set};	\
+	fi;								\
+	${CDSETSCMD} ./maketars -i "${CUROBJDIR}/cdrom"			\
+	    ${CD_METALOG.unpriv} ${mtunpriv} -N ${NETBSDSRCDIR}/etc	\
+	    -xx -F "${CUROBJDIR}/cdrom/etc/mtree" 			\
+	    -d "${DESTDIR:S,^$,/,}" ${set}
+.endfor
+	if [ -d "${CUROBJDIR}/cdrom/var/spool/ftp/hidden" ]; then	\
+		${CHMOD} +r "${CUROBJDIR}/cdrom/var/spool/ftp/hidden";	\
+	fi
+.endif
 	if ${CDRELEASE}; then 						\
 		if [ ! -d ${RELEASEDIR}/${RELEASEMACHINEDIR} ]; then 	\
 			echo "Missing ${RELEASEDIR}/${RELEASEMACHINEDIR}, aborting"; \
@@ -273,28 +288,13 @@ copy-releasedir:
 					${TOOL_PAX} ${PAX_TIMESTAMP}	\
 					-rw -pe ${PAX_v}		\
 					-M $$release_destdir; 		\
+				cd "${CUROBJDIR}";			\
 			else						\
 				echo "Missing $${cde}, aborting"; 	\
 				exit 1; 				\
 			fi; 						\
-			cd "${CUROBJDIR}";				\
 		done;							\
 	fi
-.if !empty(CD_SETS)
-	${MKDIR} ${MKDIRPERM} "${CUROBJDIR}/cdrom/etc/mtree"
-.for set in ${CD_SETS}
-	if [ -f ${CUROBJDIR:Q}/cdrom/etc/mtree/set.${set} ]; then	\
-		${CHMOD} +w ${CUROBJDIR:Q}/cdrom/etc/mtree/set.${set};	\
-	fi;								\
-	${CDSETSCMD} ./maketars -i "${CUROBJDIR}/cdrom"			\
-	    ${CD_METALOG.unpriv} ${mtunpriv} -N ${NETBSDSRCDIR}/etc	\
-	    -xx -F "${CUROBJDIR}/cdrom/etc/mtree" 			\
-	    -d "${DESTDIR:S,^$,/,}" ${set}
-.endfor
-	if [ -d "${CUROBJDIR}/cdrom/var/spool/ftp/hidden" ]; then	\
-		${CHMOD} +r "${CUROBJDIR}/cdrom/var/spool/ftp/hidden";	\
-	fi
-.endif
 
 .if ${CDDEV_POPULATE} != true
 DELDEV=-e '/^\.\/dev\/.*type=char/d'
