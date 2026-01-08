@@ -137,20 +137,18 @@ vdevs=
 sep=
 for disk in $disks; do
 	_info "partitioning disk $disk"
-	/sbin/gpt create -A $disk			|| _abort $errpartition $disk
-	/sbin/gpt add -s 2014 -t efi $disk		|| _abort $errpartition $disk
-	/sbin/gpt add -s 512m -t efi $disk		|| _abort $errpartition $disk
-	/sbin/gpt add -s 512m -t ffs $disk		|| _abort $errpartition $disk
-	/sbin/gpt add -t zfs $disk			|| _abort $errpartition $disk
-	/sbin/gpt remove -i 1 $disk			|| _abort $errpartition $disk
-	/sbin/gpt set -a biosboot -i 3 $disk		|| _abort $errpartition $disk
-	/sbin/gpt set -a bootme -i 3 $disk		|| _abort $errpartition $disk
+	/sbin/gpt create $disk				|| _abort $errpartition $disk
+	/sbin/gpt add -a 1m -s 512m -t efi $disk	|| _abort $errpartition $disk
+	/sbin/gpt add -a 1m -s 512m -t ffs $disk	|| _abort $errpartition $disk
+	/sbin/gpt add -a 1m -t zfs $disk		|| _abort $errpartition $disk
+	/sbin/gpt biosboot -i 2 $disk			|| _abort $errpartition $disk
 
 	# Format the partitions
 	_info "formatting partition: dk$dkidx (EFI)"
 	/sbin/newfs_msdos /dev/rdk$dkidx		|| _abort $errformat
 	_info "formatting partition: dk$((dkidx + 1)) (FFSv$ffsver)"
-	/sbin/newfs -V $ffsver /dev/rdk$((dkidx + 1))	|| _abort $errformat
+	/sbin/newfs -V 0 -O $ffsver \
+		/dev/rdk$((dkidx + 1))			|| _abort $errformat
 
 	# Setup the EFI partition
 	_info "setting up partition: dk$dkidx (EFI)"
