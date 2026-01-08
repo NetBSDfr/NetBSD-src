@@ -94,10 +94,34 @@ CFATTACH_DECL3_NEW(mmio_cmdline,
     virtio_mmio_cmdline_detach, NULL,
     virtio_mmio_cmdline_rescan, NULL, 0);
 
+static char *parg = NULL;
+
+static void
+copy_cmdline(bool empty)
+{
+	static char cmdline_copy[LINE_MAX] = "";
+
+	if (!empty) {
+		cmdline_copy[0] = 0;
+		return;
+	}
+	if (!strlen(cmdline_copy)) {
+		strlcpy(cmdline_copy, xen_start_info.cmd_line, sizeof(cmdline_copy));
+		parg = strstr(cmdline_copy, VMMIOSTR);
+	}
+}
+
 static int
 virtio_mmio_cmdline_match(device_t parent, cfdata_t match, void *aux)
 {
-	if (strstr(xen_start_info.cmd_line, VMMIOSTR) == NULL)
+	static bool start_match = true;
+
+	/* When matching, dont refill cmdline_copy when exhausted. */
+	if (start_match) {
+		copy_cmdline(true);
+		start_match = false;
+	}
+	if (parg == NULL || strstr(parg, VMMIOSTR) == NULL)
 		return 0;
 
 	return 1;
@@ -189,13 +213,10 @@ mmio_args_parse(struct mmio_args *margs)
 {
 	int keylen = strlen(VMMIOSTR);
 	char *next;
-	static char cmdline[LINE_MAX], *parg;
 
 	/* first pass, or emptied parg from last pass */
-	if (parg == NULL) {
-		strlcpy(cmdline, xen_start_info.cmd_line, sizeof(cmdline));
-		parg = strstr(cmdline, VMMIOSTR);
-	}
+	if (parg == NULL)
+		copy_cmdline(true);
 
 	/* no args were found */
 	if (parg == NULL) {
@@ -224,18 +245,12 @@ mmio_args_parse(struct mmio_args *margs)
 
 	if (!*parg) {
 		parg = NULL;
+		/* Empty cmdline for next pass (match) */
+		copy_cmdline(false);
 		return MMIO_LAST_ARG;
 	}
 
 	return MMIO_NEXT_ARG;
-}
-
-static int
-mmio_cmdline_submatch(device_t parent, cfdata_t cf, const int *ldesc, void *aux)
-{
-	if (memcmp(cf->cf_atname, "mmio_cmdline", 12) != 0)
-		return 0;
-	return 1;
 }
 
 static void
@@ -258,10 +273,6 @@ virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 
 	if (virtio_mmio_cmdline_do_attach(self, pvaa, margs))
 		return;
-
-	if (mmioarg == MMIO_NEXT_ARG)
-		config_found(parent, pvaa, NULL,
-		    CFARGS(.submatch = mmio_cmdline_submatch));
 }
 
 static int
