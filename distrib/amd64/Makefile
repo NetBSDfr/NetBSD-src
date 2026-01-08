@@ -9,6 +9,7 @@ SUBDIR+=	instkernel
 .if ${MKKMOD} != "no"
 SUBDIR+=	kmod
 SUBDIR+=	kmod-cgdroot
+SUBDIR+=	${${MKZFS} != "no":?kmod-zfsinstall:}
 .endif
 SUBDIR+=	.WAIT
 SUBDIR+=	cdroms

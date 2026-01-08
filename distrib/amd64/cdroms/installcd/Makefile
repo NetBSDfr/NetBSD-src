@@ -12,6 +12,7 @@ CDRELEASE=	true			# include $RELEASEDIR/$RELEASEMACHINEDIR
 CDRELEASE_NODEBUG=	true
 CDRELEASE_NOCOMPAT=	true
 CDBUILDEXTRA=	boot.cfg		# Add boot.cfg file
+CDEXTRA+=	${${MKZFS} != "no":?${RELEASEDIR}/amd64/installation/miniroot/zfsinstall.kmod:}
 CLEANFILES+=	boot.cfg
 
 prepare_md_post:

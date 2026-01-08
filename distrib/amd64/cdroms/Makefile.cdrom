@@ -29,6 +29,8 @@ CD_SETS+=	modules
 
 .if ${KERNEL_DIR:Uno} == "yes"
 SPEC_EXTRA:=${.PARSEDIR}/spec-dir.in
+.elif ${MKZFS:Uno} == "yes"
+SPEC_EXTRA:=${.PARSEDIR}/zfsspec.in
 .else
 SPEC_EXTRA:=${.PARSEDIR}/spec.in
 .endif
