@@ -56,12 +56,20 @@ struct mmio_args {
 	uint64_t		id;
 };
 
+struct mmio_cmdline_node {
+	struct mmio_args		margs;
+
+	SLIST_ENTRY(mmio_cmdline_node)	n_nodes;
+};
+
+SLIST_HEAD(mmio_cmdline_devs_head, mmio_cmdline_node);
+extern struct mmio_cmdline_devs_head virtio_mmio_cmdline_devs;
+
 uint32_t virtio_mmio_reg_read(struct virtio_mmio_softc *, bus_addr_t);
 bool virtio_mmio_common_probe_present(struct virtio_mmio_softc *);
 void virtio_mmio_common_attach(struct virtio_mmio_softc *);
 int virtio_mmio_common_detach(struct virtio_mmio_softc *, int);
 int virtio_mmio_intr(void *);
-
-extern int (*enumerate_mmio_devices)(struct mmio_args *);
+void virtio_mmio_cmdline_parse(void);
 
 #endif /* _VIRTIO_MMIOVAR_H_ */
