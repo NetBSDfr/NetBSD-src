@@ -86,8 +86,6 @@ __KERNEL_RCSID(0, "$NetBSD: virtio_mmio.c,v 1.15 2025/07/26 14:18:14 martin Exp 
 #	define STRUCT_ENDIAN	LITTLE_ENDIAN
 #endif
 
-int (*enumerate_mmio_devices)(struct mmio_args *);
-
 static void	virtio_mmio_kick(struct virtio_softc *, uint16_t);
 static uint16_t	virtio_mmio_read_queue_size(struct virtio_softc *, uint16_t);
 static void	virtio_mmio_v1_setup_queue(struct virtio_softc *, uint16_t, uint64_t);
