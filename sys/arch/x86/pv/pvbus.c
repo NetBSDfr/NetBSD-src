@@ -85,14 +85,15 @@ pv_attach(device_t parent, device_t self, void *aux)
 	aprint_naive("\n");
 	aprint_normal("\n");
 
+	pvaa.mmio_node = NULL;
+
+	/* Non MMIO devices */
+	while (config_found(self, &pvaa, NULL, CFARGS_NONE) != NULL);
+
 	virtio_mmio_cmdline_parse();
 
 	SLIST_FOREACH(mmio_node, &virtio_mmio_cmdline_devs, n_nodes) {
 		pvaa.mmio_node = mmio_node;
 		config_found(self, &pvaa, NULL, CFARGS_NONE);
 	}
-	pvaa.mmio_node = NULL;
-
-	/* Non MMIO devices */
-	while (config_found(self, &pvaa, NULL, CFARGS_NONE) != NULL);
 }
