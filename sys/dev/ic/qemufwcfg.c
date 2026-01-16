@@ -41,26 +41,6 @@ __KERNEL_RCSID(0, "$NetBSD: qemufwcfg.c,v 1.3 2024/04/06 13:42:18 skrll Exp $");
 
 #include "ioconf.h"
 
-/* Register locations are MD */
-#if defined(__i386__) || defined(__x86_64__)
-#define	FWCFG_SEL_REG		0x00
-#define	FWCFG_SEL_SWAP		htole16
-#define	FWCFG_DATA_REG		0x01
-#define	FWCFG_DMA_ADDR		0x04
-#elif defined(__arm__) || defined(__aarch64__)
-#define	FWCFG_SEL_REG		0x08
-#define	FWCFG_SEL_SWAP		htobe16
-#define	FWCFG_DATA_REG		0x00
-#define	FWCFG_DMA_ADDR		0x10
-#elif defined(__riscv)
-#define	FWCFG_SEL_REG		0x08
-#define	FWCFG_SEL_SWAP		htobe16
-#define	FWCFG_DATA_REG		0x00
-#define	FWCFG_DMA_ADDR		0x10
-#else
-#error driver does not support this architecture
-#endif
-
 static dev_type_open(fwcfg_open);
 static dev_type_close(fwcfg_close);
 static dev_type_read(fwcfg_read);

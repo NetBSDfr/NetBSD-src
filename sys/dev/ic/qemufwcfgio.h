@@ -39,4 +39,30 @@
 
 #define	FWCFGIO_SET_INDEX	_IOW('q', 0, uint16_t)
 
+/* Register locations are MD */
+#if defined(__i386__) || defined(__x86_64__)
+#define	FWCFG_SEL_REG		0x00
+#define	FWCFG_SEL_SWAP		htole16
+#define	FWCFG_DATA_REG		0x01
+#define	FWCFG_DMA_ADDR		0x04
+/*
+ * fw_cfg I/O port base address and sizes for x86
+ */
+#define	FWCFG_IO_BASE		0x510
+#define	FWCFG_IO_SIZE		0x0c
+#define	FWCFG_DMA_IO_SIZE	0x14	/* includes DMA registers */
+#elif defined(__arm__) || defined(__aarch64__)
+#define	FWCFG_SEL_REG		0x08
+#define	FWCFG_SEL_SWAP		htobe16
+#define	FWCFG_DATA_REG		0x00
+#define	FWCFG_DMA_ADDR		0x10
+#elif defined(__riscv)
+#define	FWCFG_SEL_REG		0x08
+#define	FWCFG_SEL_SWAP		htobe16
+#define	FWCFG_DATA_REG		0x00
+#define	FWCFG_DMA_ADDR		0x10
+#else
+#error driver does not support this architecture
+#endif
+
 #endif /* !_QEMUFWCFGIO_H */
