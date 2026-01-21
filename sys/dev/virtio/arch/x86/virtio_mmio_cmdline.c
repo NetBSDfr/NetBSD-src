@@ -58,6 +58,7 @@
 #include <sys/bus.h>
 #include <sys/device.h>
 #include <sys/kernel.h>
+#include <sys/kmem.h>
 #include <sys/module.h>
 #include <sys/systm.h>
 
@@ -65,28 +66,24 @@
 #include <dev/virtio/virtio_mmiovar.h>
 #include <arch/x86/pv/pvvar.h>
 #include <xen/hypervisor.h>
+#include <uvm/uvm_extern.h>
+#include <dev/cons.h>
 
 #include <machine/i82093var.h>
 #include "ioapic.h"
 
 #define VMMIOSTR "virtio_mmio.device="
 
-struct mmio_args {
-	uint64_t	sz;
-	uint64_t	baseaddr;
-	uint64_t	irq;
-	uint64_t	id;
-};
-
 struct virtio_mmio_cmdline_softc {
 	struct virtio_mmio_softc	sc_msc;
 	struct mmio_args		margs;
 };
 
+struct mmio_cmdline_devs_head virtio_mmio_cmdline_devs = 
+    SLIST_HEAD_INITIALIZER(virtio_mmio_cmdline_devs);
+
 static int	virtio_mmio_cmdline_match(device_t, cfdata_t, void *);
 static void	virtio_mmio_cmdline_attach(device_t, device_t, void *);
-static int	virtio_mmio_cmdline_do_attach(device_t,
-		    struct pv_attach_args *, struct mmio_args *);
 static int	virtio_mmio_cmdline_detach(device_t, int);
 static int	virtio_mmio_cmdline_rescan(device_t, const char *, const int *);
 static int	virtio_mmio_cmdline_alloc_interrupts(struct virtio_mmio_softc *);
@@ -98,20 +95,14 @@ CFATTACH_DECL3_NEW(mmio_cmdline,
     virtio_mmio_cmdline_detach, NULL,
     virtio_mmio_cmdline_rescan, NULL, 0);
 
+
 static int
-virtio_mmio_cmdline_match(device_t parent, cfdata_t match, void *aux)
-{
-	if (strstr(xen_start_info.cmd_line, VMMIOSTR) == NULL)
-		return 0;
-
-	return 1;
-}
-
-static void
 parsearg(struct mmio_args *margs, const char *arg)
 {
 	char *p;
 
+	/* Bus space type */
+	margs->bst = x86_bus_space_mem;
 	/* <size> */
 	margs->sz = strtoull(arg, (char **)&p, 0);
 	if ((margs->sz == 0) || (margs->sz == UINT64_MAX))
@@ -180,88 +171,96 @@ parsearg(struct mmio_args *margs, const char *arg)
 	if (*p)
 		goto bad;
 
-	return;
+	return 0;
 
 bad:
 	aprint_error("Error parsing virtio_mmio parameter: %s\n", arg);
+	return -1;
+}
+
+void
+virtio_mmio_cmdline_parse(void)
+{
+	int keylen = strlen(VMMIOSTR);
+	char tmpcmdline[sizeof(xen_start_info.cmd_line)];
+	struct mmio_args margs;
+	struct mmio_cmdline_node *mmio_node;
+	static bool mmio_cmdline_parsed = false;
+
+	if (mmio_cmdline_parsed)
+		return;
+
+	mmio_cmdline_parsed = true;
+
+	strlcpy(tmpcmdline, xen_start_info.cmd_line, sizeof(tmpcmdline));
+
+	for (char *p = strstr(tmpcmdline, VMMIOSTR);
+	    (p = strstr(p, VMMIOSTR)) != NULL && strlen(p) > keylen;) {
+		char *end = strchr(p, ' ');
+		p += keylen;
+
+		if (end)
+			while (*end == ' ')
+				*end++ = 0;
+
+		if (parsearg(&margs, p) == 0) {
+			mmio_node = kmem_zalloc(sizeof(*mmio_node), KM_SLEEP);
+			mmio_node->margs = margs;
+
+			SLIST_INSERT_HEAD(&virtio_mmio_cmdline_devs,
+			    mmio_node, n_nodes);
+		}
+
+		if (end)
+			p = end;
+	}
+}
+
+static int
+virtio_mmio_cmdline_match(device_t parent, cfdata_t match, void *aux)
+{
+	struct pv_attach_args *pvaa = aux;
+
+	if (pvaa->mmio_node != NULL)
+		return 1;
+
+	return 0;
 }
 
 static void
 virtio_mmio_cmdline_attach(device_t parent, device_t self, void *aux)
 {
-	struct virtio_mmio_cmdline_softc *sc = device_private(self);
 	struct pv_attach_args *pvaa = aux;
-	struct mmio_args *margs = &sc->margs;
-	int keylen = strlen(VMMIOSTR);
-	char *next;
-	static char cmdline[LINE_MAX], *parg = NULL;
-
-	aprint_normal("\n");
-	aprint_naive("\n");
-
-	if (parg == NULL) { /* first pass */
-		strlcpy(cmdline, xen_start_info.cmd_line, sizeof(cmdline));
-		aprint_verbose_dev(self, "kernel parameters: %s\n",
-		    cmdline);
-		parg = strstr(cmdline, VMMIOSTR);
-	}
-
-	if (parg != NULL) {
-		parg += keylen;
-		if (!*parg)
-			return;
-
-		next = parg;
-		while (*next && *next != ' ') /* find end of argument */
-			next++;
-		if (*next) { /* space */
-			*next++ = '\0'; /* end the argument string */
-			next = strstr(next, VMMIOSTR);
-		}
-
-		aprint_normal_dev(self, "viommio: %s\n", parg);
-		parsearg(margs, parg);
-
-		if (virtio_mmio_cmdline_do_attach(self, pvaa, margs))
-			return;
-
-		if (next) {
-			parg = next;
-			config_found(parent, pvaa, NULL, CFARGS_NONE);
-		}
-	}
-}
-
-static int
-virtio_mmio_cmdline_do_attach(device_t self,
-    struct pv_attach_args *pvaa,
-    struct mmio_args *margs)
-{
+	struct mmio_cmdline_node *mmio_node = pvaa->mmio_node;
 	struct virtio_mmio_cmdline_softc *sc = device_private(self);
 	struct virtio_mmio_softc *const msc = &sc->sc_msc;
 	struct virtio_softc *const vsc = &msc->sc_sc;
 	int error;
 
+	aprint_normal("\n");
+	aprint_naive("\n");
+
+	aprint_normal_dev(self, "viommio: @%#" PRIxPADDR "\n",
+	    mmio_node->margs.baseaddr);
+
 	msc->sc_iot = pvaa->pvaa_memt;
 	vsc->sc_dmat = pvaa->pvaa_dmat;
-	msc->sc_iosize = margs->sz;
+	msc->sc_iosize = mmio_node->margs.sz;
 	vsc->sc_dev = self;
+	sc->margs = mmio_node->margs;
 
-	error = bus_space_map(msc->sc_iot, margs->baseaddr, margs->sz, 0,
-	    &msc->sc_ioh);
+	error = bus_space_map(msc->sc_iot, mmio_node->margs.baseaddr,
+	    mmio_node->margs.sz, 0, &msc->sc_ioh);
 	if (error) {
-		aprint_error_dev(self, "couldn't map %#" PRIx64 ": %d",
-		    margs->baseaddr, error);
-		return error;
+		aprint_error_dev(self, "couldn't map %#" PRIxPADDR ": %d",
+		    mmio_node->margs.baseaddr, error);
+		return;
 	}
-
 	msc->sc_alloc_interrupts = virtio_mmio_cmdline_alloc_interrupts;
 	msc->sc_free_interrupts = virtio_mmio_cmdline_free_interrupts;
 
 	virtio_mmio_common_attach(msc);
 	virtio_mmio_cmdline_rescan(self, "virtio", NULL);
-
-	return 0;
 }
 
 static int

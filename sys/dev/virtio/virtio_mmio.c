@@ -66,38 +66,8 @@ __KERNEL_RCSID(0, "$NetBSD: virtio_mmio.c,v 1.15 2025/07/26 14:18:14 martin Exp 
 #include <sys/device.h>
 #include <sys/mutex.h>
 
-#define VIRTIO_PRIVATE
+#include <dev/virtio/virtio_mmioreg.h>
 #include <dev/virtio/virtio_mmiovar.h>
-
-#define VIRTIO_MMIO_MAGIC		('v' | 'i' << 8 | 'r' << 16 | 't' << 24)
-
-#define VIRTIO_MMIO_MAGIC_VALUE		0x000
-#define VIRTIO_MMIO_VERSION		0x004
-#define VIRTIO_MMIO_DEVICE_ID		0x008
-#define VIRTIO_MMIO_VENDOR_ID		0x00c
-#define VIRTIO_MMIO_DEVICE_FEATURES	0x010	/* "HostFeatures" in v1 */
-#define VIRTIO_MMIO_DEVICE_FEATURES_SEL	0x014	/* "HostFeaturesSel" in v1 */
-#define VIRTIO_MMIO_DRIVER_FEATURES	0x020	/* "GuestFeatures" in v1 */
-#define VIRTIO_MMIO_DRIVER_FEATURES_SEL	0x024	/* "GuestFeaturesSel" in v1 */
-#define VIRTIO_MMIO_V1_GUEST_PAGE_SIZE	0x028
-#define VIRTIO_MMIO_QUEUE_SEL		0x030
-#define VIRTIO_MMIO_QUEUE_NUM_MAX	0x034
-#define VIRTIO_MMIO_QUEUE_NUM		0x038
-#define VIRTIO_MMIO_V1_QUEUE_ALIGN	0x03c
-#define VIRTIO_MMIO_V1_QUEUE_PFN	0x040
-#define	VIRTIO_MMIO_QUEUE_READY		0x044
-#define VIRTIO_MMIO_QUEUE_NOTIFY	0x050
-#define VIRTIO_MMIO_INTERRUPT_STATUS	0x060
-#define VIRTIO_MMIO_INTERRUPT_ACK	0x064
-#define VIRTIO_MMIO_STATUS		0x070
-#define	VIRTIO_MMIO_V2_QUEUE_DESC_LOW	0x080
-#define	VIRTIO_MMIO_V2_QUEUE_DESC_HIGH	0x084
-#define	VIRTIO_MMIO_V2_QUEUE_AVAIL_LOW	0x090
-#define	VIRTIO_MMIO_V2_QUEUE_AVAIL_HIGH	0x094
-#define	VIRTIO_MMIO_V2_QUEUE_USED_LOW	0x0a0
-#define	VIRTIO_MMIO_V2_QUEUE_USED_HIGH	0x0a4
-#define	VIRTIO_MMIO_V2_CONFIG_GEN	0x0fc
-#define VIRTIO_MMIO_CONFIG		0x100
 
 /*
  * MMIO configuration space for virtio-mmio v1 is in guest byte order.
@@ -116,7 +86,6 @@ __KERNEL_RCSID(0, "$NetBSD: virtio_mmio.c,v 1.15 2025/07/26 14:18:14 martin Exp 
 #	define STRUCT_ENDIAN	LITTLE_ENDIAN
 #endif
 
-
 static void	virtio_mmio_kick(struct virtio_softc *, uint16_t);
 static uint16_t	virtio_mmio_read_queue_size(struct virtio_softc *, uint16_t);
 static void	virtio_mmio_v1_setup_queue(struct virtio_softc *, uint16_t, uint64_t);
@@ -128,7 +97,7 @@ static int	virtio_mmio_alloc_interrupts(struct virtio_softc *);
 static void	virtio_mmio_free_interrupts(struct virtio_softc *);
 static int	virtio_mmio_setup_interrupts(struct virtio_softc *, int);
 
-static uint32_t
+uint32_t
 virtio_mmio_reg_read(struct virtio_mmio_softc *sc, bus_addr_t reg)
 {
 	uint32_t val;
