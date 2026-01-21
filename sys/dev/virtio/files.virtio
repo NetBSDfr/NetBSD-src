@@ -3,8 +3,8 @@
 # XXX the contents of the following included file should be moved here
 include "dev/pci/files.virtio"
 
-file	dev/virtio/virtio_mmio.c	virtio_mmio
+file	dev/virtio/virtio_mmio.c	virtio_mmio	needs-flag
 
 device	viocon
 attach	viocon at virtio
-file	dev/virtio/viocon.c		viocon
+file	dev/virtio/viocon.c		viocon		needs-flag
