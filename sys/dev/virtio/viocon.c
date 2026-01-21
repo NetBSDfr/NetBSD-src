@@ -17,6 +17,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#define	VIOCON_CONSOLE
+
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD: viocon.c,v 1.10 2024/08/05 19:13:34 riastradh Exp $");
 
@@ -32,6 +34,10 @@ __KERNEL_RCSID(0, "$NetBSD: viocon.c,v 1.10 2024/08/05 19:13:34 riastradh Exp $"
 #include <sys/lwp.h>
 #include <sys/systm.h>
 #include <sys/tty.h>
+
+#ifdef VIOCON_CONSOLE
+#include <dev/cons.h>
+#endif
 
 #include <dev/pci/virtioreg.h>
 #include <dev/pci/virtiovar.h>
@@ -117,6 +123,13 @@ struct viocon_port {
 	uint16_t		 vp_cols;
 	u_char			*vp_rx_buf;
 	u_char			*vp_tx_buf;
+
+#ifdef VIOCON_CONSOLE
+	struct consdev		 vp_cntab;
+	unsigned int		 vp_pollpos;
+	unsigned int		 vp_polllen;
+	bool			 vp_polling;
+#endif
 };
 
 struct viocon_softc {
@@ -152,6 +165,12 @@ int	vioconwrite(dev_t, struct uio *, int);
 void	vioconstop(struct tty *, int);
 int	vioconioctl(dev_t, u_long, void *, int, struct lwp *);
 struct tty	*viocontty(dev_t dev);
+
+#ifdef VIOCON_CONSOLE
+static void viocon_cnpollc(dev_t, int);
+static int viocon_cngetc(dev_t);
+static void viocon_cnputc(dev_t, int);
+#endif
 
 CFATTACH_DECL_NEW(viocon, sizeof(struct viocon_softc),
     viocon_match, viocon_attach, /*detach*/NULL, /*activate*/NULL);
@@ -228,6 +247,20 @@ viocon_attach(struct device *parent, struct device *self, void *aux)
 		goto err;
 
 	viocon_rx_fill(sc->sc_ports[0]);
+
+#ifdef VIOCON_CONSOLE
+	if (cn_tab == NULL || cn_tab->cn_dev == NODEV) {
+		sc->sc_ports[0]->vp_cntab = (struct consdev) {
+			.cn_pollc = viocon_cnpollc,
+			.cn_getc = viocon_cngetc,
+			.cn_putc = viocon_cnputc,
+			.cn_dev = VIOCONDEV(device_unit(self), 0),
+			.cn_pri = CN_REMOTE,
+		};
+		aprint_normal_dev(sc->sc_dev, "console\n");
+		cn_tab = &sc->sc_ports[0]->vp_cntab;
+	}
+#endif
 
 	return;
 err:
@@ -634,3 +667,77 @@ vioconioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 		return error2;
 	return ENOTTY;
 }
+
+#ifdef VIOCON_CONSOLE
+
+static void
+viocon_cnpollc(dev_t dev, int on)
+{
+	struct viocon_port *vp = dev2port(dev);
+	int s;
+
+	KASSERT((bool)on != vp->vp_polling);
+
+	s = spltty();
+	vp->vp_polling = on;
+	vioconhwiflow(vp->vp_tty, on);
+	splx(s);
+}
+
+static int
+viocon_cngetc(dev_t dev)
+{
+	struct viocon_softc *sc = dev2sc(dev);
+	struct viocon_port *vp = dev2port(dev);
+	struct virtqueue *vq = vp->vp_rx;
+	struct virtio_softc *vsc = sc->sc_virtio;
+	int slot, len;
+
+	KASSERT(vp->vp_polling);
+	while (vp->vp_polllen == 0) {
+		if (virtio_dequeue(vsc, vq, &slot, &len) == 0) {
+			KASSERTMSG(slot >= 0, "slot=%d", slot);
+			KASSERTMSG(slot < vq->vq_num, "slot=%d", slot);
+			KASSERTMSG(len > 0, "len=%d", len);
+			KASSERTMSG(len <= BUFSIZE, "len=%d", len);
+			bus_dmamap_sync(virtio_dmat(vsc), vp->vp_dmamap,
+			    slot * BUFSIZE, BUFSIZE, BUS_DMASYNC_POSTREAD);
+			vp->vp_polllen = len;
+			vp->vp_pollpos = slot * BUFSIZE;
+		}
+	}
+	KASSERT(vp->vp_pollpos <= vq->vq_num * BUFSIZE);
+	vp->vp_polllen--;
+	return vp->vp_rx_buf[vp->vp_pollpos++];
+}
+
+static void
+viocon_cnputc(dev_t dev, int c)
+{
+	struct viocon_softc *sc = dev2sc(dev);
+	struct viocon_port *vp = dev2port(dev);
+	struct virtqueue *vq = vp->vp_tx;
+	struct virtio_softc *vsc = sc->sc_virtio;
+	int slot;
+	int s, error;
+
+	s = spltty();
+	KERNEL_LOCK(1, NULL);
+	(void)viocon_tx_drain(vp, vq);
+	error = virtio_enqueue_prep(vsc, vq, &slot);
+	if (error == 0) {
+		error = virtio_enqueue_reserve(vsc, vq, slot, 1);
+		KASSERTMSG(error == 0, "error=%d", error);
+		vp->vp_tx_buf[slot * BUFSIZE] = c;
+		bus_dmamap_sync(virtio_dmat(vsc), vp->vp_dmamap,
+		    vp->vp_tx_buf - vp->vp_rx_buf + slot * BUFSIZE, 1,
+		    BUS_DMASYNC_PREWRITE);
+		virtio_enqueue_p(vsc, vq, slot, vp->vp_dmamap,
+		    vp->vp_tx_buf - vp->vp_rx_buf + slot * BUFSIZE, 1, 1);
+		virtio_enqueue_commit(vsc, vq, slot, 1);
+	}
+	KERNEL_UNLOCK_ONE(NULL);
+	splx(s);
+}
+
+#endif
