@@ -17,8 +17,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#define	VIOCON_CONSOLE
-
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD: viocon.c,v 1.10 2024/08/05 19:13:34 riastradh Exp $");
 
@@ -35,10 +33,11 @@ __KERNEL_RCSID(0, "$NetBSD: viocon.c,v 1.10 2024/08/05 19:13:34 riastradh Exp $"
 #include <sys/systm.h>
 #include <sys/tty.h>
 
-#ifdef VIOCON_CONSOLE
 #include <dev/cons.h>
-#endif
+#include <dev/virtio/virtio_vioconvar.h>
+#include <dev/virtio/virtio_mmioreg.h>
 
+#define VIRTIO_PRIVATE
 #include <dev/pci/virtioreg.h>
 #include <dev/pci/virtiovar.h>
 
@@ -124,12 +123,10 @@ struct viocon_port {
 	u_char			*vp_rx_buf;
 	u_char			*vp_tx_buf;
 
-#ifdef VIOCON_CONSOLE
 	struct consdev		 vp_cntab;
 	unsigned int		 vp_pollpos;
 	unsigned int		 vp_polllen;
 	bool			 vp_polling;
-#endif
 };
 
 struct viocon_softc {
@@ -166,11 +163,10 @@ void	vioconstop(struct tty *, int);
 int	vioconioctl(dev_t, u_long, void *, int, struct lwp *);
 struct tty	*viocontty(dev_t dev);
 
-#ifdef VIOCON_CONSOLE
 static void viocon_cnpollc(dev_t, int);
 static int viocon_cngetc(dev_t);
 static void viocon_cnputc(dev_t, int);
-#endif
+static void viocon_early_putc(dev_t, int);
 
 CFATTACH_DECL_NEW(viocon, sizeof(struct viocon_softc),
     viocon_match, viocon_attach, /*detach*/NULL, /*activate*/NULL);
@@ -202,7 +198,65 @@ dev2port(dev_t dev)
 	return dev2sc(dev)->sc_ports[VIOCONPORT(dev)];
 }
 
-int viocon_match(struct device *parent, struct cfdata *match, void *aux)
+static struct {
+	bus_space_tag_t		ec_bst;
+	bus_space_handle_t	ec_bsh;
+	bus_addr_t		ec_reg_offset;
+} early_console;
+
+static void
+viocon_early_putc(dev_t dev, int c)
+{
+	bus_space_write_4(early_console.ec_bst, early_console.ec_bsh,
+	    early_console.ec_reg_offset, c);
+}
+
+int
+viocon_earlyinit(bus_space_tag_t bst, bus_space_handle_t bsh)
+{
+	static struct consdev viocon_early_consdev = {
+	    .cn_putc = viocon_early_putc,
+	    .cn_getc = NULL,
+	    .cn_pollc = NULL,
+	    .cn_dev = NODEV,
+	    .cn_pri = CN_NORMAL
+	};
+
+	if (bus_space_read_4(bst, bsh, VIRTIO_MMIO_MAGIC_VALUE) !=
+	    VIRTIO_MMIO_MAGIC) {
+		return -1;
+	}
+
+	if (bus_space_read_4(bst, bsh, VIRTIO_MMIO_DEVICE_ID) !=
+	    VIRTIO_DEVICE_ID_CONSOLE) {
+		return -1;
+	}
+
+	if (!(bus_space_read_4(bst, bsh, VIRTIO_MMIO_DEVICE_FEATURES) &
+	    VIRTIO_CONSOLE_F_EMERG_WRITE)) {
+		return -1;
+	}
+
+	/*
+	 * https://docs.oasis-open.org/virtio/virtio/v1.3/csd01/virtio-v1.3-csd01.html#x1-3250004
+	 * emerg_wr is 32 bits long
+	 */
+	if (bus_space_subregion(bst, bsh,
+	    VIRTIO_MMIO_CONFIG + VIRTIO_CONSOLE_EMERG_WR_OFFSET,
+	    sizeof(uint32_t), &early_console.ec_bsh) != 0) {
+		return -1;
+	}
+
+	early_console.ec_bst = bst;
+	early_console.ec_reg_offset = 0; /* already adjusted by subregion */
+
+	cn_tab = &viocon_early_consdev;
+
+	return 0;
+}
+
+int
+viocon_match(struct device *parent, struct cfdata *match, void *aux)
 {
 	struct virtio_attach_args *va = aux;
 	if (va->sc_childdevid == VIRTIO_DEVICE_ID_CONSOLE)
@@ -248,7 +302,6 @@ viocon_attach(struct device *parent, struct device *self, void *aux)
 
 	viocon_rx_fill(sc->sc_ports[0]);
 
-#ifdef VIOCON_CONSOLE
 	if (cn_tab == NULL || cn_tab->cn_dev == NODEV) {
 		sc->sc_ports[0]->vp_cntab = (struct consdev) {
 			.cn_pollc = viocon_cnpollc,
@@ -260,7 +313,6 @@ viocon_attach(struct device *parent, struct device *self, void *aux)
 		aprint_normal_dev(sc->sc_dev, "console\n");
 		cn_tab = &sc->sc_ports[0]->vp_cntab;
 	}
-#endif
 
 	return;
 err:
@@ -668,8 +720,6 @@ vioconioctl(dev_t dev, u_long cmd, void *data, int flag, struct lwp *l)
 	return ENOTTY;
 }
 
-#ifdef VIOCON_CONSOLE
-
 static void
 viocon_cnpollc(dev_t dev, int on)
 {
@@ -739,5 +789,3 @@ viocon_cnputc(dev_t dev, int c)
 	KERNEL_UNLOCK_ONE(NULL);
 	splx(s);
 }
-
-#endif
