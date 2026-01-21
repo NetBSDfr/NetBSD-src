@@ -44,7 +44,6 @@
 static int _pv_dma_may_bounce(bus_dma_tag_t, bus_dmamap_t, int, int *);
 static int pv_match(device_t, cfdata_t, void *);
 static void pv_attach(device_t, device_t, void *);
-static int pv_submatch(device_t, cfdata_t, const int *, void *);
 
 struct x86_bus_dma_tag pvbus_bus_dma_tag = {
 	._tag_needs_free	= 0,
@@ -71,7 +70,6 @@ _pv_dma_may_bounce(bus_dma_tag_t t, bus_dmamap_t map, int flags,
 static int
 pv_match(device_t parent, cfdata_t match, void *aux)
 {
-
 	return 1;
 }
 
@@ -79,6 +77,7 @@ static void
 pv_attach(device_t parent, device_t self, void *aux)
 {
 	struct pv_attach_args pvaa;
+	struct mmio_cmdline_node *mmio_node;
 
 	pvaa.pvaa_memt = x86_bus_space_mem;
 	pvaa.pvaa_dmat = &pvbus_bus_dma_tag;
@@ -86,17 +85,16 @@ pv_attach(device_t parent, device_t self, void *aux)
 	aprint_naive("\n");
 	aprint_normal("\n");
 
-	config_found(self, &pvaa, NULL, CFARGS(.search = pv_submatch));
-}
+	pvaa.mmio_node = NULL;
 
-static int
-pv_submatch(device_t parent, cfdata_t cf, const int *ldesc, void *aux)
-{
-	struct pv_attach_args *pvaa = aux;
+	/* Non MMIO devices */
+	while (config_found(self, &pvaa, NULL, CFARGS_NONE) != NULL)
+		continue;
 
-	if (config_probe(parent, cf, pvaa)) {
-		config_attach(parent, cf, pvaa, NULL, CFARGS_NONE);
-		return 0;
+	virtio_mmio_cmdline_parse();
+
+	SLIST_FOREACH(mmio_node, &virtio_mmio_cmdline_devs, n_nodes) {
+		pvaa.mmio_node = mmio_node;
+		config_found(self, &pvaa, NULL, CFARGS_NONE);
 	}
-	return 0;
 }
