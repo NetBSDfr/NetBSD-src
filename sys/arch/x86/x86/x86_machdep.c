@@ -257,6 +257,19 @@ x86_add_xen_modules(void)
 			    modlist[i].size);
 #endif
 #if defined(MEMORY_DISK_HOOKS) && defined(MEMORY_DISK_DYNAMIC)
+#define IMGBLKSIZE 512
+		} else if (memcmp((char *)((uintptr_t)modlist[i].paddr + KERNBASE + IMGBLKSIZE),
+			    "EFI PART", 8) == 0) {
+			const uintptr_t base = (uintptr_t)modlist[i].paddr + KERNBASE;
+			/*
+			 * https://en.wikipedia.org/wiki/GUID_Partition_Table
+			 * +512 bytes - LBA 0 -> EFI magic
+			 * +512 bytes - LBA 1 informations & address at offset 0x20
+			 * base + offset from 0x20 - first usable LBA (2-*)
+			 */
+			uintptr_t offset = *(const uint32_t *)(base + 2 * IMGBLKSIZE + 0x20);
+			md_root_setconf(
+			    (void *)(base + offset * IMGBLKSIZE), modlist[i].size - offset);
 		} else {
 			aprint_debug("File-system image path=%s len=%"PRIu64" pa=%p\n",
 			    "pvh-filesystem",
