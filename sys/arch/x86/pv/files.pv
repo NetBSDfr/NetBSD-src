@@ -9,3 +9,7 @@ file	dev/virtio/arch/x86/virtio_mmio_cmdline.c	mmio_cmdline
 
 attach	qemufwcfg at pv with qemufwcfg_pv
 file	arch/x86/pv/qemufwcfg_pv.c			qemufwcfg_pv
+
+device	pvclock
+attach	pvclock at pv
+file	arch/x86/pv/pvclock.c
