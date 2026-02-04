@@ -1,0 +1,4 @@
+include "arch/amd64/conf/MICROVM"
+
+# Paravirtual clock available in KVM
+pvclock* at pv?
