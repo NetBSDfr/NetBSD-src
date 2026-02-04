@@ -216,8 +216,7 @@ mm_md_physacc(paddr_t pa, vm_prot_t prot)
 
 #ifdef MODULAR
 #ifdef XEN
-void x86_add_xen_modules(void);
-void
+static void
 x86_add_xen_modules(void)
 {
 #if defined(XENPVHVM) || defined(XENPVH)
