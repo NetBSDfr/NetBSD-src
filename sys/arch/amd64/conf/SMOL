@@ -1,4 +1,8 @@
 include "arch/amd64/conf/MICROVM"
+include "arch/x86/conf/files.tslog"
 
 # Paravirtual clock available in KVM
 pvclock* at pv?
+
+# tslog(4) boot-time event tracing facility
+options	TSLOG
