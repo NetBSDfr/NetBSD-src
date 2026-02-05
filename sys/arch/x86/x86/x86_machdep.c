@@ -54,6 +54,7 @@ __KERNEL_RCSID(0, "$NetBSD: x86_machdep.c,v 1.160 2025/12/05 17:58:12 khorben Ex
 #include <sys/sysctl.h>
 #include <sys/extent.h>
 #include <sys/rnd.h>
+#include <sys/disklabel_gpt.h>
 
 #include <x86/bootspace.h>
 #include <x86/cpuvar.h>
@@ -222,6 +223,8 @@ x86_add_xen_modules(void)
 #if defined(XENPVHVM) || defined(XENPVH)
 	uint32_t i;
 	struct hvm_modlist_entry *modlist;
+	uint64_t size;
+	char * addr;
 
 	if (hvm_start_info->nr_modules == 0) {
 		aprint_verbose("No Xen module info at boot\n");
@@ -257,13 +260,33 @@ x86_add_xen_modules(void)
 #endif
 #if defined(MEMORY_DISK_HOOKS) && defined(MEMORY_DISK_DYNAMIC)
 		} else {
+			const uint32_t blksz = 512;
+			char * lba0 = (char *)((uintptr_t)modlist[i].paddr + KERNBASE);
+			struct gpt_hdr * gh = (struct gpt_hdr *)(lba0 + blksz * GPT_HDR_BLKNO);
+			struct gpt_ent * ge;
+			uint32_t j;
+
+			size = modlist[i].size;
+			addr = lba0;
+			/* look for a GPT partition table */
+			if (size > sizeof(*gh) * 2 &&
+			    gh->hdr_size == GPT_HDR_SIZE &&
+			    gh->hdr_entsz == sizeof(*ge) &&
+			    memcmp(gh->hdr_sig, GPT_HDR_SIG, sizeof(gh->hdr_sig)) == 0) {
+				ge = (struct gpt_ent *)(lba0 + gh->hdr_lba_table * blksz);
+
+				for (j = 0; j < gh->hdr_entries; j++) {
+					/* look for a bootable partition */
+					if (ge[j].ent_attr & GPT_ENT_ATTR_BOOTME) {
+						size = (ge[j].ent_lba_end - ge[j].ent_lba_start) * blksz;
+						addr = lba0 + ge[j].ent_lba_start * blksz;
+						break;
+					}
+				}
+			}
 			aprint_debug("File-system image path=%s len=%"PRIu64" pa=%p\n",
-			    "pvh-filesystem",
-			    modlist[i].size,
-			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE));
-			md_root_setconf(
-			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE),
-			    modlist[i].size);
+			    "pvh-filesystem", size, addr);
+			md_root_setconf(addr, size);
 #endif
 		}
 	}
