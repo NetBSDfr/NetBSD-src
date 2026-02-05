@@ -223,6 +223,7 @@ x86_add_xen_modules(void)
 #if defined(XENPVHVM) || defined(XENPVH)
 	uint32_t i;
 	struct hvm_modlist_entry *modlist;
+	char name[37] = "pvh-filesystem";
 	uint64_t size;
 	char * addr;
 
@@ -276,8 +277,13 @@ x86_add_xen_modules(void)
 				ge = (struct gpt_ent *)(lba0 + gh->hdr_lba_table * blksz);
 
 				for (j = 0; j < gh->hdr_entries; j++) {
+					uint32_t k;
+
 					/* look for a bootable partition */
 					if (ge[j].ent_attr & GPT_ENT_ATTR_BOOTME) {
+						for (k = 0; k < sizeof(ge->ent_name) / sizeof(*ge->ent_name); k++)
+							name[k] = ge[j].ent_name[k];
+						name[sizeof(name) - 1] = '\0';
 						size = (ge[j].ent_lba_end - ge[j].ent_lba_start) * blksz;
 						addr = lba0 + ge[j].ent_lba_start * blksz;
 						break;
@@ -285,7 +291,7 @@ x86_add_xen_modules(void)
 				}
 			}
 			aprint_debug("File-system image path=%s len=%"PRIu64" pa=%p\n",
-			    "pvh-filesystem", size, addr);
+			    name, size, addr);
 			md_root_setconf(addr, size);
 #endif
 		}
