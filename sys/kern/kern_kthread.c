@@ -47,6 +47,8 @@ __KERNEL_RCSID(0, "$NetBSD: kern_kthread.c,v 1.51 2026/01/04 01:35:16 riastradh 
 #include <sys/sdt.h>
 #include <sys/systm.h>
 
+#include <x86/tslog.h>
+
 #include <uvm/uvm_extern.h>
 
 static kmutex_t		kthread_lock;
@@ -98,6 +100,8 @@ kthread_create(pri_t pri, int flag, struct cpu_info *ci,
 		vsnprintf(l->l_name, MAXCOMLEN, fmt, ap);
 		va_end(ap);
 	}
+
+	TSTHREAD(l, l->l_name);
 
 	/*
 	 * Set parameters.

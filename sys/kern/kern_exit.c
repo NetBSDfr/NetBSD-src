@@ -113,6 +113,8 @@ __KERNEL_RCSID(0, "$NetBSD: kern_exit.c,v 1.300 2025/03/16 15:52:18 riastradh Ex
 
 #include <uvm/uvm_extern.h>
 
+#include <x86/tslog.h>
+
 #ifdef DEBUG_EXIT
 int debug_exit = 0;
 #define DPRINTF(x) if (debug_exit) printf x
@@ -205,6 +207,8 @@ exit1(struct lwp *l, int exitcode, int signo)
 	ksiginfo_t	ksi;
 	ksiginfoq_t	kq;
 	int		wakeinit;
+
+	TSPROCEXIT(l->l_proc->p_pid);
 
 	p = l->l_proc;
 

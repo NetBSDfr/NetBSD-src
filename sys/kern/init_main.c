@@ -236,6 +236,8 @@ extern void *_binary_splash_image_end;
 #include <sys/boot_duration.h>
 #endif
 
+#include <x86/tslog.h>
+
 extern time_t rootfstime;
 
 #ifndef curlwp
@@ -275,6 +277,8 @@ main(void)
 #endif
 	CPU_INFO_ITERATOR cii;
 	struct cpu_info *ci;
+
+	TSENTER();
 
 #ifdef DIAGNOSTIC
 	/*
@@ -638,6 +642,8 @@ main(void)
 
 	scdebug_init();
 
+	TSEXIT();
+
 	/*
 	 * Create process 1 (init(8)).  We do this now, as Unix has
 	 * historically had init be process 1, and changing this would
@@ -983,6 +989,8 @@ start_init(void *arg)
 	char ipath[129];
 	int ipx, len;
 
+	TSENTER();
+
 	/*
 	 * Now in process 1.
 	 */
@@ -1128,6 +1136,7 @@ start_init(void *arg)
 		error = sys_execve(l, &args, retval);
 		if (error == 0 || error == EJUSTRETURN) {
 			KERNEL_UNLOCK_LAST(l);
+			TSEXIT();
 			return;
 		}
 		printf("exec %s: error %d\n", path, error);

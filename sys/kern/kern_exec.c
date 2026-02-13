@@ -117,6 +117,8 @@ __KERNEL_RCSID(0, "$NetBSD: kern_exec.c,v 1.531 2025/07/16 19:14:13 kre Exp $");
 
 #include <machine/reg.h>
 
+#include <x86/tslog.h>
+
 #include <compat/common/compat_util.h>
 
 #ifndef MD_TOPDOWN_INIT
@@ -1476,6 +1478,9 @@ execve1(struct lwp *l, bool has_path, const char *path, int fd,
 	    &data);
 	if (error)
 		return error;
+
+	TSEXEC(l->l_proc->p_pid, data.ed_pathstring);
+
 	error = execve_runproc(l, &data, false, false);
 	return error;
 }

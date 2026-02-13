@@ -119,6 +119,8 @@ __KERNEL_RCSID(0, "$NetBSD: subr_autoconf.c,v 1.318 2026/01/17 02:01:39 thorpej 
 
 #include <machine/limits.h>
 
+#include <x86/tslog.h>
+
 /*
  * Autoconfiguration subroutines.
  */
@@ -1863,6 +1865,8 @@ config_attach_internal(device_t parent, cfdata_t cf, void *aux, cfprint_t print,
 
 	KASSERT(KERNEL_LOCKED_P());
 
+	TSENTER2(cf->cf_name);
+
 	dev = config_devalloc(parent, cf, args);
 	if (!dev)
 		panic("config_attach: allocation of device softc failed");
@@ -1958,6 +1962,7 @@ config_attach_internal(device_t parent, cfdata_t cf, void *aux, cfprint_t print,
 
 	device_register_post_config(dev, aux);
 	rnd_add_uint32(&rnd_autoconf_source, 0);
+	TSEXIT2(cf->cf_name);
 	return dev;
 }
 
