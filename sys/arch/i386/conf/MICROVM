@@ -26,4 +26,4 @@ include		"arch/x86/conf/files.tslog"
 options         EXEC_ELF32      # exec ELF binaries
 
 # tslog(4) boot-time event tracing facility
-#options	TSLOG
+options		TSLOG

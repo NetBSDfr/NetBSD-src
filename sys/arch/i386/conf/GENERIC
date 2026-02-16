@@ -19,6 +19,7 @@
 # device.
 
 include 	"arch/i386/conf/std.i386"
+include		"arch/x86/conf/files.tslog"
 
 options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
 
@@ -1520,6 +1521,9 @@ options 	PAX_SEGVGUARD=0		# PaX Segmentation fault guard
 options 	PAX_MPROTECT=1		# PaX mprotect(2) restrictions
 options 	PAX_MPROTECT_DEBUG=1	# PaX mprotect debug
 options 	PAX_ASLR=1		# PaX Address Space Layout Randomization
+
+# tslog(4) boot-time event tracing facility
+options		TSLOG
 
 # Pull in optional local configuration - always at end
 cinclude	"arch/i386/conf/GENERIC.local"

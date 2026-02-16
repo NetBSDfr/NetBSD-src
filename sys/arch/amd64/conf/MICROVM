@@ -30,4 +30,4 @@ options 	MEMORY_DISK_HOOKS	# enable md specific hooks
 options 	MEMORY_DISK_DYNAMIC	# enable dynamic resizing
 
 # tslog(4) boot-time event tracing facility
-#options	TSLOG
+options		TSLOG
