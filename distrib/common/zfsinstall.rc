@@ -179,20 +179,9 @@ EOF
 	/bin/cp /usr/mdec/boot /altroot/boot
 	_info "installing modules"
 	(cd /altroot && tar xzpf /tmp/modules$setext)	|| _abort $errinstmodules
-
-	# Initialize ZFS while the modules are available
-	[ -n "$modules" ] && for module in $modules; do
-		_info "loading module: $module"
-		# XXX ignore errors
-		/sbin/modload "$module"
-	done
-	modules=
-
 	/sbin/umount /altroot				|| _abort $errumount
-
 	/usr/sbin/installboot -m "$machine" /dev/dk$((dkidx + 1)) \
 		/usr/mdec/bootxx_ffsv$ffsver		|| _abort $errinstboot
-
 	vdevs="$vdevs${sep}dk$((dkidx + 2))"
 	sep=' '
 	dkidx=$((dkidx + 3))
