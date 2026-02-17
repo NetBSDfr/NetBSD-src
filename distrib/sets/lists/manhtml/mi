@@ -49,6 +49,7 @@
 ./usr/share/man/html1/bg.html			man-util-htmlman	html
 ./usr/share/man/html1/biff.html			man-mail-htmlman	html
 ./usr/share/man/html1/bpm.html			man-obsolete		html,obsolete
+./usr/share/man/html1/bsddialog.html		man-sysutil-htmlman	html
 ./usr/share/man/html1/bthset.html		man-util-htmlman	html
 ./usr/share/man/html1/btkey.html		man-util-htmlman	html
 ./usr/share/man/html1/btpin.html		man-util-htmlman	html

@@ -2,4 +2,4 @@
 
 .include "../Makefile.inc"
 
-.PATH:		${BSDDIALOG_DISTDIR}/lib
+.PATH:	${BSDDIALOG_DISTDIR}/lib

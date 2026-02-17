@@ -547,7 +547,7 @@
 ./usr/bin/bc					base-util-bin
 ./usr/bin/bdes					base-crypto-bin
 ./usr/bin/biff					base-mail-bin
-./usr/bin/bsddialog				base-util-bin
+./usr/bin/bsddialog				base-sysutil-bin
 ./usr/bin/bthset				base-util-bin
 ./usr/bin/btkey					base-util-bin
 ./usr/bin/btpin					base-util-bin

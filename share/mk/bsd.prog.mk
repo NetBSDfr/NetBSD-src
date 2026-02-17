@@ -93,6 +93,7 @@ _LIBLIST=\
 	atf_cxx \
 	blocklist \
 	bluetooth \
+	bsddialog \
 	bsdmalloc \
 	bz2 \
 	c \

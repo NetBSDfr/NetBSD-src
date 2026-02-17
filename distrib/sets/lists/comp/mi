@@ -211,6 +211,9 @@
 ./usr/include/bluetooth.h			comp-c-include
 ./usr/include/bm.h				comp-c-include
 ./usr/include/bozohttpd.h			comp-c-include
+./usr/include/bsddialog.h			comp-c-include
+./usr/include/bsddialog_progressview.h		comp-c-include
+./usr/include/bsddialog_theme.h			comp-c-include
 ./usr/include/bzlib.h				comp-c-include
 ./usr/include/c++/__availability		comp-cxx-include	libcxx
 ./usr/include/c++/__bit_reference		comp-cxx-include	libcxx
@@ -3894,6 +3897,8 @@
 ./usr/lib/libbluetooth_p.a			comp-c-proflib		compatfile,profile
 ./usr/lib/libbozohttpd.a			comp-c-lib		compatfile
 ./usr/lib/libbozohttpd_p.a			comp-c-proflib		compatfile,profile
+./usr/lib/libbsddialog.a			comp-c-lib		compatfile
+./usr/lib/libbsddialog_p.a			comp-c-proflib		compatfile,profile
 ./usr/lib/libbsdmalloc.a			comp-c-lib		compatfile
 ./usr/lib/libbsdmalloc_p.a			comp-c-proflib		compatfile,profile
 ./usr/lib/libbz2.a				comp-c-lib		compatfile
