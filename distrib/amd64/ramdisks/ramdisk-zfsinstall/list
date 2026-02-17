@@ -1,4 +1,4 @@
-#	$NetBSD: list,v 1.1 2020/02/22 09:53:47 roy Exp $
+#	$NetBSD$
 
 PROG	bin/sync
 

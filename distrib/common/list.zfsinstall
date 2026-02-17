@@ -23,15 +23,22 @@ PROG	sbin/newfs_msdos
 # We need installboot for NetBSD
 PROG	usr/sbin/installboot
 
+# We need bsddialog for the installer
+SRCDIRS	external/bsd/bsddialog/usr.bin
+PROG	usr/bin/bsddialog
+
 # We need uname for run-time configuration
 PROG	usr/bin/uname
 
+LIBS	-lbsddialog
+LIBS	-lcurses
 LIBS	-lnvpair
 LIBS	-luutil
 LIBS	-lzfs
 LIBS	-lavl
 LIBS	-lm
 LIBS	-lpthread
+LIBS	-lterminfo
 LIBS	-lumem
 #LIBS	-lutil		# replaced by libhack
 LIBS	-lz

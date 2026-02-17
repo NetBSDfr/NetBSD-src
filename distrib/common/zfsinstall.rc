@@ -1,4 +1,4 @@
-#/bin/sh
+#!/bin/sh
 #
 #	$NetBSD$
 
@@ -57,7 +57,12 @@ _abort() {
 }
 
 _info() {
-	echo "$progname: $@"
+	if [ -x /usr/bin/bsddialog ]; then
+		TERM=vt100 /usr/bin/bsddialog --msgbox "$@" 25 80
+		[ $? -eq 0 ] || echo "$progname: $@"
+	else
+		echo "$progname: $@"
+	fi
 }
 
 # Setup some stuff in case things go south and we drop to the shell

@@ -7,3 +7,4 @@
 ./targetroot 	type=dir  uname=root gname=wheel mode=755
 ./zfsinstall.kmod type=file uname=root gname=wheel mode=644
 ./etc/gettytab 	type=link uname=root gname=wheel mode=755
+./usr/bin/bsddialog	type=file  uname=root gname=wheel mode=755
