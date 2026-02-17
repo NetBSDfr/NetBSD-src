@@ -4,5 +4,6 @@ banner=
 banner=If you encounter a problem while booting, report a bug at
 banner=https://www.NetBSD.org/.
 menu=Install NetBSD:boot netbsd
+menu=Install NetBSD (root on ZFS):load solaris;load zfs;load /zfsinstall.kmod;boot netbsd
 menu=Drop to boot prompt:prompt
 timeout=30

@@ -10,6 +10,7 @@
 CDBASE=		amd64dvd		# gives ${CDBASE}.iso
 CDRELEASE=	true			# include $RELEASEDIR/$RELEASEMACHINEDIR
 CDBUILDEXTRA=	boot.cfg		# Add boot.cfg file
+CDEXTRA+=	${${MKZFS} != "no":?${RELEASEDIR}/amd64/installation/miniroot/zfsinstall.kmod:}
 CLEANFILES+=	boot.cfg
 
 .if ${MKMAN} != "no"
@@ -17,7 +18,12 @@ CD_SETS+=	man
 .endif
 
 prepare_md_post:
+.if ${MKZFS:Uno} != "no"
+	${TOOL_SED} "s/@@VERSION@@/${DISTRIBVER}/" \
+		< ${.CURDIR}/zfsboot.cfg.in > boot.cfg
+.else
 	${TOOL_SED} "s/@@VERSION@@/${DISTRIBVER}/" \
 		< ${.CURDIR}/boot.cfg.in > boot.cfg
+.endif
 
 .include "${.CURDIR}/../../../common/Makefile.bootcd"

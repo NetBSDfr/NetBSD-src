@@ -29,7 +29,7 @@ CD_SETS+=	modules
 
 .if ${KERNEL_DIR:Uno} == "yes"
 SPEC_EXTRA:=${.PARSEDIR}/spec-dir.in
-.elif ${MKZFS:Uno} == "yes"
+.elif ${MKZFS:Uno} != "no"
 SPEC_EXTRA:=${.PARSEDIR}/zfsspec.in
 .else
 SPEC_EXTRA:=${.PARSEDIR}/spec.in
@@ -58,6 +58,6 @@ image_md_pre: ${EFIBOOTIMG}
 	${MKDIR} ${MKDIRPERM} cdrom/mnt2 cdrom/targetroot
 	${INSTALL} ${COPY} ${SYSINSTDIR}/sysinstmsgs.?? cdrom/usr/share/sysinst/catalog/
 	${MKDIR} ${MKDIRPERM} cdrom/var
-.if ${MKZFS:Uno} == "yes"
+.if ${MKZFS:Uno} != "no"
 	${INSTALL} ${COPY} ${.CURDIR}/../../kmod-zfsinstall/zfsinstall.kmod cdrom/zfsinstall.kmod
 .endif
