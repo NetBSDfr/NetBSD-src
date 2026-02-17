@@ -15,6 +15,7 @@ LIBC?=			/usr/lib/libc.a
 LIBCOMPAT?=		/usr/lib/libcompat.a
 LIBCRYPT?=		/usr/lib/libcrypt.a
 LIBCURSES?=		/usr/lib/libcurses.a
+LIBBSDDIALOG?=		/usr/lib/libbsddialog.a
 LIBC_PIC?=		/usr/lib/libc_pic.a
 LIBC_SO?=		/usr/lib/libc.so
 LIBDBM?=		/usr/lib/libdbm.a

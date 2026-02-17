@@ -1,0 +1,4 @@
+# $NetBSD$
+
+BSDDIALOG_SRCDIR=	${NETBSDSRCDIR}/external/bsd/bsddialog
+BSDDIALOG_DISTDIR=	${BSDDIALOG_SRCDIR}/dist

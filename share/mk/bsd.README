@@ -1331,6 +1331,7 @@ DPADD		Additional dependencies for the program.  Usually used for
 		LIBATF_CXX?=		${DESTDIR}/usr/lib/libatf-c++.a
 		LIBBLOCKLIST?=		${DESTDIR}/usr/lib/libblocklist.a
 		LIBBLUETOOTH?=		${DESTDIR}/usr/lib/libbluetooth.a
+		LIBBSDDIALOG?=		${DESTDIR}/usr/lib/libbsddialog.a
 		LIBBSDMALLOC?=		${DESTDIR}/usr/lib/libbsdmalloc.a
 		LIBBZ2?=		${DESTDIR}/usr/lib/libbz2.a
 		LIBC?=			${DESTDIR}/usr/lib/libc.a
