@@ -87,6 +87,7 @@ _abort() {
 	[ $# -gt 1 ] && _error "$@"
 	_info "Restarting the installer..."
 	sleep 1
+	_reset
 	exec /bin/sh /etc/rc
 }
 
@@ -239,6 +240,14 @@ _remove() {
 	#FIXME implement for just-in-time downloads
 	#XXX ignore errors
 	_runcmd $cmdrm "$1" || true
+}
+
+_reset() {
+	_runcmd /sbin/umount /altroot
+	_runcmd /sbin/umount /cdrom
+	_runcmd /sbin/umount /etc
+	_runcmd /sbin/umount /tmp
+	_runcmd /sbin/umount /var
 }
 
 _runcmd() {
@@ -447,6 +456,9 @@ EOF
 	_runcmd /sbin/umount /altroot				|| _abort $errumount
 	_info "Exporting ZFS pool: $rpool"
 	_runcmd /sbin/zpool export "$rpool"			|| _abort
+
+	# Reset the environment
+	_reset
 
 	# Start the system like zfsroot.rc
 	_info "Importing ZFS pool: $rpool"
