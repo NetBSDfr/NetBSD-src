@@ -1,0 +1,6 @@
+# $NetBSD$
+
+.
+./altroot
+./cdrom
+./rpool

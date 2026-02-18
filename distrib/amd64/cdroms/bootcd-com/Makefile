@@ -7,7 +7,6 @@ CDBOOTOPTIONS=	-o console=com0
 .include "${.CURDIR}/../Makefile.cdrom"
 
 CDBASE=		boot-com			# gives ${CDBASE}.iso
-
 CDBUILDEXTRA+=	boot.cfg		# Add boot.cfg file
 CLEANFILES+=	boot.cfg
 

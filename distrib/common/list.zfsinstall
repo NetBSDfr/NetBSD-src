@@ -27,6 +27,13 @@ PROG	usr/sbin/installboot
 SRCDIRS	external/bsd/bsddialog/usr.bin
 PROG	usr/bin/bsddialog
 
+# We need progress for progress bars
+PROG	usr/bin/progress
+
+# We need tr and wc for pretty dialogs
+PROG	usr/bin/tr
+PROG	usr/bin/wc
+
 # We need uname for run-time configuration
 PROG	usr/bin/uname
 

@@ -17,4 +17,4 @@ LISTS+=			${DISTRIBDIR}/common/list.zfsinstall
 
 LISTS+=			${.CURDIR}/list
 
-MTREECONF+=		${DISTRIBDIR}/common/mtree.zfsroot
+MTREECONF+=		${DISTRIBDIR}/common/mtree.zfsinstall
