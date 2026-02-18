@@ -572,7 +572,8 @@ while true; do
 			--no-label "Shell" --yes-label "Install" \
 			--left1-button "Update" \
 			--yesno "Choose \"Install\" to install NetBSD with the root filesystem on a ZFS pool,
-	or \"Shell\" to enter rescue mode." 21 78
+\"Update\" to update an existing system in place,
+or \"Shell\" to enter rescue mode." 21 78
 		res=$?
 		case $res in
 			0)
