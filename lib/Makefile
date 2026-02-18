@@ -129,6 +129,7 @@ SUBDIR+=	../external/bsd/blocklist/lib		# depends on libpthread
 SUBDIR+=	../external/mit/lua/lib # depends on libm
 SUBDIR+=	../external/public-domain/sqlite/lib # depends on libm
 SUBDIR+=	libcurses	# depends on libterminfo
+SUBDIR+=	../external/bsd/bsddialog/lib		# depends on libcurses
 SUBDIR+=	libdm		# depends on libprop
 SUBDIR+=	libedit		# depends on libterminfo
 SUBDIR+=	libexecinfo 	# depends on libelf
