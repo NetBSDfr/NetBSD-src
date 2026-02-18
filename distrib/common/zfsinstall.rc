@@ -80,6 +80,17 @@ _abort() {
 	exec /bin/sh
 }
 
+_copy() {
+	src="$1"
+	dst="$2"
+
+	if [ -x /usr/bin/progress ]; then
+		/usr/bin/progress -ef "$src" /bin/cat > "$dst"
+	else
+		$cmdcp "$src" "$dst"
+	fi
+}
+
 _download() {
 	url="$1"
 
@@ -101,8 +112,8 @@ _error() {
 	if [ -x /usr/bin/bsddialog ]; then
 		TERM=wsvt25 /usr/bin/bsddialog \
 			--backtitle "$backtitle" \
-			--title "Error" --msgbox "$@" 21 78
-		[ $? -eq 0 ] || echo "$progname: $@" 1>&2
+			--title "Error" --msgbox "$*" 21 78
+		[ $? -eq 0 ] || echo "$progname: $*" 1>&2
 	else
 		echo "$progname: $@" 1>&2
 	fi
@@ -124,8 +135,8 @@ _info() {
 	if [ -x /usr/bin/bsddialog ]; then
 		TERM=wsvt25 /usr/bin/bsddialog \
 			--backtitle "$backtitle" \
-			--infobox "$@" 21 78
-		[ $? -eq 0 ] || echo "$progname: $@"
+			--infobox "$*" 21 78
+		[ $? -eq 0 ] || echo "$progname: $*"
 	else
 		echo "$progname: $@"
 	fi
@@ -136,10 +147,10 @@ _install_kernel() {
 	kernel="$2"
 
 	if [ $network -eq 0 ]; then
-		$cmdcp "/cdrom/$machine/binary/kernel/netbsd-$kernel$kernelext" \
+		_copy "/cdrom/$machine/binary/kernel/netbsd-$kernel$kernelext" \
 			"$destdir/netbsd$kernelext"
 	else
-		$cmdcp "$dldir/netbsd-$kernel$kernelext" \
+		_copy "$dldir/netbsd-$kernel$kernelext" \
 			"$destdir/netbsd$kernelext"
 	fi
 }
@@ -149,10 +160,10 @@ _install_ramdisk() {
 	ramdisk="$2"
 
 	if [ $network -eq 0 ]; then
-		$cmdcp "/cdrom/$machine/installation/miniroot/$ramdisk$ramdiskext" \
+		_copy "/cdrom/$machine/installation/miniroot/$ramdisk$ramdiskext" \
 			"$destdir/$ramdisk$ramdiskext"
 	else
-		$cmdcp "$dldir/$ramdisk$ramdiskext" \
+		_copy "$dldir/$ramdisk$ramdiskext" \
 			"$destdir/$ramdisk$ramdiskext"
 	fi
 }
@@ -275,8 +286,10 @@ for disk in $disks; do
 	_info "Setting up partition: dk$dkidx (EFI)"
 	/sbin/mount /dev/dk$dkidx /altroot		|| _abort $errmount
 	/bin/mkdir -p /altroot/EFI/boot			|| _abort $errmkdir
-	$cmdcp /usr/mdec/bootx64.efi /usr/mdec/bootia32.efi \
-		/altroot/EFI/boot			|| _abort $errinstboot
+	_copy /usr/mdec/bootx64.efi \
+		/altroot/EFI/boot/bootx64.efi		|| _abort $errinstboot
+	_copy /usr/mdec/bootia32.efi \
+		/altroot/EFI/boot/bootia32.efi		|| _abort $errinstboot
 	/sbin/umount /altroot				|| _abort $errumount
 
 	# Setup the NetBSD boot partition
@@ -296,8 +309,8 @@ EOF
 	_install_ramdisk /altroot "$ramdisk"		|| _abort $errinstramdisk $ramdisk
 	_info "Installing modules"
 	_extract_set /altroot "modules"			|| _abort $errinstmodules
-	_info "Installing bootloader"
-	$cmdcp /usr/mdec/boot /altroot/boot		|| _abort $errinstboot
+	_info "Installing the bootloader"
+	_copy /usr/mdec/boot /altroot/boot		|| _abort $errinstboot
 	/sbin/umount /altroot				|| _abort $errumount
 	$cmdinstallboot -m "$machine" /dev/dk$((dkidx + 1)) \
 		/usr/mdec/bootxx_ffsv$ffsver		|| _abort $errinstboot
