@@ -9,6 +9,9 @@ PROG	sbin/zpool
 LINK	sbin/zfs sbin/mount_zfs
 ARGVLN	zfs mount_zfs
 
+# We need sleep to regenerate
+PROG	bin/sleep
+
 # We need sysctl to set init.root=/altroot
 PROG	sbin/sysctl
 
