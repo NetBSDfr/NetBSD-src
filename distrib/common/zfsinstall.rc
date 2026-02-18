@@ -243,11 +243,13 @@ _remove() {
 }
 
 _reset() {
+	_runcmd $cmddhcpcd -x
 	_runcmd /sbin/umount /altroot
 	_runcmd /sbin/umount /cdrom
 	_runcmd /sbin/umount /etc
 	_runcmd /sbin/umount /tmp
 	_runcmd /sbin/umount /var
+	_runcmd /sbin/zpool export "$rpool"
 }
 
 _runcmd() {
@@ -262,22 +264,6 @@ _runcmd() {
 }
 
 _zfsinstall() {
-	if [ -x "$cmdbsddialog" ]; then
-		$cmdbsddialog \
-			--backtitle "$backtitle" \
-			--title "Question" \
-			--no-label "Shell" --yes-label "Install" \
-			--yesno "Choose \"Install\" to install NetBSD with the root filesystem on a ZFS pool,
-	or \"Shell\" to enter rescue mode." 21 78
-		if [ $? -ne 0 ]; then
-			/bin/sh
-			return 0
-		fi
-	else
-		_confirm "This will install NetBSD with the root filesystem on a ZFS pool."
-		[ $? -eq 0 ]					|| _abort $erruser
-	fi
-
 	# Locate the disks
 	disks=
 	dkidx=0
@@ -474,6 +460,24 @@ EOF
 	exit 0
 }
 
+_zfsupdate() {
+	_info "Updating the system..."
+
+	_info "Importing ZFS pool: $rpool"
+	_runcmd /sbin/zpool import -f -N "$rpool"		|| _abort
+
+	_info "Mounting ZFS volume: $rpool/$rroot on /altroot"
+	_runcmd /sbin/mount -t zfs "$rpool/$rroot" /altroot	|| _abort $errmount
+
+	#FIXME implement
+
+	_info "Restarting init"
+	_runcmd $cmdsysctl -w init.root=/altroot		|| _abort
+
+	# Boot the updated system in place
+	exit 0
+}
+
 
 # Setup some stuff in case things go south and we drop to the shell
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
@@ -560,7 +564,34 @@ if [ $network -ne 0 ]; then
 fi
 
 while true; do
-	_zfsinstall
+	if [ -x "$cmdbsddialog" ]; then
+		$cmdbsddialog \
+			--backtitle "$backtitle" \
+			--title "Question" \
+			--default-button "Install" \
+			--no-label "Shell" --yes-label "Install" \
+			--left1-button "Update" \
+			--yesno "Choose \"Install\" to install NetBSD with the root filesystem on a ZFS pool,
+	or \"Shell\" to enter rescue mode." 21 78
+		res=$?
+		case $res in
+			0)
+				_zfsinstall
+				;;
+			6)
+				_zfsupdate
+				;;
+			*)
+				/bin/sh
+				return 0
+				;;
+		esac
+	else
+		_confirm "This will install NetBSD with the root filesystem on a ZFS pool."
+		[ $? -eq 0 ]					|| _abort $erruser
+		_zfsinstall
+	fi
+
 	_info "Restarting the installer..."
 	sleep 1
 done
