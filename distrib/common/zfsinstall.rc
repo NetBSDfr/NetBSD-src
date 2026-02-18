@@ -31,7 +31,7 @@ modules="solaris zfs"
 network=1
 progname="zfsinstall"
 ramdisk="zfsroot"
-ramdiskext=".kmod"
+ramdiskext=".fs"
 setext=".tar.xz"
 sets="base comp etc games gpufw man manhtml misc modules rescue text"
 verbose=1
@@ -201,11 +201,11 @@ _install_ramdisk() {
 	ramdisk="$2"
 
 	if [ $network -eq 0 ]; then
-		_copy "/cdrom/$machine/installation/miniroot/$ramdisk$ramdiskext" \
-			"$destdir/$ramdisk$ramdiskext"
+		_copy "/cdrom/$machine/installation/ramdisk/ramdisk-$ramdisk$ramdiskext" \
+			"$destdir/ramdisk-$ramdisk$ramdiskext"
 	else
-		_copy "$dldir/$ramdisk$ramdiskext" \
-			"$destdir/$ramdisk$ramdiskext"
+		_copy "$dldir/ramdisk-$ramdisk$ramdiskext" \
+			"$destdir/ramdisk-$ramdisk$ramdiskext"
 	fi
 }
 
@@ -382,19 +382,28 @@ if [ $network -ne 0 ]; then
 	kernurl="$mirror/$machine/binary/kernel/netbsd-$kernel$kernelext"
 	_download "$kernurl"				|| _abort $errdlkern $kernel
 	_info "Downloading ramdisk: $ramdisk"
-	ramdiskurl="$mirror/$machine/installation/miniroot/$ramdisk$ramdiskext"
+	ramdiskurl="$mirror/$machine/installation/ramdisk/ramdisk-$ramdisk$ramdiskext"
 	_download "$ramdiskurl"				|| _abort $errdlramdisk $ramdisk
 fi
 
 _confirm "This will erase and partition the following disks: $disks"
 [ $? -eq 0 ]						|| _abort $erruser
 
+# Count the disks
+diskcnt=0
+for disk in $disks; do
+	diskcnt=$((diskcnt + 1))
+done
+
 # Partition the disks
+diski=0
 vdevs=
 sep=
 for disk in $disks; do
+	diski=$((diski + 1))
+
 	# Partition the disk
-	_info "Partitioning disk $disk"
+	_info "Partitioning disk $disk ($diski/$diskcnt)"
 	_runcmd /sbin/gpt create $disk			|| _abort $errpartition $disk
 	_runcmd /sbin/gpt add -a 1m -s 512m -t efi $disk|| _abort $errpartition $disk
 	_runcmd /sbin/gpt add -a 1m -s 512m -t ffs $disk|| _abort $errpartition $disk
@@ -423,8 +432,8 @@ for disk in $disks; do
 	_runcmd /sbin/mount /dev/dk$((dkidx + 1)) \
 		/altroot				|| _abort $errmount
 	cat > /altroot/boot.cfg << EOF
-menu=Boot normally:rndseed /etc/entropy-file;load solaris;load zfs;load /$ramdisk$ramdiskext;boot netbsd$kernelext
-menu=Boot single user:rndseed /etc/entropy-file;load solaris;load zfs;load $ramdisk$ramdiskext;boot netbsd$kernelext -s
+menu=Boot normally:rndseed /etc/entropy-file;load solaris;load zfs;fs /ramdisk-$ramdisk$ramdiskext;boot netbsd$kernelext
+menu=Boot single user:rndseed /etc/entropy-file;load solaris;load zfs;fs /ramdisk-$ramdisk$ramdiskext;boot netbsd$kernelext -s
 menu=Drop to boot prompt:prompt
 default=1
 timeout=5
