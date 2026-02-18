@@ -18,6 +18,7 @@ rroot=ROOT
 # Configurable - additional settings.
 dldir="/tmp"
 ffsver=2
+hostname=$(/usr/bin/uname -n)
 kernel="GENERIC"
 kernelext=".gz"
 machine=$(/usr/bin/uname -m)
@@ -212,6 +213,7 @@ _install_ramdisk() {
 _network() {
 	_info "Configuring the network"
 	_runcmd $cmddhcpcd --waitip=4
+	hostname=$(/usr/bin/uname -n)
 }
 
 _remove() {
@@ -229,7 +231,7 @@ _runcmd() {
 	elif [ $verbose -eq 1 ]; then
 		"$@"
 	else
-		"$@" > /dev/null 2>&1
+		"$@" > /dev/null
 	fi
 }
 
@@ -481,11 +483,11 @@ ptyfs /dev/pts ptyfs rw
 procfs /proc procfs rw
 tmpfs /var/shm tmpfs rw,-m1777,-sram%25
 EOF
-(cd /altroot/dev && ./MAKEDEV all)			|| _abort $errmkdev
+(cd /altroot/dev && _runcmd ./MAKEDEV all)		|| _abort $errmkdev
 cat >> /altroot/etc/rc.conf << EOF
 rc_configured=YES
 
-hostname="$(/usr/bin/uname -n)"
+hostname="$hostname"
 no_swap=YES
 zfs=YES
 
