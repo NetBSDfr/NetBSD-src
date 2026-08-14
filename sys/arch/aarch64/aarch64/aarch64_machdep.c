@@ -109,6 +109,20 @@ vaddr_t physical_end;
 /* filled in before cleaning bss. keep in .data */
 u_long kern_vtopdiff __attribute__((__section__(".data")));
 
+#ifdef BOOT_DURATION
+#include <sys/boot_duration.h>
+uint64_t startcntvct __attribute__((__section__(".data")));
+
+uint64_t
+boot_duration_timer(void)
+{
+	uint64_t now = gtmr_cntvct_read();
+	uint32_t freq = gtmr_cntfrq_read();
+
+	return (now - startcntvct) * 1000 / freq;
+}
+#endif
+
 /* extra physical memory allocated from round_page(_end[]) */
 long kernend_extra;
 
