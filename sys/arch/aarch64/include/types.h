@@ -112,6 +112,8 @@ typedef __uint64_t __register_t;
 #define __HAVE___LWP_GETPRIVATE_FAST
 #define __HAVE_UCAS_FULL
 
+#define __HAVE_BOOT_DURATION
+
 #if defined(_KERNEL) || defined(_KMEMUSER)
 #define PCU_FPU			0
 #define PCU_UNIT_COUNT		1

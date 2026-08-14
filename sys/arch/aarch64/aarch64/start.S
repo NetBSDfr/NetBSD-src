@@ -49,6 +49,12 @@ RCSID("$NetBSD: start.S,v 1.14 2024/02/07 04:20:26 msaitoh Exp $")
 start:
 	/* DON'T CLOBBER X0-X3 REGISTERS. THEY ARE UBOOT ARGUMENTS */
 
+#ifdef BOOT_DURATION
+	mrs	x8, cntvct_el0
+	adrl	x9, startcntvct
+	str	x8, [x9]
+#endif
+
 	/*
 	 * Relocate to L2_SIZE(2Mbyte) align if necessary
 	 *
