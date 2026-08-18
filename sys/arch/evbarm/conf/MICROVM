@@ -1,0 +1,108 @@
+#
+#	GENERIC ARM (aarch64) MICROVM kernel
+#
+
+include	"arch/evbarm/conf/std.generic64"
+include	"arch/arm/pic/files.pic"
+include	"arch/arm/cortex/files.cortex"
+include	"arch/evbarm/conf/files.fdt"
+
+options 	MULTIPROCESSOR
+options 	CPU_CORTEX
+
+# Early console for boot debugging (QEMU virt / Firecracker PL011 address)
+options 	EARLYCONS=plcom, CONSADDR=0x09000000
+
+armfdt0 	at root
+simplebus*	at fdt? pass 0
+
+# CPUs
+cpus*		at fdt? pass 0
+cpu*		at fdt? pass 0
+
+options 	INCLUDE_CONFIG_FILE	# embed config file in kernel binary
+maxusers	8			# estimated number of users
+
+options 	INSECURE		# disable kernel security levels - X needs this
+
+options 	RTC_OFFSET=0	# hardware clock is this many mins. west of GMT
+
+options 	PIPE_SOCKETPAIR	# smaller, but slower pipe(2)
+
+options 	COMPAT_100	# NetBSD 10.0+ (kevent, etc)
+
+options 	BOOT_DURATION	# print kernel boot time in ms
+
+makeoptions	COPTS="-O2 -fno-omit-frame-pointer"
+
+# File systems
+file-system FFS
+file-system EXT2FS
+file-system KERNFS
+file-system MFS
+file-system TMPFS
+file-system PTYFS
+file-system MSDOSFS
+file-system PROCFS
+
+options 	DKWEDGE_AUTODISCOVER
+options 	DKWEDGE_METHOD_GPT
+# File system options
+# ffs
+options 	FFS_NO_SNAPSHOT	# No FFS snapshot support
+options 	WAPBL		# File system journaling support
+
+# Networking options
+#options 	GATEWAY		# packet forwarding
+options 	INET		# IP + ICMP + TCP + UDP
+options 	INET6		# IPV6
+
+# Kernel root file system and dump configuration.
+config		netbsd	root on ? type ?
+
+#
+# Device configuration
+#
+
+# Power State Coordination Interface (PSCI)
+psci*		at fdt? pass 0
+
+# Timer
+gtmr*		at fdt? pass 2			# ARM Generic Timer
+armgtmr0	at gtmr?
+
+# Interrupt controller
+gic*		at fdt? pass 1			# ARM GICv2
+armgic0 	at gic?
+gicvthree*	at fdt? pass 1			# ARM GICv3
+
+# RTC
+plrtc*	at fdt?			# ARM PL031 RTC (TOD clock)
+
+# UART
+plcom*	at fdt? pass 4
+com*		at fdt? pass 4			# NS16550 UART (provides FDT console)
+
+## Virtio devices
+virtio*	at fdt?				# Virtio MMIO
+include "dev/virtio/virtio.config"
+no viomb* at virtio?			# XXX ?
+no vioscsi* at virtio?			# XXX ?
+no viogpu* at virtio?			# unsupported
+
+qemufwcfg* at fdt?
+
+pseudo-device	vnd			# disk-like interface to files
+#options 	VND_COMPRESSION		# compressed vnd(4)
+
+## network pseudo-devices
+pseudo-device	bpfilter		# Berkeley packet filter
+pseudo-device	loop			# network loopback
+
+## miscellaneous pseudo-devices
+pseudo-device	pty			# pseudo-terminals
+# userland interface to drivers, including autoconf and properties retrieval
+pseudo-device	drvctl
+
+file-system	PUFFS		# required for 9p mount
+pseudo-device	putter
