@@ -76,5 +76,13 @@ SECTIONS
 	{
 		KEEP(*(.note.netbsd.ident));
 	}
+
+	/* Kernel does not unwind via .eh_frame (DDB uses frame pointers). */
+	/DISCARD/ :
+	{
+		*(.eh_frame)
+		*(.eh_frame_hdr)
+		*(.eh_frame_end)
+	}
 }
 
