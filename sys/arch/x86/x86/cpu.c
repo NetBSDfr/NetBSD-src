@@ -1417,6 +1417,7 @@ void
 cpu_get_tsc_freq(struct cpu_info *ci)
 {
 	static uint64_t freq_from_cpuid = 0;
+	static void (*calibrated_with)(unsigned int) = NULL;
 	uint64_t freq = 0, t0, t1;
 	int64_t overhead;
 
@@ -1449,6 +1450,31 @@ cpu_get_tsc_freq(struct cpu_info *ci)
 #endif
 		if (freq == 0) {
 			/*
+			 * If a previous call already calibrated with the
+			 * very same delay function, recalibrating now would
+			 * produce the same result, so keep the existing
+			 * value instead of burning ~150ms of boot time.
+			 * A different delay function (e.g. lapic_delay
+			 * replacing an i8254_delay calibration) may give a
+			 * better result, so calibrate again in that case.
+			 */
+			if (ci->ci_data.cpu_cc_freq != 0 &&
+			    delay_func == calibrated_with)
+				return;
+
+			/*
+			 * PV guests have no usable i8254: calibrating
+			 * against the fallback delay loop would only burn
+			 * ~25ms of boot time to produce a biased result.
+			 * A proper source (calibrated lapic timer, Xen PV
+			 * wallclock, ...) is installed shortly afterwards
+			 * and cpu_get_tsc_freq() is called again then.
+			 */
+			if (vm_guest != VM_GUEST_NO &&
+			    delay_func == i8254_delay)
+				return;
+
+			/*
 			 * Work out the approximate overhead involved below.
 			 * Discard the result of the first go around the
 			 * loop.
@@ -1468,9 +1494,14 @@ cpu_get_tsc_freq(struct cpu_info *ci)
 
 			/*
 			 * Now do the calibration.
+			 *
+			 * 200 x 100us is enough: the error of this method
+			 * is dominated by the systematic bias of the delay
+			 * source, not by statistical noise, so longer runs
+			 * only burn boot time (~150ms for 1000 iterations).
 			 */
 			freq = 0;
-			for (int i = 0; i < 1000; i++) {
+			for (int i = 0; i < 200; i++) {
 				const int s = splhigh();
 				t0 = cpu_counter();
 				delay_func(100);
@@ -1478,7 +1509,8 @@ cpu_get_tsc_freq(struct cpu_info *ci)
 				splx(s);
 				freq += t1 - t0 - overhead;
 			}
-			freq = freq * 10;
+			freq = freq * 50;
+			calibrated_with = delay_func;
 
 			aprint_debug_dev(ci->ci_dev, "TSC freq "
 			    "from delay %" PRIu64 " Hz\n", freq);

@@ -662,6 +662,10 @@ lapic_calibrate_timer(bool secondpass)
 		 * Second pass calibration, using the TSC which has ideally
 		 * been calibrated using the HPET or information gleaned
 		 * from MSRs by this point.
+		 *
+		 * A 10ms window is plenty to derive lapic_per_second
+		 * (the LAPIC counter ticks at least 10^8 times a second);
+		 * 50ms only burns boot time.
 		 */
 		uint64_t l0, l1, t0, t1;
 
@@ -669,7 +673,7 @@ lapic_calibrate_timer(bool secondpass)
 		t0 = cpu_counter();
 		l0 = lapic_gettick();
 		t0 += cpu_counter();
-		DELAY(50000);
+		DELAY(10000);
 		t1 = cpu_counter();
 		l1 = lapic_gettick();
 		t1 += cpu_counter();
