@@ -30,9 +30,11 @@ include "dev/pci/files.pci"			# PCI devices
 #
 include "arch/arm/pci/files.pci"		# MD PCI support code
 
+include "dev/cardbus/files.cardbus"		#   and CardBus devices
 # Kernel boot arguments
 defparam	opt_machdep.h			BOOT_ARGS
 
+include "dev/usb/files.usb"			# USB devices
 #
 # ARM evaluation board specific devices
 #

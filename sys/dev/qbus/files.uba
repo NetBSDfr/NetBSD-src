@@ -15,10 +15,12 @@ attach	dz at uba with dz_uba
 # DL-11 at UBA
 device	dl: tty
 attach	dl at uba
+file	dev/qbus/dl.c				dl needs-flag
 
 # DHU-11 at UBA
 device	dhu: tty
 attach	dhu at uba
+file	dev/qbus/dhu.c				dhu needs-flag
 
 # UDA50/whatever disk/tape MSCP controller
 device	mtc: mscp
@@ -45,6 +47,7 @@ attach	il at uba
 # QDSS at UBA
 device	qd: qfont
 attach	qd at uba
+file	dev/qbus/qd.c				qd needs-count
 
 # Fontfile for DEC framebuffers, soon to die in favour for MI fontfiles.
 
@@ -53,6 +56,7 @@ device	rlc { drive=-1 }
 attach	rlc at uba
 device	rl: disk
 attach	rl at rlc
+file	dev/qbus/rl.c				rl | rlc needs-flag
 
 # DEC DMC-11/DMR-11 P2P interface
 device	dmc: ifnet, ifuba
@@ -61,14 +65,17 @@ attach	dmc at uba
 # DEC TS11 tape formatter
 device	ts: tape
 attach	ts at uba
+file	dev/qbus/ts.c				ts needs-flag
 
 # DMF32 on UBA
 device	dmf: tty # ifnet, ifuba
 attach	dmf at uba
+file	dev/qbus/dmf.c				dmf needs-flag
 
 # DMZ32 on UBA
 device	dmz: tty
 attach	dmz at uba
+file	dev/qbus/dmz.c				dmz needs-flag
 
 # Common code for dmf/dmz
 
@@ -77,3 +84,4 @@ device  rfc { drive=-1 }
 attach  rfc at uba
 device  rf: disk
 attach  rf at rfc
+file	dev/qbus/rf.c				rf | rfc needs-flag

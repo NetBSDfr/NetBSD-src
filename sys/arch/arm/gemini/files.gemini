@@ -21,6 +21,7 @@ define obio { [addr=-1], [size=0], [intr=-1], [mult=1], [intrbase=-1], [nobyteac
 	     } : bus_space_generic
 device	obio: obio, pcibus
 attach	obio at mainbus
+file	arch/arm/gemini/gemini_obio.c		obio needs-count
 
 # OBIO files
 ##file	arch/arm/gemini/gemini_a2x_space.c		obio
@@ -34,17 +35,21 @@ attach	obio at mainbus
 # GEMINI interrupt controller
 device	geminiicu: pic, pic_splfuncs
 attach	geminiicu at obio with geminiicu
+file	arch/arm/gemini/gemini_icu.c		geminiicu needs-flag
 
 # Gemini inter-processor-interrupts
 device	geminiipi {}
 attach	geminiipi at obio
+file	arch/arm/gemini/gemini_ipi.c		geminiipi needs-flag
 
 # Gemini inter-processor-messages
 device	geminiipm {}
 attach	geminiipm at geminiipi
+file	arch/arm/gemini/gemini_ipm.c		geminiipm needs-flag
 
 device	gpn: ifnet, ether, arp
 attach	gpn at geminiipm
+file	arch/arm/gemini/if_gpn.c		gpn needs-flag
 
 # GEMINI GPIO controllers
 
@@ -57,6 +62,7 @@ attach 	geminitmr at obio with obiotimer
 
 # Gemini Watchdog timer
 device	geminiwdt: sysmon_wdog
+file	arch/arm/gemini/gemini_wdt.c		geminiwdt needs-flag
 defparam opt_gemini.h				GEMINI_WDT_CLOCK_FREQ
 
 attach geminiwdt at obio with obiowdt
@@ -68,10 +74,12 @@ attach com at obio with gemini_com
 define  lpcbus  {[addr = -1]}
 device	lpc { [ldn=-1], [addr=-1], [size=0], [intr=-1] }
 attach	lpc at lpcbus
+file	arch/arm/gemini/gemini_lpc.c		lpc needs-count
 
 # GEMINI LPC Host Controller
 device	geminilpchc: lpcbus
 attach	geminilpchc at obio with obio_lpchc
+file	arch/arm/gemini/gemini_lpchc.c		geminilpchc needs-count
 
 # LPC Bus COM UARTs
 attach	com at lpc with lpc_com
@@ -89,10 +97,12 @@ attach wdc at obio with wdc_obio
 # PCI
 device	gemini_pci: pcibus
 attach	gemini_pci at obio
+file	arch/arm/gemini/gemini_pci.c		pci needs-flag
 
 # GEMINI MAC controller
 device	geminigmac { port, intr, phy }: mii, mii_bitbang
 attach	geminigmac at obio with geminigmac
+file	arch/arm/gemini/gemini_gmac.c		geminigmac needs-flag
 
 device	gmc: ifnet, ether, arp, mii
 attach	gmc at geminigmac

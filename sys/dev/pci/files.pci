@@ -18,6 +18,7 @@ defflag	opt_pciide.h	PCIIDE_CMD064x_DISABLE PCIIDE_AMD756_ENABLEDMA
 
 device	pci {[dev = -1], [function = -1]}
 attach	pci at pcibus
+file	dev/pci/pci.c			pci			needs-flag
 
 file	dev/pci/pcibusprint.c		pcibus
 
@@ -71,6 +72,7 @@ attach	mlx at pci with mlx_pci
 # Newer Mylex AcceleRAID and eXtremeRAID controllers
 device	mly: scsi
 attach	mly at pci
+file	dev/pci/mly.c			mly			needs-flag
 
 # Myson-Century Technology MTD803 3-in-1 Fast Ethernet Controller
 attach	mtd at pci with mtd_pci
@@ -220,6 +222,7 @@ define  jmide_hl { }
 device	jmide: ata, ata_dma, ata_udma, pciide_common, wdc_common, jmide_hl
 attach	jmide at pci
 attach	ahcisata at jmide_hl with jmahci
+file	dev/pci/jmide.c			jmide | jmahci needs-flag
 
 # National Semiconductor IDE controllers
 device	nside: ata, ata_dma, ata_udma, pciide_common, wdc_common
@@ -301,6 +304,7 @@ attach	cy at pci with cy_pci
 # Cyclades-Z series of intelligent multi-port serial adapters
 device	cz
 attach	cz at pci
+file	dev/pci/cz.c			cz			needs-flag
 
 # Intel EtherExpress PRO 10/100B
 attach	fxp at pci with fxp_pci
@@ -334,13 +338,16 @@ attach	ntwoc at pci with ntwoc_pci
 # generic PCI VGA
 defflag	opt_vga.h	VGA_POST
 attach	vga at pci with vga_pci
+file	dev/pci/vga_pci.c		vga_pci			needs-flag
 
 # DEC TGA
 device	tga: wsemuldisplaydev, rasops8, rasops32
 attach	tga at pci
+file	dev/pci/tga.c			tga			needs-flag
 
 # HP Visualize
 attach	sti at pci with sti_pci
+file	dev/pci/sti_pci.c		sti_pci			needs-flag
 
 # Integraphics Systems IGA168x and CyberPro framebuffers (linear non-VGA mode)
 # device declaration in sys/conf/files
@@ -349,6 +356,7 @@ attach	igsfb at pci with igsfb_pci
 # Brooktree Bt848 video capture
 device	bktr: radiodev
 attach	bktr at pci
+file	dev/pci/bktr/bktr_os.c		bktr			needs-flag
 
 # Cirrus Logic CrystalClear PCI Audio CS4280
 device	clcs: audiobus, ac97, midibus
@@ -373,6 +381,7 @@ device	eap { }: audiobus, ac97, midibus
 attach	eap at pci
 
 attach	joy at eap with joy_eap
+file	dev/pci/joy_eap.c		joy_eap needs-flag
 
 # Acer Labs M5455
 device	auacer: audiobus, ac97, aurateconv
@@ -457,6 +466,7 @@ defflag opt_puc.h	PUC_CNAUTO
 defparam opt_puc.h	PUC_CNBUS
 
 attach	com at puc with com_puc
+file	dev/pci/com_puc.c		com_puc needs-flag
 
 
 
@@ -646,6 +656,7 @@ attach	voodoofb at pci
 # VIA UniChrome framebuffer console driver
 device	unichromefb: wsemuldisplaydev, rasops16, rasops32, vcons, drm
 attach	unichromefb at pci
+file	dev/pci/unichromefb.c		unichromefb needs-flag
 
 # ATI Radeon framebuffer console driver
 # (Note: to enable the BIOS parser, add options RADEON_BIOS_INIT to the config)
@@ -853,12 +864,14 @@ attach	ibmcd at pci
 # SIS 315 Pro frame buffer
 device  sisfb: wsemuldisplaydev, rasops8, rasops15, rasops16, rasops32, vcons
 attach  sisfb at pci
+file    dev/pci/sisfb.c		sisfb	needs-flag
 
 attach	virtio at pci with virtio_pci
 
 # Silicon Motion SM712(LynxEM+) frame buffer
 device	lynxfb: wsemuldisplaydev, rasops16
 attach	lynxfb at pci
+file	dev/pci/lynxfb.c	lynxfb needs-flag
 
 # Intel GMA
 device	igma: igmabus, i2cbus, i2c_bitbang, ddc_read_edid, edid
@@ -914,6 +927,7 @@ device  wwanc {} : tty
 attach  wwanc at pci
 device  wwan: ifnet
 attach  wwan at wwanc
+file    dev/pci/xmm7360.c               wwanc | wwan            needs-flag
 
 # VMware VMXNET3 virtual interface
 device	vmx: ether, ifnet, arp

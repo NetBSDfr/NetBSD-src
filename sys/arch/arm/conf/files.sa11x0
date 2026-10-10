@@ -8,13 +8,16 @@
 # also provides irq and timer services
 device saip { [addr=-1], [size=0], [intr=-1], [gpio=-1]}
 attach saip at mainbus
+file	arch/arm/sa11x0/sa11x0.c		saip needs-flag
 
 # clock device
 device	saost
 attach	saost at saip
+file	arch/arm/sa11x0/sa11x0_ost.c		saost needs-flag
 
 device	sacom: tty
 attach	sacom at saip
+file	arch/arm/sa11x0/sa11x0_com.c		sacom needs-flag
 
 # SA11[01]0 companion chips
 device	sacc { [addr=-1], [size=0], [intr=-1] }
@@ -22,4 +25,5 @@ attach	sacc at saip
 
 device	sacpcic: pcmciabus
 attach	sacpcic at sacc
+file	arch/arm/sa11x0/sa11x1_pcic.c	sacpcic needs-flag
 

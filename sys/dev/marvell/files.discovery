@@ -27,10 +27,12 @@ device	gt { [unit = -1], [offset = -1], [irq = -1] }
 
 # PCI Interface
 device	gtpci: pcibus
+file	dev/marvell/gtpci.c		gtpci & (gtpci_gt|gtpci_mbus) needs-flag
 attach	gtpci at gt with gtpci_gt
 
 # PCI Express Interface
 device	mvpex: pcibus
+file	dev/marvell/mvpex.c		mvpex & (mvpex_gt|mvpex_mbus) needs-flag
 attach	mvpex at gt with mvpex_gt
 
 # Fast ethernet
@@ -42,6 +44,7 @@ attach	gfe at gfec
 # Multi-Protocol Serial controller
 device	gtmpsc: tty
 attach	gtmpsc at gt
+file	dev/marvell/gtmpsc.c		gtmpsc needs-flag
 
 device	obio { [offset = -1], [size = 0], [irq = -1] }
 attach	obio at gt

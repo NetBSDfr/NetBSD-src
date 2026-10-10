@@ -37,6 +37,7 @@ attach	tidpllclk at fdt with ti_dpll_clock
 
 # UART
 attach	com at fdt with ti_com: ti_prcm
+file	arch/arm/ti/ti_com.c		ti_com needs-flag
 
 # Timer
 device	omaptimer

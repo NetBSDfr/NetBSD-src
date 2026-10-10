@@ -21,6 +21,7 @@ attach	ahb at mainbus
 include "arch/arm/pic/files.pic"
 device	avic: pic, pic_splfuncs
 attach	avic at ahb
+file	arch/arm/imx/imx31_icu.c		avic		needs-flag
 
 # iMX IP bus
 device	aips { [addr=-1], [size=0], [intr=-1]} : bus_space_generic
@@ -33,6 +34,7 @@ attach	emi at ahb
 # iMX GPIO
 device	imxgpio: gpiobus
 attach	imxgpio at ahb
+file	arch/arm/imx/imx31_gpio.c		imxgpio		needs-flag
 
 # iMX M3IF - Multi Master Memory Interface
 # iMX ESDCTL/MDDRC - Enhanced SDRAM/LPDDR memory controller
@@ -45,12 +47,14 @@ attach	imxgpio at ahb
 # Clock Control Module
 device	imxccm
 attach	imxccm	at aips
+file	arch/arm/imx/imx31_ccm.c	imxccm		needs-flag
 
 defparam opt_imx31clk.h IMX31_IPGCLK_FREQ
 
 # iMX UART
 device	imxuart
 attach	imxuart at aips with imx31_uart
+file	arch/arm/imx/imxuart.c			imxuart	needs-flag
 defflag	opt_imxuart.h				IMXUARTCONSOLE
 
 attach	ehci at ahb with ehci_ahb : bus_dma_generic

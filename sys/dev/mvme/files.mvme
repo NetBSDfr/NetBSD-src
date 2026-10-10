@@ -9,10 +9,12 @@ define	mvmebus
 # VMEChip2 found on many MVME boards
 device	vmetwo: mvmebus, vmebus
 attach	vmetwo at mainbus
+file	dev/mvme/vme_two.c			vmetwo needs-flag
 
 # PCCChip2 found on many MVME boards
 device	pcctwo { [ ipl = -1 ] }
 attach	pcctwo at mainbus
+file	dev/mvme/pcctwo.c			pcctwo needs-flag
 
 # This is not as odd as it looks. If the user doesn't define
 # a vmetwo0 device in the config file, we still need the
@@ -23,12 +25,14 @@ attach	clock at pcctwo with clock_pcctwo
 
 # MVME68K/MVME88K Printer
 attach	lpt at pcctwo with lpt_pcctwo
+file	dev/mvme/lpt_mvme.c			lpt needs-flag
 
 # MVME68K/MVME88K Ethernet Interface
 attach	ie at pcctwo with ie_pcctwo
 
 # CD2401 Quad Serial Controller
 attach	clmpcc at pcctwo with clmpcc_pcctwo
+file	dev/mvme/clmpcc_pcctwo.c		clmpcc_pcctwo needs-flag
 
 # MVME68K/MVME88K Memory Controller ASICs
 device	memc

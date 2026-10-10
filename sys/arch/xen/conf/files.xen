@@ -40,6 +40,7 @@ file	arch/xen/xen/xencons.c		xencons needs-flag
 # Xen Network driver
 device	xennet: arp, ether, ifnet
 attach xennet at xenbus
+file	arch/xen/xen/if_xennet_xenbus.c xennet needs-flag
 
 # Xen Block device driver and wd/sd/cd identities
 device	xbd: disk

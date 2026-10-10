@@ -6,6 +6,8 @@ device	mvxpbm { [port = -1 ], [irq = -1] }
 
 # ARMADA XP Gigabit Ethernet Controller Interface
 device	mvxpe: mvxpbm, ether, ifnet, arp, mii
+file	dev/marvell/if_mvxpe.c			mvxpe		needs-flag
 
 # ARMADA XP Cryptographic Engines and Security Accelerator
 device	mvxpsec: opencrypto
+file	dev/marvell/mvxpsec.c			mvxpsec		needs-flag

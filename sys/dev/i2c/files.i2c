@@ -6,6 +6,7 @@ define	i2cexec
 
 device	iic { [addr = -1] } : i2c_bitbang
 attach	iic at i2cbus
+file	dev/i2c/i2c.c				iic	needs-flag
 defparam opt_i2c.h				I2C_MAX_ADDR
 
 # Common module for bit-bang'ing an I2C bus
@@ -76,6 +77,8 @@ attach	s390rtc at iic
 define	at24cxx_eeprom
 device	seeprom
 attach	seeprom at iic
+file	dev/i2c/at24cxx.c			seeprom | at24cxx_eeprom
+						    needs-flag
 
 # National Semiconductor LM75 temperature sensor
 device	lmtemp: sysmon_envsys
@@ -121,6 +124,7 @@ attach	ddc at iic
 # SGS TDA7433 audio mixer
 device	sgsmix
 attach	sgsmix at iic
+file	dev/i2c/sgsmix.c		sgsmix needs-flag
 defflag	opt_sgsmix.h	SGSMIX_DEBUG
 
 # Memory Serial Presence Detect
@@ -159,6 +163,7 @@ device	tps65217pmic { }: sysmon_envsys
 device	tps65217reg: tps65217pmic
 attach	tps65217pmic at iic
 attach	tps65217reg at tps65217pmic
+file	dev/i2c/tps65217pmic.c 		tps65217pmic	needs-flag
 
 # Microchip MCP23008 / MCP23017 I/O Expander
 attach	mcpgpio at iic with mcpgpio_i2c
@@ -180,6 +185,7 @@ device	axp20x { }: sysmon_envsys
 device	axp20xreg: axp20x
 attach	axp20x at iic
 attach	axp20xreg at axp20x
+file	dev/i2c/axp20x.c			axp20x		needs-flag
 
 # AXP22x Power Management Unit
 device	axp22x: sysmon_envsys
@@ -194,14 +200,17 @@ attach	axpreg at axppmic
 # AXP809 Power Management Unit
 device	axp809pm
 attach	axp809pm at iic
+file	dev/i2c/axp809.c			axp809pm	needs-flag
 
 # AC100 integrated audio codec and RTC
 device	ac100ic
 attach	ac100ic at iic
+file	dev/i2c/ac100.c				ac100ic		needs-flag
 
 # ACT8846 Power Management Unit
 device	act8846pm
 attach	act8846pm at iic
+file	dev/i2c/act8846.c			act8846pm	needs-flag
 
 # Texas Instruments TMP451 Temperature Sensor
 device	titemp: sysmon_envsys
@@ -212,6 +221,7 @@ device	as3722pmic { }: sysmon_wdog
 device	as3722reg: as3722pmic
 attach	as3722pmic at iic
 attach	as3722reg at as3722pmic
+file	dev/i2c/as3722.c			as3722pmic	needs-flag
 
 # Texas Instruments TCA8418 Keypad Scan IC
 device	tcakp: wskbddev, linux_keymap

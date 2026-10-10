@@ -31,10 +31,12 @@ attach	le at ledma with le_ledma: le24
 
 attach	esp at sbus with esp_sbus
 attach	esp at dma with esp_dma
+file	dev/sbus/esp_sbus.c		esp_sbus | esp_dma	needs-flag
 
 # LSI64854 based bi-directional parallel port
 device	bpp {}: lsi64854
 attach	bpp at sbus
+file	dev/sbus/bpp.c			bpp	needs-flag
 
 device	qec {}
 attach	qec at sbus
@@ -60,6 +62,7 @@ device	mtty: tty
 attach	mtty at magma
 device	mbpp
 attach	mbpp at magma
+file	dev/sbus/magma.c		magma | mtty | mbpp needs-flag
 
 # XXX this should use the cd18xx code when it (the cd18xx code) works.
 device spif {}
@@ -68,11 +71,13 @@ device stty: tty
 attach stty at spif
 device sbpp
 attach sbpp at spif
+file   dev/sbus/spif.c                 spif | stty | sbpp needs-flag
 
 device siosixteen { channel = -1 }
 attach siosixteen at sbus
 device clcd: tty, cd18xx
 attach clcd at siosixteen
+file	dev/sbus/sio16.c		siosixteen | clcd needs-flag
 
 # STP4020 SBus to PCMCIA bridge (`nell' to her friends)
 device	nell: pcmciabus
@@ -90,6 +95,7 @@ attach	cgthree at sbus with cgthree_sbus
 # framebuffer devices implemented only on SBus
 device	tcx: fb, rasops8, wsemuldisplaydev, vcons
 attach	tcx at sbus
+file	dev/sbus/tcx.c			tcx needs-flag
 
 device	zx: fb, rasops32, wsemuldisplaydev, vcons
 attach	zx at sbus
@@ -100,6 +106,7 @@ defflag opt_pnozz.h	PNOZZ_EMUL_CG3
 defflag opt_pnozz.h	PNOZZ_USE_LATCH
 device	pnozz: fb, rasops8, bt_dac, wsemuldisplaydev, vcons, glyphcache
 attach	pnozz at sbus
+file	dev/sbus/p9100.c		pnozz needs-flag
 
 # SUNW,DBRI audio
 defflag	opt_sbus_dbri.h	DBRI_DEBUG
@@ -114,6 +121,7 @@ attach genfb at sbus with genfb_sbus : fb
 defflag	opt_agten.h	AGTEN_DEBUG
 device	agten: fb, rasops8, bt_dac, wsemuldisplaydev, vcons, glyphcache
 attach	agten at sbus
+file	dev/sbus/agten.c		agten needs-flag
 
 # Sun CG12 / Matrox SG3
 defflag opt_cgtwelve.h	CG12_DEBUG CG12_COLOR CG12_SHADOW

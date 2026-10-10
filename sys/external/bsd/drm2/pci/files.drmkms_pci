@@ -5,6 +5,7 @@ define	drmkms_pci: drmkms
 makeoptions	drmkms_pci	"CPPFLAGS.drmkms_pci"+="${CPPFLAGS.drmkms}"
 
 #file	external/bsd/drm2/dist/drm/ati_pcigart.c	drmkms_pci
+file	external/bsd/drm2/dist/drm/drm_agpsupport.c	drmkms_pci & agp	needs-flag
 
 define	drmfb_pci: drmfb, drmkms_pci
 

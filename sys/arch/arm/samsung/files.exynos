@@ -41,6 +41,7 @@ attach	mct at fdt with exyo_mct
 # Watchdog
 device	exyowdt : sysmon_wdog
 attach	exyowdt at fdt with exynos_wdt
+file	arch/arm/samsung/exynos_wdt.c		exynos_wdt needs-flag
 
 # UARTs
 device	exuart
@@ -49,6 +50,8 @@ attach	exuart at fdt with exynos_uart
 # PINCTL
 device  exyopctl : gpiobus
 attach  exyopctl at fdt with exynos_pinctrl
+file	arch/arm/samsung/exynos_pinctrl.c	exynos_pinctrl needs-flag
+file	arch/arm/samsung/exynos_gpio.c		exynos_pinctrl needs-flag
 
 # USB2 PHY
 device	exusbphy
@@ -70,6 +73,7 @@ attach	dwcmmc at fdt with exynos_dwcmmc
 # I2C support, bitbanging through GPIO
 device	exyoi2c: i2cbus, i2c_bitbang
 attach	exyoi2c at fdt with exynos_i2c
+file	arch/arm/samsung/exynos_i2c.c		exynos_i2c needs-flag
 
 # PWM timer
 device	expwm: pwm

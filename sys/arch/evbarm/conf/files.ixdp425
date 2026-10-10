@@ -18,6 +18,7 @@ attach	ixpsip at mainbus
 # LED
 device	ixdpled
 attach	ixdpled at ixpsip
+file    arch/evbarm/ixdp425/ixdp425_led.c		ixdpled needs-flag
 
 #
 # Machine-independent CardBus drivers

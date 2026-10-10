@@ -19,6 +19,7 @@ file	dev/isa/isabusprint.c		isabus
 
 # ISA DMA controller
 define	isadma
+file	dev/isa/isadma.c		isadma			needs-flag
 
 #
 # 8250/16[45]50-based multi-port serial boards
@@ -118,6 +119,7 @@ attach	wds at isa
 # Mitsumi CD-ROM controllers
 device	mcd: disk
 attach	mcd at isa
+file	dev/isa/mcd.c			mcd			needs-flag
 defflag			MCD_PROMISC		# enable "promiscuous" match
 
 attach	wdc at isa with wdc_isa
@@ -125,6 +127,7 @@ attach	wdc at isa with wdc_isa
 # Wangtek- and Archive-compatible tape controller boards
 device	wt: tape, isadma
 attach	wt at isa
+file	dev/isa/wt.c			wt			needs-flag
 
 #
 # GPIB controllers
@@ -232,8 +235,10 @@ define	sbdsp { }
 
 # SoundBlaster family
 device	sb: audiobus, isadma, sbdsp, midibus
+file	dev/isa/sb.c			sb			needs-flag
 
 attach	sb at isa with sb_isa
+file	dev/isa/sb_isa.c		sb_isa			needs-flag
 
 attach	opl at sbdsp with opl_sb
 
@@ -242,6 +247,7 @@ attach	mpu at sbdsp with mpu_sb
 # ProAudio Spectrum
 device	pas: audiobus, isadma, sbdsp
 attach	pas at isa
+file	dev/isa/pas.c			pas			needs-flag
 
 # AD1848 (CS4248, CS4231, AD1845) audio codec support; used by other drivers
 
@@ -250,19 +256,24 @@ define	ics2101
 
 # Microsoft Windows Sound System
 device	wss { } : audiobus, isadma, ad1848
+file	dev/isa/wss.c			wss			needs-flag
 
 attach	wss at isa with wss_isa
+file	dev/isa/wss_isa.c		wss_isa			needs-flag
 
 attach	opl at wss with opl_wss
 
 # ESS Technology ES1887/ES888/ES1888
 device	ess { }: audiobus, isadma
+file	dev/isa/ess.c			ess			needs-flag
 
 attach	ess at isa with ess_isa
+file	dev/isa/ess_isa.c		ess_isa			needs-flag
 
 attach	opl at ess with opl_ess
 
 attach	joy at ess with joy_ess
+file	dev/isa/joy_ess.c		joy_ess			needs-flag
 
 # Yamaha OPL2/OPL3 FM synth
 attach	opl at isa with opl_isa
@@ -274,12 +285,14 @@ defparam opt_ym.h	YM_POWER_MODE YM_POWER_OFF_SEC
 attach	opl at ym with opl_ym
 
 attach	mpu at ym with mpu_ym
+file	dev/isa/mpu_ym.c		mpu_ym			needs-flag
 
 # Gravis UltraSound & UltraSound MAX.
 # Use the "drq2" keyword in a config file to specify an extra DMA
 # channel for full-duplex operation.
 device	gus: audiobus, isadma, ics2101, ad1848
 attach	gus at isa
+file	dev/isa/gus.c			gus			needs-flag
 
 # Sierra's Aria chipset.
 # (e.g. Prometheus Aria 16)
@@ -296,10 +309,12 @@ attach	pckbc at isa with pckbc_isa
 
 # generic ISA VGA
 attach	vga at isa with vga_isa
+file	dev/isa/vga_isa.c		vga_isa			needs-flag
 
 # generic EGA
 device	ega: wsemuldisplaydev, pcdisplayops
 attach	ega at isa
+file	dev/isa/ega.c			ega			needs-flag
 
 # IDEC Supervision/16 image capture board
 device	isv
@@ -308,6 +323,7 @@ attach	isv at isa with isv_isa
 # generic PC graphics adapter (MGA, CGA, ...)
 device	pcdisplay: wsemuldisplaydev, pcdisplayops
 attach	pcdisplay at isa
+file	dev/isa/pcdisplay.c		pcdisplay		needs-flag
 
 # Middle Digital, Inc. PC-Weasel serial console board.
 # XXX This is a little gross... this is to conditionally compile
@@ -315,6 +331,7 @@ attach	pcdisplay at isa
 # but we can't use an `option', because options can't have
 # attributes.
 defpseudo pcweasel: sysmon_wdog
+file	dev/isa/weasel_isa.c		pcweasel		needs-flag
 
 # Sound Forte RadioLink SF16-FMR2 FM Radio Card
 device sf2r: radiodev, tea5757
@@ -335,6 +352,7 @@ attach	rtii at isa
 # PC PPI (speaker interface)
 device	pcppi {}
 attach	pcppi at isa
+file	dev/isa/pcppi.c			pcppi			needs-flag
 
 attach	spkr at pcppi with spkr_pcppi
 
@@ -350,6 +368,7 @@ attach	attimer at isa with attimer_isa
 # SMSC LPC47B397 Super I/O with hardware monitor
 device	smsc: sysmon_envsys
 attach	smsc at isa with smsc
+file	dev/isa/smsc.c			smsc			needs-flag
 
 # Winbond LPC Super I/O
 device	wbsio { }: gpiobus, sysmon_wdog
@@ -389,6 +408,7 @@ attach	tsdio at isa
 
 # Trusted Platform Module
 attach tpm at isa with tpm_isa
+file   dev/isa/tpm_isa.c		tpm_isa	needs-flag
 
 # Soekris GPIO & LEDs driver
 device	soekrisgpio: gpiobus
@@ -403,3 +423,4 @@ attach	nct at isa
 # THIS MUST COME AFTER ALL MI ISA DEVICES ARE DEFINED.  This is because
 # ISA PnP devices often use `device' declarations listed in this file.
 #
+include	"dev/isapnp/files.isapnp"

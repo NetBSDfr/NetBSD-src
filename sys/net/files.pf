@@ -4,7 +4,10 @@ defpseudo pf:		ifnet
 defpseudo pflog:	ifnet
 defpseudo pfsync:	ifnet
 
+file	dist/pf/net/if_pflog.c		pflog		needs-flag
+file	dist/pf/net/if_pfsync.c		pfsync		needs-flag
 
+file	dist/pf/net/pf.c		pf		needs-flag
 
 
 makeoptions	pf	CPPFLAGS+="-I$S/dist/pf"

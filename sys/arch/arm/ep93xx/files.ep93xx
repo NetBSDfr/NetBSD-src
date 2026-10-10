@@ -10,6 +10,7 @@ device	epsoc { [addr=-1], [size=0], [intr=-1] }: bus_space_generic
 
 device	epclk
 attach epclk at epsoc
+file	arch/arm/ep93xx/epclk.c		epclk needs-flag
 
 device	epe: ether, ifnet, arp, mii
 attach epe at epsoc
@@ -18,9 +19,11 @@ device	epohci
 attach ohci at epsoc with epohci
 
 device epcom : tty
+file	arch/arm/ep93xx/epcom.c		epcom needs-flag
 
 device	epgpio { [port=-1], [bit1=-1], [bit2=-1] }: gpiobus
 attach	epgpio at epsoc
+file	arch/arm/ep93xx/epgpio.c	epgpio	needs-flag
 
 #
 # Support selective disabling of certain EP93xx GPIO lines when attaching
@@ -39,6 +42,7 @@ defparam opt_ep93xx_gpio_mask.h		EPGPIO_PORT_H_MASK=0xff
 
 device	epwdog
 attach	epwdog at epsoc
+file	arch/arm/ep93xx/epwdog.c	epwdog	needs-flag
 
 device eppcic : pcmciabus
 
@@ -47,3 +51,4 @@ attach	eprtc at epsoc
 
 device	epled
 attach	epled at epgpio
+file	arch/arm/ep93xx/epled.c		epled	needs-flag

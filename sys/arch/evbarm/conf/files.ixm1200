@@ -15,6 +15,7 @@ attach	ixpsip at mainbus
 
 device	nappinr
 attach	nappinr at ixpsip
+file	arch/evbarm/ixm1200/nappi_nr.c		nappinr needs-flag
 
 device	nppb: pcibus
 attach	nppb at pci
