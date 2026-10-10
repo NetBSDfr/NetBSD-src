@@ -42,7 +42,6 @@ file	arch/amd64/amd64/autoconf.c		machdep & !xenpv
 file	arch/amd64/amd64/busfunc.S		machdep
 file	arch/amd64/amd64/cpu_in_cksum.S		(inet | inet6) & cpu_in_cksum
 file	arch/amd64/amd64/cpufunc.S		machdep
-file	arch/amd64/amd64/kobj_machdep.c		modular
 file	kern/subr_disk_mbr.c			disk
 file	arch/amd64/amd64/gdt.c			machdep
 file	arch/amd64/amd64/machdep.c		machdep
