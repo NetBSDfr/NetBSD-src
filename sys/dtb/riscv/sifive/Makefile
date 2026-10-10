@@ -1,8 +1,0 @@
-#	$NetBSD: Makefile,v 1.2 2024/08/12 10:55:52 skrll Exp $
-
-DTSSUBDIR=	sifive
-DTSMAKEVARS=	CONFIG_ARCH_SIFIVE=y
-DTSFILESCMD=	${MAKE} -C ${ARCHDTSDIR}/${DTSSUBDIR} ${DTSMAKEVARS} -v dtb-y
-DTS=		${DTSFILESCMD:sh}
-
-.include <bsd.dtb.mk>

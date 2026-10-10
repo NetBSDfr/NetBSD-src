@@ -1,8 +1,0 @@
-ioconf sgp40mox
-
-include "conf/files"
-
-pseudo-root iic*
-
-sgp40mox* at iic? addr 0x59
-

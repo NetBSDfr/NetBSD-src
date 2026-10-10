@@ -1,1 +1,0 @@
-/* no PCI in generic drmkms module */
