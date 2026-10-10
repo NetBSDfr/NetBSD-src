@@ -89,4 +89,12 @@ SECTIONS
 	__end__ = . ;
 	_end = .;
 	PROVIDE(end = .);
+
+	/* Kernel does not unwind via .eh_frame (DDB uses frame pointers). */
+	/DISCARD/ :
+	{
+		*(.eh_frame)
+		*(.eh_frame_hdr)
+		*(.eh_frame_end)
+	}
 }
