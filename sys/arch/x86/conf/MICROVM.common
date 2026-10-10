@@ -27,12 +27,13 @@ options 	PIPE_SOCKETPAIR	# smaller, but slower pipe(2)
 # Xen PV support for PVH and HVM guests, needed for PVH boot
 options 	XENPVHVM
 options 	XEN
+# Xen PVH boot support: options XEN/XENPVHVM provide the PVH entry and ELF notes in
+# locore.S; the hypervisor/xenbus/xencons devices are part of the PVH boot path
+# (pmap.c reserves the xenstore/xencons ring pages, pvh_consinit.c calls
+# xenconscn_attach), so all three must stay even though smolBSD runs on KVM.
 hypervisor*	at mainbus?		# Xen hypervisor
 xenbus*	 	at hypervisor?		# Xen virtual bus
 xencons*	at hypervisor?		# Xen virtual console
-
-# Include NetBSD 10 compatibility
-options		COMPAT_100
 #
 # Because gcc omits the frame pointer for any -O level, the line below
 # is needed to make backtraces in DDB work.

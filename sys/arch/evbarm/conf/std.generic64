@@ -16,8 +16,6 @@ options 	DRAM_BLOCKS=256
 options 	EVBARM_BOARDTYPE="FDT"
 options 	FDT				# Flattened Device Tree support
 options 	FPU_VFP
-options 	MODULAR
-options 	MODULAR_DEFAULT_AUTOLOAD
 options 	PCI_NETBSD_CONFIGURE
 options 	PCI_RESOURCE
 options 	PCI_SMCCC		# Arm PCI Conf Access Firmware Interface
