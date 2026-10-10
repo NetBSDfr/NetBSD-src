@@ -20,6 +20,7 @@ attach	zynqgpio at fdt
 # UART
 device	zynquart
 attach	zynquart at fdt
+file	arch/arm/xilinx/zynq_uart.c		zynquart needs-flag
 defflag	opt_zynquart.h				ZYNQUARTCONSOLE
 
 # Gigabit Ethernet Controller

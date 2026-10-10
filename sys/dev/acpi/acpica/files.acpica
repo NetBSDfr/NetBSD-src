@@ -1,0 +1,4 @@
+#	$NetBSD: files.acpica,v 1.15 2011/02/17 07:34:42 jruoho Exp $
+
+file	dev/acpi/acpica/OsdEnvironment.c	acpica	needs-flag
+

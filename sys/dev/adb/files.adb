@@ -14,9 +14,11 @@ define adb_bus {}
 
 device nadb {}
 attach nadb at adb_bus
+file dev/adb/adb_bus.c		nadb needs-flag
 
 device adbkbd : wskbddev, wsmousedev, sysmon_power, sysmon_taskq
 attach adbkbd at nadb
+file dev/adb/adb_kbd.c		adbkbd needs-flag
 defflag	opt_adbkbd.h	ADBKBD_EMUL_USB
 defparam opt_adbkbd.h	ADBKBD_LAYOUT
 
@@ -25,6 +27,8 @@ attach adbbt at nadb
 
 device adbms : wsmousedev
 attach adbms at nadb
+file dev/adb/adb_ms.c		adbms needs-flag
 
 device ktm : wsmousedev
 attach ktm at nadb
+file dev/adb/adb_ktm.c		ktm needs-flag

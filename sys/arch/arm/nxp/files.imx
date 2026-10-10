@@ -47,10 +47,13 @@ attach	imxiomux at fdt
 # GPIO controller
 device	imxgpio: gpiobus
 attach	imxgpio at fdt
+file	arch/arm/imx/imxgpio.c			imxgpio	needs-flag
 
 # UART
 device	imxuart: tty
 attach	imxuart at fdt with imx_com
+file	arch/arm/imx/imxuart.c			imxuart	needs-flag
+file	arch/arm/nxp/imx_com.c			imx_com needs-flag
 defflag opt_imxuart.h				IMXUARTCONSOLE
 
 # FEC
@@ -92,6 +95,7 @@ defparam opt_imxspi.h				IMXSPI_DEBUG
 # iMX6 On-Chip OTP controller
 device	imxocotp
 attach	imxocotp at fdt
+file	arch/arm/nxp/imx6_ocotp.c		imxocotp	needs-flag
 
 # iMX6 Enhanced Periodic Interrupt Timer
 #device	imxclock

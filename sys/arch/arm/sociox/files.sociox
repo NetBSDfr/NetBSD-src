@@ -18,6 +18,7 @@ attach	sniemmc at fdt with sniemmc_fdt
 device	sniiic: i2cbus
 attach	sniiic at acpinodebus with sniiic_acpi
 attach	sniiic at fdt with sniiic_fdt
+file	arch/arm/sociox/sni_i2c.c		sniiic	needs-flag
 
 # Socionext GPIO
 device	snigpio: gpiobus

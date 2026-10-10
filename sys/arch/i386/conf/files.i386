@@ -209,6 +209,7 @@ attach	sysbeep at pcppi
 
 # Floppy disk controller
 device	fdc {drive = -1}: isadma
+file	dev/isa/fd.c			fdc needs-flag
 
 attach	fdc at isa with fdc_isa
 
@@ -246,6 +247,8 @@ include	"dev/mca/files.mca"
 # CMOS RAM
 #
 defpseudo cmos
+include	"dev/pckbport/files.pckbport"
+file	arch/i386/isa/cmos.c		cmos needs-flag
 
 #
 # Other mainbus-attached devices
@@ -329,6 +332,7 @@ include "dev/acpi/files.acpi"
 # Microsoft Hyper-V
 
 
+include	"dev/cardbus/files.cardbus"
 # Obsolete vesabios/vesafb flags
 obsolete	defflag	opt_vesabios.h	VESABIOSVERBOSE
 obsolete	defparam opt_vesafb.h	VESAFB_WIDTH VESAFB_HEIGHT VESAFB_DEPTH
@@ -342,3 +346,6 @@ attach	glxsb at pci
 include "arch/x86/pv/files.pv"
 
 include "arch/i386/conf/majors.i386"
+include "dev/hyperv/files.hyperv"
+include	"dev/usb/files.usb"
+include	"arch/i386/pnpbios/files.pnpbios"

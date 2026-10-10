@@ -133,6 +133,7 @@ include "compat/linux32/files.linux32"
 include "compat/linux32/arch/aarch64/files.linux32_aarch64"
 
 # profiling support
+file	dev/tprof/tprof_armv8.c			tprof	needs-flag
 
 # ARMv8.0-AES
 include "crypto/aes/arch/arm/files.aesarmv8"

@@ -4,10 +4,12 @@
 define	hpcfbif {}
 device	hpcfb: wsemuldisplaydev, rasops1, rasops2, rasops4, rasops8, rasops15, rasops16
 attach	hpcfb at hpcfbif
+file	dev/hpc/hpcfb.c		hpcfb		needs-flag
 
 define	hpccmap
 
 device	bivideo: hpcfbif, hpccmap
 attach	bivideo at mainbus
+file	dev/hpc/bivideo.c	bivideo		needs-flag
 
 defflag	opt_hpcfb.h		FBDEBUG

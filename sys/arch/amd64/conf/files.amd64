@@ -120,7 +120,9 @@ attach	sysbeep at pcppi
 
 # Floppy disk controller
 device	fdc {drive = -1}: isadma
+file	dev/isa/fd.c				fdc needs-flag
 
+include	"dev/pckbport/files.pckbport"
 attach	fdc at isa with fdc_isa
 
 device	fd: disk
@@ -167,3 +169,6 @@ include "dev/acpi/files.acpi"
 include "arch/x86/pv/files.pv"
 
 include	"arch/amd64/conf/majors.amd64"
+include	"dev/cardbus/files.cardbus"
+include "dev/hyperv/files.hyperv"
+include	"dev/usb/files.usb"

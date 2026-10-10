@@ -66,6 +66,7 @@ attach	vmt at cpufeaturebus
 
 device	hyperv
 attach	hyperv at cpufeaturebus
+file	arch/x86/x86/hyperv.c		hyperv needs-flag
 
 file	arch/x86/x86/apic.c		ioapic | lapic
 file	arch/x86/x86/bus_dma.c		machdep
@@ -99,6 +100,9 @@ file	arch/x86/x86/x86_machdep.c	machdep
 
 file 	uvm/pmap/pmap_pvt.c		machdep
 
+file	arch/x86/x86/cpu_ucode.c	cpu_ucode needs-flag
+file	arch/x86/x86/cpu_ucode_amd.c	cpu_ucode needs-flag
+file	arch/x86/x86/cpu_ucode_intel.c	cpu_ucode needs-flag
 
 define	lapic
 file	arch/x86/x86/lapic.c		lapic needs-flag
@@ -126,6 +130,7 @@ file	arch/x86/isa/rtc.c  	isa
 file	arch/x86/x86/x86_stub.c
 
 # IPMI device
+file	arch/x86/x86/x86_ipmi.c		ipmi needs-flag
 
 
 #file	arch/x86/pci/pci_ranges.c	pci

@@ -22,6 +22,7 @@ defparam opt_ipfilter.h	HOSTMAP_SIZE	# size of hostmap hash table
 
 defpseudo ipfilter: ifnet, bpf_filter		# XXX not really an ifnet
 
+file	external/bsd/ipf/netinet/ip_fil_netbsd.c	ipfilter needs-flag
 
 makeoptions	ipfilter	CPPFLAGS+="-I$S/external/bsd/ipf"
 makeoptions	ipfilter	"CWARNFLAGS.ip_sync.c"+="-Wno-error"

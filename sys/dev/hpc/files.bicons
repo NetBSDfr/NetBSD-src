@@ -3,3 +3,4 @@
 
 defpseudo	biconsdev
 
+file	dev/hpc/biconsdev.c	biconsdev	needs-count

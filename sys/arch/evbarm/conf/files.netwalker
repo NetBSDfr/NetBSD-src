@@ -32,6 +32,7 @@ attach	lidsw at gpio with netwalker_lid
 
 # LCD BackLight
 attach	imxpwm at axi with netwalker_backlight
+file	arch/evbarm/netwalker/netwalker_backlight.c	netwalker_backlight needs-flag
 
 # OJ6SH-T25 Optical Joystick
 device  oj6sh: wsmousedev

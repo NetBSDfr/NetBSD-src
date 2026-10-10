@@ -16,6 +16,7 @@ define	lkkbdmap
 
 # DZ-11 (-compatible) tty device driver.
 device	dz { line = -1 }: tty
+file	dev/dec/dz.c			dz needs-flag
 
 device	vsms: wsmousedev
 device	lkkbd: wskbddev, lkkbdmap

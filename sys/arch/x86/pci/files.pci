@@ -10,6 +10,7 @@ defflag	AGP_X86
 # PCI-Host bridge chipsets
 device	pchb:	pcibus, agpbus, agp_x86
 attach	pchb at pci
+file	arch/x86/pci/pchb.c		pchb		needs-flag
 
 # PCI-ISA bridges
 device	pcib: isabus
@@ -58,6 +59,7 @@ attach	tcpcib at pci
 
 device	fwhrng
 attach	fwhrng at fwhichbus
+file	arch/x86/pci/fwhrng.c		fwhrng needs-flag
 
 # Intel Integrated Memory Controller and associated SMBus
 # (Experimental)

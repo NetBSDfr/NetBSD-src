@@ -1,6 +1,7 @@
 #	$NetBSD: files.sysmon,v 1.15 2015/04/24 03:33:43 pgoyette Exp $
 
 define	sysmon_taskq
+file	dev/sysmon/sysmon_taskq.c	sysmon_taskq 		needs-flag
 
 define	sysmon
 file	dev/sysmon/sysmon.c		sysmon
@@ -9,9 +10,11 @@ define	sysmon_power: sysmon
 file	dev/sysmon/sysmon_power.c	sysmon_power		needs-flag
 
 define	sysmon_envsys: sysmon, sysmon_power, sysmon_taskq
+file	dev/sysmon/sysmon_envsys.c		sysmon_envsys	needs-flag
 defflag opt_envsys.h ENVSYS_DEBUG ENVSYS_OBJECTS_DEBUG
 
 define	sysmon_wdog: sysmon
+file	dev/sysmon/sysmon_wdog.c	sysmon_wdog		needs-flag
 
 defpseudodev swwdog: sysmon_wdog
 

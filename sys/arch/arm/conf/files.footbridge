@@ -9,3 +9,4 @@ attach	footbridge at mainbus
 # DC21285 "Footbridge" serial port
 device	fcom: tty, bus_space_generic
 attach	fcom at footbridge
+file	arch/arm/footbridge/footbridge_com.c		fcom needs-flag

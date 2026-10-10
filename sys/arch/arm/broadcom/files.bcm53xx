@@ -17,6 +17,7 @@ defflag opt_broadcom.h				BCM5301X
 device	bcmcca { [channel=-1] } : bus_space_generic, gpiobus, sysmon_wdog
 attach	bcmcca at mainbus
 attach	com at bcmcca with com_cca
+file	arch/arm/broadcom/bcm53xx_cca.c		bcmcca|com_cca	needs-flag
 
 # ChipCommonB attach point
 device	bcmccb { [port=-1], [mdio=-1], [phy=-1] } : bus_space_generic
@@ -33,6 +34,7 @@ attach	bcmnand at bcmccb with bcmnand_ccb
 
 device	bcmrng
 attach	bcmrng at bcmccb with bcmrng_ccb
+file	arch/arm/broadcom/bcm53xx_rng.c		bcmrng_ccb	needs-flag
 
 device	bcmmdio : mii
 attach	bcmmdio at bcmccb with bcmmdio_ccb

@@ -21,6 +21,7 @@ attach	ohci at ssio with ohci_ssio
 
 # LCD controller
 device lcd: wsemuldisplaydev, rasops16, rasops8
+file arch/arm/s3c2xx0/s3c24x0_lcd.c		lcd needs-flag
 
 # SPI port
 #  intr locator is for an additional interrupt other than SPI[01] interrupts.

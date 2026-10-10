@@ -16,6 +16,7 @@ device	ixpio: pcibus, bus_space_generic
 # clock device
 device	ixpclk
 attach	ixpclk at ixpsip
+file	arch/arm/xscale/ixp425_timer.c		ixpclk needs-flag
 
 # watchdog device
 device	ixpdog: sysmon_wdog

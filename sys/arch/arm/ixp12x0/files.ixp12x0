@@ -14,6 +14,8 @@ device	ixpio: pcibus, bus_space_generic
 # clock device
 device	ixpclk 
 attach	ixpclk at ixpsip
+file	arch/arm/ixp12x0/ixp12x0_clk.c		ixpclk needs-flag
 
 # IXM1200 serial device
 device	ixpcom: tty
+file	arch/arm/ixp12x0/ixp12x0_com.c		ixpcom needs-flag

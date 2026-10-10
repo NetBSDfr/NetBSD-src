@@ -7,9 +7,11 @@ attach	clpssoc at internal
 
 device	clpscom
 attach	clpscom at clpssoc
+file	arch/arm/clps711x/clpscom.c		clpscom		needs-flag
 
 device	clpslcd : rasops2, rasops4, wsemuldisplaydev
 attach	clpslcd at clpssoc
+file	arch/arm/clps711x/clpslcd.c		clpslcd		needs-flag
 
 device	clpsrtc
 attach	clpsrtc at clpssoc

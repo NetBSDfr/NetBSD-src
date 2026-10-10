@@ -9,3 +9,4 @@
 define	apmdevif {}
 device	apmdev
 attach	apmdev at apmdevif
+file	dev/hpc/apm/apmdev.c		apmdev needs-count

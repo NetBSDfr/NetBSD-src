@@ -1,0 +1,3 @@
+
+defpseudo agr:		ifnet, ether # XXX
+file	net/agr/if_agr.c		agr		needs-flag

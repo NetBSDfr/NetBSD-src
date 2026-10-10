@@ -8,6 +8,7 @@ defflag	EISAVERBOSE
 
 device	eisa {[slot = -1]}
 attach	eisa at eisabus
+file	dev/eisa/eisa.c			eisa			needs-flag
 
 file	dev/eisa/eisabusprint.c		eisabus
 

@@ -2,6 +2,10 @@
 
 # Note: `rasops_glue' is only here to force the header file's name
 #       hence it must be mentioned first  (shudder...)
+file dev/rasops/rasops.c ( (rasops_glue |
+    rasops1 | rasops2 | rasops4 | rasops8 | rasops15 | rasops16 | rasops24 |
+    rasops32 | rasops_rotation) &
+    (rasterconsole | wsdisplay)) needs-flag
 
 
 defflag	opt_rasops.h 	RASOPS_CLIPPING RASOPS_SMALL

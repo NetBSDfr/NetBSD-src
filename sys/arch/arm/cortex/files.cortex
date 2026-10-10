@@ -22,6 +22,7 @@ file	arch/arm/cortex/gicv3.c			gicvthree
 # ARM PL310 L2 Cache Controller(initially on Cortex-A9)
 device	arml2cc
 attach	arml2cc at mpcorebus
+file	arch/arm/cortex/pl310.c			arml2cc	needs-flag
 
 # ARMv7 Generic Timer
 device	armgtmr
@@ -31,6 +32,7 @@ file	arch/arm/cortex/gtmr.c			armgtmr needs-flag
 # A9 MPCore Global Timer
 device	arma9tmr
 attach	arma9tmr at mpcorebus
+file	arch/arm/cortex/a9tmr.c			arma9tmr needs-flag
 
 # A9 MPcore Private Timer
 device	arma9ptmr

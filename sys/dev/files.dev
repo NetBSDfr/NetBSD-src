@@ -1,13 +1,20 @@
 #	$NetBSD: files.dev,v 1.10 2024/04/02 22:30:03 charlotte Exp $
 
+file	dev/bio.c			bio			needs-flag
 file	dev/clock_subr.c		kern	# XXX
 file	dev/dksubr.c			cgd | xbd | ccd | raid | dm | ld | sd | cd | wd
 file	dev/dkwedge/dk.c		kern	# XXX
 file	dev/dkwedge/dkwedge_gpt.c	dkwedge_method_gpt
+file	dev/lockstat.c			lockstat		needs-flag
 file	dev/md.c			md
 file	dev/mm.c			kern	# XXX
+file	dev/nullcons_subr.c		nullcons		needs-flag
+file	dev/radio.c			radio			needs-flag
 file	dev/random.c			rnd			needs-flag
+file	dev/video.c			video			needs-flag
 file	dev/vnd.c			vnd
+file	dev/ipmi.c			ipmi			needs-flag
 file	dev/smbios.c			smbios
 
 defpseudo efi
+file	dev/efi.c			efi			needs-flag

@@ -1,0 +1,137 @@
+#	$NetBSD: files.cardbus,v 1.39 2018/12/14 21:49:22 jakllsch Exp $
+#
+# files.cardbus
+#
+
+device	cardslot: cbbus, pcmciabus
+attach	cardslot at pcmciaslot
+file	dev/cardbus/cardslot.c		cardslot		needs-flag
+defflag	opt_cardslot.h			CARDSLOT_DEBUG
+
+device	cardbus {[function = -1]}
+attach	cardbus at cbbus
+file	dev/cardbus/cardbus.c		cardbus			needs-flag
+defflag	opt_cardbus.h			CARDBUS_DEBUG
+
+
+#
+# 3Com 3C575TX and 3C575BTX
+#
+attach	ex at cardbus with ex_cardbus
+
+#
+# Intel PRO/100 8255x based CardBus cards.
+#
+attach	fxp at cardbus with fxp_cardbus
+
+#
+#
+attach	com at cardbus with com_cardbus
+
+#
+# ADMtek ADM8211
+#
+attach	atw at cardbus with atw_cardbus
+
+#
+# Realtek RTL8180
+#
+attach	rtw at cardbus with rtw_cardbus
+
+#
+# Ralink RT2500/RT2600
+#
+attach	ral at cardbus with ral_cardbus
+
+#
+# DECchip 21143 and clones.
+#
+attach	tlp at cardbus with tlp_cardbus
+
+#
+# Broadcom BCM43xx wireless
+#
+attach	bwi at cardbus with bwi_cardbus
+
+#
+# OHCI USB controller
+#
+attach	ohci at cardbus with ohci_cardbus
+
+#
+# UHCI USB controller
+#
+attach	uhci at cardbus with uhci_cardbus
+
+#
+# EHCI USB controller
+#
+attach	ehci at cardbus with ehci_cardbus
+file	dev/cardbus/ehci_cardbus.c	ehci_cardbus needs-flag
+
+#
+# OHCI IEEE 1394 controller
+#
+attach	fwohci at cardbus with fwohci_cardbus
+
+#
+# Adaptec ADP-1480 SCSI controller
+#
+attach	ahc at cardbus with ahc_cardbus: ahc_seeprom, smc93cx6
+defparam opt_ahc_cardbus.h		AHC_CARDBUS_DEFAULT_SCSI_ID
+
+#
+# PCI bridge
+#
+attach  ppb at cardbus with rbus_ppb
+
+#
+# Realtek 8139
+#
+attach	rtk at cardbus with rtk_cardbus
+
+#
+# Realtek 8169
+#
+attach	re at cardbus with re_cardbus
+
+
+#
+# Advansys SCSI controller.
+#
+attach	adv at cardbus with adv_cardbus
+
+#
+# Atheros Wireless LAN
+#
+attach	ath at cardbus with ath_cardbus
+
+#
+# Atheros AR9k Wireless LAN
+#
+attach	athn at cardbus with athn_cardbus
+
+#
+# Workbit NinjaSCSI-32 controllers
+#
+attach	njs at cardbus with njs_cardbus
+
+#
+# Workbit NinjaATA-32 controllers
+#
+attach	njata at cardbus with njata_cardbus
+
+#
+# Silicon Image SteelVine SATA-II controllers
+#
+attach	siisata at cardbus with siisata_cardbus
+
+#
+# SD Host Controller
+#
+attach	sdhc at cardbus with sdhc_cardbus
+
+#
+# Marvel Libertas Open
+#
+attach	malo at cardbus with malo_cardbus

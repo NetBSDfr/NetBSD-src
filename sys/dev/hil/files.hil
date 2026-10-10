@@ -8,9 +8,11 @@ device	hil {[code = -1]}
 
 device	hilkbd: wskbddev
 attach	hilkbd at hil
+file	dev/hil/hilkbd.c	hilkbd			needs-flag
 
 device	hilms: wsmousedev
 attach	hilms at hil
+file	dev/hil/hilms.c		hilms			needs-flag
 
 device	hilid
 attach	hilid at hil

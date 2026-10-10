@@ -6,6 +6,7 @@
 # IOMD device
 device	iomd {}
 attach	iomd at mainbus
+file	arch/arm/iomd/iomd.c			iomd		needs-flag
 
 # I^2C bus (bit-banged through IOMD control register)
 device	iomdiic: i2cbus, i2c_bitbang
@@ -25,6 +26,7 @@ attach	qms at iomd
 
 device	iomdkbc: pckbport
 attach	iomdkbc at iomd
+file	arch/arm/iomd/iomdkbc.c			iomdkbc		needs-flag
 
 # VIDC device
 # parent to vidcvideo, vidcaudio
@@ -35,6 +37,8 @@ attach	vidc at mainbus
 device	vidcvideo: rasops4, rasops8, rasops16, rasops32, wsemuldisplaydev,
 		   videomode, vcons
 attach	vidcvideo at vidc
+file	arch/arm/iomd/vidc20config.c		vidcvideo	needs-flag
+file	arch/arm/iomd/vidcvideo.c		vidcvideo	needs-flag
 
 # Audio device
 device	vidcaudio: audiobus, audiobell

@@ -9,12 +9,14 @@
 #
 
 define	firm_events
+file	dev/sun/event.c			firm_events needs-flag
 
 
 # upper layer of sun kbd driver
 # examples for lower and middle layers follows.  cannot move them here
 # because zs/zstty attachments are slightly different on each sun port.
 device kbd: firm_events, wskbddev
+file	dev/sun/kbd.c			kbd needs-flag
 
 defflag	opt_sunkbd.h	SPARCBOOK_CMD KBD_HIJACK_VOLUME_BUTTONS
 
@@ -33,6 +35,7 @@ defflag	opt_sunkbd.h	SPARCBOOK_CMD KBD_HIJACK_VOLUME_BUTTONS
 # upper layer of sun ms driver
 # XXX: middle layer for sun serial mice (split out?)
 device ms: firm_events, wsmousedev
+file	dev/sun/ms.c			ms needs-flag
 
 # e.g. - lower layer: sun (mouse systems) mouse at zs
 #attach ms at zs with ms_zs
@@ -57,12 +60,17 @@ define	bt_dac
 
 # Include /dev/fb driver only if a framebuffer card is included
 # The attribute "fb" is already defined in src/sys/conf/files
+file	dev/sun/fb.c			fb needs-flag
 
 # pfour `add-on'; used by several drivers
 define	pfour
+file	dev/sun/pfour_subr.c		pfour needs-flag
 
 device bwtwo: fb, rasops1, pfour, wsemuldisplaydev, vcons
+file	dev/sun/bwtwo.c			bwtwo needs-flag
 
 device cgthree: bt_dac, fb, rasops8, wsemuldisplaydev, vcons
+file	dev/sun/cgthree.c		cgthree needs-flag
 
 device cgsix: bt_dac, fb, rasops8, pfour, wsemuldisplaydev, vcons, glyphcache
+file	dev/sun/cgsix.c			cgsix needs-flag

@@ -21,6 +21,7 @@ attach	axi at mainbus
 include "arch/arm/pic/files.pic"
 device	tzic: pic, pic_splfuncs
 attach	tzic at axi
+file	arch/arm/imx/imx51_tzic.c		tzic	needs-flag
 
 # iMX51 Enhanced Periodic Interrupt Timer
 device	imxclock
@@ -29,6 +30,7 @@ attach	imxclock at axi
 # Clock Control Module
 device	imxccm
 attach	imxccm	at axi
+file	arch/arm/imx/imx51_ccm.c		imxccm	needs-flag
 defflag opt_imx51clk.h				IMXCCMDEBUG
 
 # frequency of external low frequency clock
@@ -62,6 +64,7 @@ attach	imxiomux at axi
 
 # IPU v3 controller
 device	ipu { }
+file	arch/arm/imx/imx51_ipuv3.c	imx_ipuv3	needs-flag
 defparam opt_imx51_ipuv3.h		IPUV3_DEBUG
 
 # Framebuffer console
@@ -76,6 +79,7 @@ attach	genfb at ipu with imx_genfb
 # iMX UART
 device	imxuart
 attach	imxuart at axi with imx51_uart
+file	arch/arm/imx/imxuart.c			imxuart	needs-flag
 defflag	opt_imxuart.h				IMXUARTCONSOLE
 
 # USB controller

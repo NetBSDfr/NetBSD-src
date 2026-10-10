@@ -1,0 +1,34 @@
+# $NetBSD: files.pnpbios,v 1.18 2014/01/26 19:16:17 dsl Exp $
+
+defflag  opt_pnpbios.h	PNPBIOSVERBOSE
+defflag  opt_pnpbios.h	PNPBIOSDEBUG
+defparam opt_pnpbios.h	PNPBIOSDEBUG_VALUE
+defflag  opt_pnpbios.h	PNPBIOSEVENTS
+defflag  opt_pnpbios.h	PNPBIOSEVENTSDEBUG
+
+device	pnpbios { [index = -1] }
+attach	pnpbios at pnpbiosbus
+file	arch/i386/pnpbios/pnpbios.c		pnpbios		needs-flag
+
+attach	com at pnpbios with com_pnpbios
+
+
+
+attach	sb at pnpbios with sb_pnpbios
+
+attach	wss at pnpbios with wss_pnpbios
+
+attach	ym at pnpbios with ym_pnpbios
+
+attach	ess at pnpbios with ess_pnpbios
+
+attach	pciide at pnpbios with pciide_pnpbios
+file	arch/i386/pnpbios/pciide_pnpbios.c	pciide_pnpbios	needs-flag
+
+attach	lm at pnpbios with lm_pnpbios
+
+attach	pckbc at pnpbios with pckbc_pnpbios
+
+attach	fdc at pnpbios with fdc_pnpbios
+
+attach	joy at pnpbios with joy_pnpbios
