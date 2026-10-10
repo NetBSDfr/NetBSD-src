@@ -486,6 +486,8 @@ boot_duration_timer(void)
 {
 	KASSERT(curcpu_stable());
 	KASSERT(CPU_IS_PRIMARY(curcpu()));
+	if (curcpu()->ci_data.cpu_cc_freq == 0)
+		return 0;
 	return (rdtsc() - ((uint64_t)starttsc_hi << 32 | starttsc_lo)) /
 	    (curcpu()->ci_data.cpu_cc_freq / 1000);
 }
