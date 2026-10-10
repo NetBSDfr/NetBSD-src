@@ -98,7 +98,6 @@ file	arch/aarch64/aarch64/cpufunc_asm_armv8.S
 file	arch/aarch64/aarch64/exec_machdep.c
 file	arch/aarch64/aarch64/fusu.S
 file	arch/aarch64/aarch64/idle_machdep.S
-file	arch/aarch64/aarch64/kobj_machdep.c		modular
 file	arch/aarch64/aarch64/lock_stubs.S
 file	arch/aarch64/aarch64/process_machdep.c
 file	arch/aarch64/aarch64/procfs_machdep.c		procfs
