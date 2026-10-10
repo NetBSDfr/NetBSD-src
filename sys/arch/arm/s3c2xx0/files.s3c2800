@@ -1,0 +1,17 @@
+#	$NetBSD: files.s3c2800,v 1.1 2002/11/20 17:52:48 bsh Exp $
+#
+# Configuration info for Samsung S3C2800
+#
+
+# Pull in common info for s3c2800/2400X/2410X
+include arch/arm/s3c2xx0/files.s3c2xx0
+
+
+
+# integrated PCI interface
+device sspci: pcibus
+attach sspci at ssio
+
+
+# UART
+

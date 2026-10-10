@@ -6,59 +6,43 @@ define	i2cexec
 
 device	iic { [addr = -1] } : i2c_bitbang
 attach	iic at i2cbus
-file	dev/i2c/i2c.c				iic	needs-flag
-file	dev/i2c/i2c_exec.c			iic | i2cbus | i2cexec
-file	dev/i2c/i2c_subr.c			i2cbus
 defparam opt_i2c.h				I2C_MAX_ADDR
 
 # Common module for bit-bang'ing an I2C bus
 define	i2c_bitbang
-file	dev/i2c/i2c_bitbang.c			i2c_bitbang
 
 # Common module for i2c mux support
 define	i2cmux
-file	dev/i2c/i2cmux.c			i2cmux
 
 # Auvitek AU8522 decoder
 define	au8522: i2cexec
-file	dev/i2c/au8522.c			au8522
 
 # LG DT3303 decoder
 define	lg3303: i2cexec, dtv_math
-file	dev/i2c/lg3303.c			lg3303
 
 # Xceive XC3028 tuner
 define	xc3028: i2cexec, firmload
-file	dev/i2c/xc3028.c			xc3028
 
 # Xceive XC5000 tuner
 define	xc5k: i2cexec, firmload
-file	dev/i2c/xc5k.c				xc5k
 
 # Generic PLL-based tuners
 define	tvpll: i2cexec
-file	dev/i2c/tvpll.c				tvpll
-file	dev/i2c/tvpll_tuners.c			tvpll
 
 # Nextwave NXT200x demodulator
 define	nxt2k: i2cexec, firmload
-file	dev/i2c/nxt2k.c				nxt2k
 
 # Microtune MT2131 silicon tuner
 define	mt2131: i2cexec
-file	dev/i2c/mt2131.c			mt2131
 
 # Conexant/Samsung CX24227/S5H1409 demodulator
 define	cx24227: i2cexec
-file	dev/i2c/cx24227.c			cx24227
 
 #
 # I2C master devices
 #
 define	motoi2c
-file	dev/i2c/motoi2c.c			motoi2c
 define	mvi2c
-file	dev/i2c/gttwsi_core.c			mvi2c
 
 #
 # I2C client devices
@@ -67,257 +51,207 @@ file	dev/i2c/gttwsi_core.c			mvi2c
 # M41T00 Real Time Clock
 device	m41trtc
 attach	m41trtc at iic
-file	dev/i2c/m41t00.c			m41trtc
 
 # M41ST84 Real Time Clock
 device	strtc
 attach	strtc at iic
-file	dev/i2c/m41st84.c			strtc
 
 # MAX6900 Real Time Clock
 device	maxrtc
 attach	maxrtc at iic
-file	dev/i2c/max6900.c			maxrtc
 
 # NXP/Philips PCF8563 Real Time Clock
 device	pcf8563rtc
 attach	pcf8563rtc at iic
-file	dev/i2c/pcf8563.c			pcf8563rtc
 
 # Philips PCF8583 Real Time Clock
 device	pcfrtc
 attach	pcfrtc at iic
-file	dev/i2c/pcf8583.c			pcfrtc
 
 # Seiko Instruments S-xx390A Real Time Clock
 device	s390rtc
 attach	s390rtc at iic
-file	dev/i2c/s390.c				s390rtc
 
 # Atmel/Microchip 24Cxx Serial EEPROM
 define	at24cxx_eeprom
 device	seeprom
 attach	seeprom at iic
-file	dev/i2c/at24cxx.c			seeprom | at24cxx_eeprom
-						    needs-flag
 
 # National Semiconductor LM75 temperature sensor
 device	lmtemp: sysmon_envsys
 attach	lmtemp at iic
-file	dev/i2c/lm75.c				lmtemp
 
 # IST-AG Humidity and Temperature sensor (P14)
 device	hythygtemp: sysmon_envsys
 attach	hythygtemp at iic
-file	dev/i2c/hytp14.c			hythygtemp
 
 # National Semiconductor LM78 temp sensor/fan controller
 attach	lm at iic with lm_iic
-file	dev/i2c/lm_i2c.c			lm_iic
 
 # National Semiconductor LM87 and clones system hardware monitor
 device	lmenv: sysmon_envsys
 attach	lmenv at iic
-file	dev/i2c/lm87.c				lmenv
 
 # Dallas DS1307 Real Time Clock
 device	dsrtc: sysmon_envsys
 attach	dsrtc at iic
-file	dev/i2c/ds1307.c			dsrtc
 defflag opt_dsrtc.h				DSRTC_YEAR_START_2K
 
 # Xicor X1226 Real Time Clock
 device	xrtc
 attach	xrtc at iic
-file	dev/i2c/x1226.c				xrtc
 
 # Analog Devices dBCool family of thermal monitors / fan controllers
 device dbcool: sysmon_envsys
 attach dbcool at iic
-file dev/i2c/dbcool.c			dbcool
 
 # RICOH RS5C372[AB] Real Time Clock
 device	rs5c372rtc
 attach	rs5c372rtc at iic
-file	dev/i2c/rs5c372.c		rs5c372rtc
 
 # RICOH R2025S/D Real Time Clock
 device	r2025rtc
 attach	r2025rtc at iic
-file	dev/i2c/r2025.c			r2025rtc
 
 # VESA Display Data Channel 2
 device	ddc
 define	ddc_read_edid
 attach	ddc at iic
-file	dev/i2c/ddc.c			ddc | ddc_read_edid
 
 # SGS TDA7433 audio mixer
 device	sgsmix
 attach	sgsmix at iic
-file	dev/i2c/sgsmix.c		sgsmix needs-flag
 defflag	opt_sgsmix.h	SGSMIX_DEBUG
 
 # Memory Serial Presence Detect
 attach	spdmem at iic with spdmem_iic
-file	dev/i2c/spdmem_i2c.c		spdmem_iic
 
 # Memory Temp Sensor
 device	sdtemp: sysmon_envsys
 attach	sdtemp at iic
-file	dev/i2c/sdtemp.c		sdtemp
 
 # DS1672 Real Time Clock
 device	ds1672rtc
 attach	ds1672rtc at iic
-file	dev/i2c/ds1672.c		ds1672rtc
 
 # ADM1021
 device	admtemp: sysmon_envsys
 attach	admtemp at iic
-file	dev/i2c/adm1021.c		admtemp
 
 # ADM1026 hardware monitor
 device	adm1026hm: sysmon_envsys
 attach	adm1026hm at iic
-file	dev/i2c/adm1026.c		adm1026hm
 
 # SMSC LPC47M192 hardware monitor
 device	smscmon: sysmon_envsys
 attach	smscmon at iic
-file	dev/i2c/smscmon.c		smscmon
 
 # G760a FAN controller
 device	g760a: sysmon_envsys
 attach	g760a at iic
-file	dev/i2c/g760a.c			g760a
 
 # IBM Hawk Integrated Systems Management Processor
 device	ibmhawk: sysmon_envsys
 attach	ibmhawk at iic
-file	dev/i2c/ibmhawk.c		ibmhawk
 
 # TI TPS65217
 device	tps65217pmic { }: sysmon_envsys
 device	tps65217reg: tps65217pmic
 attach	tps65217pmic at iic
 attach	tps65217reg at tps65217pmic
-file	dev/i2c/tps65217pmic.c 		tps65217pmic	needs-flag
 
 # Microchip MCP23008 / MCP23017 I/O Expander
 attach	mcpgpio at iic with mcpgpio_i2c
-file	dev/i2c/mcp23xxxgpio_i2c.c	mcpgpio_i2c
 
 # Microchip MCP980x
 device	mcp980x: sysmon_envsys
 attach	mcp980x at iic
-file	dev/i2c/mcp980x.c 		mcp980x
 
 # Nuvoton W83795G/ADG Hardware Monitor
 device	w83795g: gpiobus, sysmon_envsys, sysmon_wdog
 attach	w83795g at iic
-file	dev/i2c/w83795g.c 		w83795g
 
 # Freescale MPL115A2
 device  mpl115a: sysmon_envsys
 attach  mpl115a at iic
-file    dev/i2c/mpl115a.c		mpl115a
 
 # AXP20x Power Management Unit
 device	axp20x { }: sysmon_envsys
 device	axp20xreg: axp20x
 attach	axp20x at iic
 attach	axp20xreg at axp20x
-file	dev/i2c/axp20x.c			axp20x		needs-flag
 
 # AXP22x Power Management Unit
 device	axp22x: sysmon_envsys
 attach	axp22x at iic
-file	dev/i2c/axp22x.c			axp22x
 
 # X-Powers AXP Power Management IC
 device	axppmic { }: sysmon_envsys, sysmon_taskq
 device	axpreg: axppmic
 attach	axppmic at iic
 attach	axpreg at axppmic
-file	dev/i2c/axppmic.c			axppmic
 
 # AXP809 Power Management Unit
 device	axp809pm
 attach	axp809pm at iic
-file	dev/i2c/axp809.c			axp809pm	needs-flag
 
 # AC100 integrated audio codec and RTC
 device	ac100ic
 attach	ac100ic at iic
-file	dev/i2c/ac100.c				ac100ic		needs-flag
 
 # ACT8846 Power Management Unit
 device	act8846pm
 attach	act8846pm at iic
-file	dev/i2c/act8846.c			act8846pm	needs-flag
 
 # Texas Instruments TMP451 Temperature Sensor
 device	titemp: sysmon_envsys
 attach	titemp at iic
-file	dev/i2c/titemp.c			titemp
 
 # AMS AS3722 Power Management IC
 device	as3722pmic { }: sysmon_wdog
 device	as3722reg: as3722pmic
 attach	as3722pmic at iic
 attach	as3722reg at as3722pmic
-file	dev/i2c/as3722.c			as3722pmic	needs-flag
 
 # Texas Instruments TCA8418 Keypad Scan IC
 device	tcakp: wskbddev, linux_keymap
 attach	tcakp at iic
-file	dev/i2c/tcakp.c				tcakp
 
 # MAXIM MAX77620 Power Management IC
 device	max77620pmic
 attach	max77620pmic at iic
-file	dev/i2c/max77620.c			max77620pmic
 
 # Texas Instruments TCA9539 I/O Expander
 device	tcagpio
 attach	tcagpio at iic
-file	dev/i2c/tcagpio.c			tcagpio
 
 # Silicon Lab SI7013/SI7020/SI7021 Temperature and Humidity sensor
 device si70xxtemp
 attach si70xxtemp at iic
-file dev/i2c/si70xx.c				si70xxtemp
 
 # Aosong AM2315 Temperature and Humidity sensor
 device am2315temp
 attach am2315temp at iic
-file dev/i2c/am2315.c				am2315temp
 
 # Silergy SY8106A regulator
 device	sy8106a
 attach	sy8106a at iic
-file	dev/i2c/sy8106a.c			sy8106a
 
 # Maxim DS1631 High-Precision Digital Thermometer and Thermostat
 device	dstemp: sysmon_envsys
 attach	dstemp at iic
-file	dev/i2c/dstemp.c			dstemp
 
 # EM3027 Real Time Clock and Temperature Sensor
 device	em3027rtc: sysmon_envsys
 attach	em3027rtc at iic
-file	dev/i2c/em3027.c			em3027rtc
 
 # Analog Devices AD7417 thermometer and ADC
 device	adadc: sysmon_envsys
 attach	adadc at iic
-file	dev/i2c/adadc.c				adadc
 
 # Apple Sudden Motion Sensor
 device	asms: sysmon_envsys
 attach	asms at iic
-file	dev/i2c/asms.c				asms
 
 # HID over i2c
 # HID "bus"
@@ -326,136 +260,108 @@ define  ihidbus {[ reportid = -1 ]}
 # HID root device for multiple report IDs
 device  ihidev: hid, ihidbus
 attach  ihidev at iic
-file    dev/i2c/ihidev.c			ihidev
 
 # HID mice
 device	ims: hid, hidms, wsmousedev
 attach	ims at ihidbus
-file	dev/i2c/ims.c				ims
 
 # HID multitouch
 device	imt: hid, hidmt, wsmousedev
 attach	imt at ihidbus
-file	dev/i2c/imt.c				imt
 
 # HID keyboard
 device	ikbd: hid, hidkbd, wskbddev
 attach	ikbd at ihidbus
-file	dev/i2c/ikbd.c				ikbd
 
 # Taos TSL256x ambient light sensor
 device	tsllux: sysmon_envsys
 attach	tsllux at iic
-file	dev/i2c/tsllux.c			tsllux
 
 # Philips/NXP TEA5767 
 device tea5767radio : radiodev
 attach tea5767radio at iic
-file dev/i2c/tea5767.c				tea5767radio
 
 # Fairchild FAN53555 / Silergy SY82x regulator
 device	fan53555reg
 attach	fan53555reg at iic
-file	dev/i2c/fan53555.c			fan53555reg
 
 # Rockchip Power Management IC
 device	rkpmic { }
 device	rkreg: rkpmic
 attach	rkpmic at iic
 attach	rkreg at rkpmic
-file	dev/i2c/rkpmic.c			rkpmic
 
 # SSD1306 or SH1106 OLED/PLED display
 attach	ssdfb at iic with ssdfb_iic
-file	dev/i2c/ssdfb_i2c.c			ssdfb_iic
 
 # Analogix ANX6345 eDP transmitter
 device	anxedp: edid, videomode, drmkms, drmkms_i2c
 attach	anxedp at iic
-file	dev/i2c/anxedp.c			anxedp
 makeoptions	anxedp	"CPPFLAGS.anxedp"+="${CPPFLAGS.drmkms}"
 
 # NXP PCA954x / PCA984x I2C switch / mux controllers
 device	pcaiicmux: i2cbus, i2cmux
 attach	pcaiicmux at iic
-file	dev/i2c/pcai2cmux.c			pcaiicmux
 
 # NXP PCA9685 16-channel, 12-bit PWM Fm+ LED controller
 device	pcapwm: pwm
 attach	pcapwm at iic
-file	dev/i2c/pca9685.c			pcapwm
 
 # TI TWL4030 Power Management IC
 device	twl
 attach	twl at iic
-file	dev/i2c/twl4030.c			twl
 
 # NXP TDA19988 HDMI encoder
 device	tdahdmi: edid, videomode, drmkms, drmkms_i2c
 attach	tdahdmi at iic
-file	dev/i2c/tda19988.c			tdahdmi
 makeoptions	tdahdmi	"CPPFLAGS.tdahdmi"+="${CPPFLAGS.drmkms}"
 
 # Everest Semi ES8316 Low Power Audio CODEC
 device	es8316ac
 attach	es8316ac at iic
-file	dev/i2c/es8316ac.c			es8316ac
 
 # CellWise CW2015 Fuel Gauge IC
 device	cwfg: sysmon_envsys
 attach	cwfg at iic
-file	dev/i2c/cwfg.c				cwfg
 
 # Sensirion SHT30/SHT31/SHT35 Temperature and Humidity sensor
 device sht3xtemp
 attach sht3xtemp at iic
-file dev/i2c/sht3x.c				sht3xtemp
 
 # Sensirion SHT40/SHT41/SHT45 Temperature and Humidity sensor
 device sht4xtemp
 attach sht4xtemp at iic
-file dev/i2c/sht4x.c				sht4xtemp
 
 # Sensirion SGP40 MOx gas sensor
 device sgp40mox
 attach sgp40mox at iic
-file dev/i2c/sgp40.c				sgp40mox
-file dev/i2c/sensirion_voc_algorithm.c		sgp40mox
 
 # Philips PCA955x GPIO
 device	pcagpio: leds
 attach	pcagpio at iic
-file	dev/i2c/pcagpio.c			pcagpio
 
 # Philips PCF8574 IO expander
 device	pcf8574io: leds, sysmon_envsys
 attach	pcf8574io at iic
-file	dev/i2c/pcf8574.c			pcf8574io
 
 # Sparkfun Serial motor controller
 attach  scmd at iic with scmdi2c
-file	dev/i2c/scmdi2c.c			scmdi2c
 
 # Aosong AHT20 Temperature and Humidity sensor
 device aht20temp
 attach aht20temp at iic
-file dev/i2c/aht20.c				aht20temp
 
 # Bosch Sensortec BMP280/BME280 Temperature, Humidity and Pressure sensor
 attach	bmx280thp at iic with bmx280thpi2c
-file dev/i2c/bmx280thpi2c.c			bmx280thpi2c
 
 # Maxim DS2482-100 and DS2482-800 I2C to Onewire bridge
 device ds2482ow: onewirebus
 attach ds2482ow at iic
-file dev/i2c/ds2482ow.c				ds2482ow
 
 # Onsemi FUSB302B USB-C power controller
 device fusbtc
 attach fusbtc at iic
-file dev/i2c/fusbtc.c				fusbtc
 
 # EMC-210x and EMC-230x fan controllers
 device emcfan: gpiobus, sysmon_envsys
 attach emcfan at iic
-file dev/i2c/emcfan.c				emcfan

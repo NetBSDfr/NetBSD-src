@@ -8,6 +8,5 @@ makeoptions	chacha	"COPTS.chacha_neon.c"+="-mfloat-abi=softfp -mfpu=neon"
 endif
 
 file	crypto/chacha/arch/arm/chacha_neon.c	chacha & (cpu_cortex | aarch64)
-file	crypto/chacha/arch/arm/chacha_neon_32.S	chacha & cpu_cortex & !aarch64
 file	crypto/chacha/arch/arm/chacha_neon_64.S	chacha & aarch64
 file	crypto/chacha/arch/arm/chacha_neon_impl.c chacha & (cpu_cortex | aarch64)

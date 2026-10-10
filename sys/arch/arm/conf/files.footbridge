@@ -1,0 +1,11 @@
+#	$NetBSD: files.footbridge,v 1.13 2007/12/03 15:33:17 ad Exp $
+#
+# Shared footbridge files information
+
+# DC21285 "Footbridge" specific files
+device	footbridge {}: pcibus, bus_space_generic
+attach	footbridge at mainbus
+
+# DC21285 "Footbridge" serial port
+device	fcom: tty, bus_space_generic
+attach	fcom at footbridge

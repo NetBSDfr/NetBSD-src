@@ -25,9 +25,7 @@ include	"secmodel/bsd44/files.bsd44"
 #
 # Sample overlay model on-top of the traditional one
 #
-include "secmodel/overlay/files.overlay"
 
 #
 # Multi-position keylock
 #
-include "secmodel/keylock/files.keylock"

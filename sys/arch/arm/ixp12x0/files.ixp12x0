@@ -1,0 +1,19 @@
+#       $NetBSD: files.ixp12x0,v 1.6 2005/12/11 12:16:50 christos Exp $
+#
+# Configuration info for Intel IXP12x0 CPU support
+#
+
+
+# IXP1200 Slow peripheral devices
+device	ixpsip { [addr=-1], [size=0], [intr=-1] }: bus_space_generic
+
+# IXP12x0 Processor CPU support
+# IXP1200 IX,PCI,SRAM bus
+device	ixpio: pcibus, bus_space_generic
+
+# clock device
+device	ixpclk 
+attach	ixpclk at ixpsip
+
+# IXM1200 serial device
+device	ixpcom: tty

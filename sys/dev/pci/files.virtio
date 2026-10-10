@@ -9,11 +9,9 @@ file	dev/pci/ld_virtio.c	ld_virtio
 
 device	viomb
 attach	viomb at virtio
-file	dev/pci/viomb.c		viomb
 
 device	viogpu: wsemuldisplaydev, rasops32, vcons
 attach	viogpu at virtio
-file	dev/pci/viogpu.c	viogpu
 
 device	vioif: ether, ifnet, arp
 attach	vioif at virtio
@@ -25,7 +23,6 @@ file	dev/pci/viornd.c	viornd
 
 device	vioscsi: scsi
 attach	vioscsi at virtio
-file	dev/pci/vioscsi.c	vioscsi
 
 device	vio9p
 attach	vio9p at virtio

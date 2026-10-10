@@ -1,0 +1,138 @@
+#	$NetBSD: files.rockchip,v 1.30 2025/06/03 19:10:26 rjs Exp $
+#
+# Configuration info for Rockchip family SoCs
+#
+#
+
+
+
+# Clock and reset unit (CRU)
+device	rkcru: rk_cru
+
+ifdef arm
+
+# RK3288 clock and reset unit
+attach	rkcru at fdt with rk3288_cru
+
+else
+
+# RK3328 clock and reset unit
+attach	rkcru at fdt with rk3328_cru
+
+# RK3399 clock and reset unit
+attach	rkcru at fdt with rk3399_cru
+attach	rkcru at fdt with rk3399_pmucru
+
+# RK3588 clock and reset unit
+attach	rkcru at fdt with rk3588_cru
+
+endif
+
+# IOMUX control
+device	rkiomux { }
+
+ifdef arm
+
+attach	rkiomux at fdt with rk3288_iomux
+
+else
+
+attach	rkiomux at fdt with rk3328_iomux
+attach	rkiomux at fdt with rk3399_iomux
+attach	rkiomux at fdt with rk3588_iomux
+
+endif
+
+# GPIO
+device	rkgpio: gpiobus
+attach	rkgpio at rkiomux with rk_gpio
+
+# I2C
+device	rkiic: i2cbus, i2cexec
+attach	rkiic at fdt with rk_i2c
+
+# SPI
+device	rkspi: spibus
+attach	rkspi at fdt with rk_spi
+
+# USB PHY
+device	rkusb { }
+attach	rkusb at fdt with rk_usb
+device	rkusbphy
+attach	rkusbphy at rkusb with rk_usbphy
+
+device	rk3288usb { }
+attach	rk3288usb at fdt with rk3288_usb
+device	rk3288usbphy
+attach	rk3288usbphy at rk3288usb with rk3288_usbphy
+
+# GMAC
+attach	awge at fdt with rk_gmac
+
+# EQOS
+attach	eqos at fdt with rk_eqos
+
+# PCIe PHY
+device	rkpciephy
+attach	rkpciephy at fdt
+
+# PCIe host
+device	rkpcie: pcibus, pcihost_fdt
+attach	rkpcie at fdt
+
+# eMMC PHY
+device	rkemmcphy
+attach	rkemmcphy at fdt
+
+# TSADC temperature sensors
+device	rktsadc: sysmon_envsys
+attach	rktsadc at fdt with rk_tsadc
+
+# PWM
+device	rkpwm: pwm
+attach	rkpwm at fdt with rk_pwm
+
+# DRM master
+define	rkfbbus { }
+device	rkdrm: drmkms, ddc_read_edid, rkfbbus
+attach	rkdrm at fdt with rk_drm
+makeoptions	rk_drm	"CPPFLAGS.rk_drm"+="${CPPFLAGS.drmkms}"
+
+# DRM framebuffer console
+device	rkfb: rkfbbus, drmfb, wsemuldisplaydev
+attach	rkfb at rkfbbus with rk_fb
+makeoptions	rk_fb	"CPPFLAGS.rk_fb"+="${CPPFLAGS.drmkms}"
+
+# Visual Output Processor
+device	rkvop: drmkms
+attach	rkvop at fdt with rk_vop
+makeoptions	rk_vop	"CPPFLAGS.rk_vop"+="${CPPFLAGS.drmkms}"
+
+# HDMI TX (Designware based)
+attach	dwhdmi at fdt with rk_dwhdmi
+makeoptions	rk_dwhdmi	"CPPFLAGS.rk_dwhdmi"+="${CPPFLAGS.drmkms}"
+
+# DP/eDP (Analogix-based)
+attach	anxdp at fdt with rk_anxdp
+makeoptions	rk_anxdp	"CPPFLAGS.rk_anxdp"+="${CPPFLAGS.drmkms}"
+
+# I2S/PCM controller
+device	rki2s
+attach  rki2s at fdt with rk_i2s
+
+# Crypto engine v1
+device	rkv1crypto
+attach	rkv1crypto at fdt with rk_v1crypto
+
+# USB-C PHY
+device	rktypec { }
+attach	rktypec at fdt with rk_typec
+device	rktcphy
+attach	rktcphy at rktypec with rk_tcphy
+
+# SOC parameters
+defflag	opt_soc.h			SOC_ROCKCHIP
+defflag	opt_soc.h			SOC_RK3288: SOC_ROCKCHIP
+defflag	opt_soc.h			SOC_RK3328: SOC_ROCKCHIP
+defflag	opt_soc.h			SOC_RK3399: SOC_ROCKCHIP
+defflag	opt_soc.h			SOC_RK3588: SOC_ROCKCHIP

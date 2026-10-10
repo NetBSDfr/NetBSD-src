@@ -1,2 +1,1 @@
 device vmt: sysmon_power, sysmon_taskq
-file	dev/vmt/vmt_subr.c		vmt

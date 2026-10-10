@@ -1,0 +1,4 @@
+#	$NetBSD: files.linux_arm,v 1.4 2006/08/30 11:14:39 matt Exp $
+#
+# Config file description for ARM-dependent Linux compat code.
+

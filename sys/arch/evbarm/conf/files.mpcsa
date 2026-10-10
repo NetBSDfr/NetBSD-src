@@ -1,0 +1,21 @@
+#
+# MPCSA evaluation board configuration info
+#
+
+# CPU support and integrated peripherals
+include "arch/arm/at91/files.at91"
+
+# board-specific startup source file
+
+# CF support
+attach	at91cf at at91bus with mpcsa_cf
+
+# SPI
+attach	at91spi at at91bus with mpcsa_spi
+
+device	mpcsa_leds: gpiobus
+attach	mpcsa_leds at spi
+
+# USART
+attach	at91usart at at91bus with mpcsa_usart
+

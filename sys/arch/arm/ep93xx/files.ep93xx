@@ -1,0 +1,49 @@
+#       $NetBSD: files.ep93xx,v 1.4 2009/02/27 03:13:55 kenh Exp $
+#
+# Configuration info for Cirrus Logic EP93XX CPU support
+#
+
+makeoptions CPUFLAGS+="-march=armv4 -mtune=arm9"
+
+
+device	epsoc { [addr=-1], [size=0], [intr=-1] }: bus_space_generic
+
+device	epclk
+attach epclk at epsoc
+
+device	epe: ether, ifnet, arp, mii
+attach epe at epsoc
+
+device	epohci
+attach ohci at epsoc with epohci
+
+device epcom : tty
+
+device	epgpio { [port=-1], [bit1=-1], [bit2=-1] }: gpiobus
+attach	epgpio at epsoc
+
+#
+# Support selective disabling of certain EP93xx GPIO lines when attaching
+# a gpiobus (they may be used for other functions by the hardware and using
+# them could be harmful).  The default is all GPIO lines are available
+#
+
+defparam opt_ep93xx_gpio_mask.h		EPGPIO_PORT_A_MASK=0xff
+defparam opt_ep93xx_gpio_mask.h		EPGPIO_PORT_B_MASK=0xff
+defparam opt_ep93xx_gpio_mask.h		EPGPIO_PORT_C_MASK=0xff
+defparam opt_ep93xx_gpio_mask.h		EPGPIO_PORT_D_MASK=0xff
+defparam opt_ep93xx_gpio_mask.h		EPGPIO_PORT_E_MASK=0xff
+defparam opt_ep93xx_gpio_mask.h		EPGPIO_PORT_F_MASK=0xff
+defparam opt_ep93xx_gpio_mask.h		EPGPIO_PORT_G_MASK=0xff
+defparam opt_ep93xx_gpio_mask.h		EPGPIO_PORT_H_MASK=0xff
+
+device	epwdog
+attach	epwdog at epsoc
+
+device eppcic : pcmciabus
+
+device	eprtc
+attach	eprtc at epsoc
+
+device	epled
+attach	epled at epgpio

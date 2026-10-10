@@ -1,0 +1,16 @@
+#	$NetBSD: files.hil,v 1.1 2011/02/06 18:26:54 tsutsui Exp $
+#	$OpenBSD: files.hil,v 1.6 2006/08/10 23:41:16 miod Exp $
+#
+# Configuration file for machine-independent HIL code.
+#
+
+device	hil {[code = -1]}
+
+device	hilkbd: wskbddev
+attach	hilkbd at hil
+
+device	hilms: wsmousedev
+attach	hilms at hil
+
+device	hilid
+attach	hilid at hil

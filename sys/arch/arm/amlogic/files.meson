@@ -1,0 +1,127 @@
+#	$NetBSD: files.meson,v 1.14 2025/07/10 08:13:12 skrll Exp $
+#
+# Configuration info for Amlogic Meson family SoCs
+#
+#
+
+
+# Common clocks
+define	meson_clk
+
+# Meson8b clock controller
+device	meson8bclkc: meson_clk
+attach	meson8bclkc at fdt with meson8b_clkc
+
+# Meson GXBB clock controller
+device	gxbbclkc: meson_clk
+attach	gxbbclkc at fdt with mesongxbb_clkc
+
+# Meson GXBB AO clock controller
+device	gxbbaoclkc: meson_clk
+attach	gxbbaoclkc at fdt with mesongxbb_aoclkc
+
+# Meson G12[AB] clock controller
+device	g12clkc: meson_clk
+attach	g12clkc at fdt with mesong12_clkc
+
+# Meson G12[AB] AO clock controller
+device	g12aoclkc: meson_clk
+attach	g12aoclkc at fdt with mesong12_aoclkc
+
+# Meson reset controller
+device	mesonresets
+attach	mesonresets at fdt with meson_resets
+
+# UART
+device	mesonuart
+attach	mesonuart at fdt with meson_uart
+
+# Framebuffer console
+device	mesonfb: genfb, wsemuldisplaydev
+attach	mesonfb at fdt with meson_genfb
+
+# GPIO
+device	mesonpinctrl: gpiobus
+attach	mesonpinctrl at fdt with meson_pinctrl
+
+# Meson8b SDHC
+device	mesonsdhc: sdmmcbus
+attach	mesonsdhc at fdt with meson_sdhc
+
+# Meson8b SDIO
+device	mesonsdio: sdmmcbus
+attach	mesonsdio at fdt with meson_sdio
+
+# Meson GX MMC
+device	mesongxmmc: sdmmcbus
+attach	mesongxmmc at fdt with mesongx_mmc
+
+# USB PHY
+device	mesonusbphy
+attach	mesonusbphy at fdt with meson_usbphy
+
+# Meson GXL USB2 PHY
+device	mesongxlu2phy
+attach	mesongxlu2phy at fdt with mesongxl_usb2phy
+
+# Meson GXL USB3 PHY
+device	mesongxlu3phy
+attach	mesongxlu3phy at fdt with mesongxl_usb3phy
+
+# Meson G12 USB2 PHY
+device	mesong12u2phy
+attach	mesong12u2phy at fdt with mesong12_usb2phy
+
+# Meson G12 USB3/PCIE PHY
+device	mesong12u3pphy
+attach	mesong12u3pphy at fdt with mesong12_usb3pciephy
+
+# Meson G12 USB
+device	mesonusbctrl
+attach	mesonusbctrl at fdt with meson_usbctrl
+
+# RTC
+device	mesonrtc
+attach	mesonrtc at fdt with meson_rtc
+
+# RNG
+device	mesonrng
+attach	mesonrng at fdt with meson_rng
+
+# GMAC
+attach	awge at fdt with meson_dwmac
+
+# Meson GXL internal PHY
+device	gxlphy: mii_phy
+attach  gxlphy at mii
+
+# Meson8b Watchdog
+device	mesonwdt: sysmon_wdog
+attach	mesonwdt at fdt with meson_wdt
+
+# Meson GX Watchdog
+device	mesongxwdt: sysmon_wdog
+attach	mesongxwdt at fdt with mesongx_wdt
+
+# Meson Timers
+device	meson6timer
+attach	meson6timer at fdt with meson6_timer
+
+# Meson PWM
+device	mesonpwm
+attach	mesonpwm at fdt with meson_pwm
+
+# Meson Thermal
+device	mesonthermal
+attach	mesonthermal at fdt with meson_thermal
+
+device	mesoniic: i2cbus, i2cexec
+attach	mesoniic at fdt with meson_i2c
+
+# SOC parameters
+defflag	opt_soc.h			SOC_MESON
+defflag	opt_soc.h			SOC_MESON8B: SOC_MESON
+defflag	opt_soc.h			SOC_MESONG12: SOC_MESON
+defflag	opt_soc.h			SOC_MESONGX: SOC_MESON
+defflag	opt_soc.h			SOC_MESONGXBB: SOC_MESONGX
+defflag	opt_soc.h			SOC_MESONGXL: SOC_MESONGX

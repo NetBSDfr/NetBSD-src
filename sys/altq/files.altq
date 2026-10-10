@@ -14,18 +14,3 @@ defflag opt_altq.h		ALTQ_AFMAP ALTQ_BLUE ALTQ_CBQ ALTQ_CDNR
 # defflag opt_altq.h		BLUE_STATS
 
 define	altq
-file	altq/altq_conf.c	altq
-file	altq/altq_afmap.c	altq
-file	altq/altq_blue.c	altq
-file	altq/altq_cbq.c		altq
-file	altq/altq_cdnr.c	altq
-file	altq/altq_fifoq.c	altq
-file	altq/altq_hfsc.c	altq
-file	altq/altq_jobs.c	altq
-file	altq/altq_localq.c	altq
-file	altq/altq_priq.c	altq
-file	altq/altq_red.c		altq
-file	altq/altq_rio.c		altq
-file	altq/altq_rmclass.c	altq
-file	altq/altq_subr.c	altq
-file	altq/altq_wfq.c		altq

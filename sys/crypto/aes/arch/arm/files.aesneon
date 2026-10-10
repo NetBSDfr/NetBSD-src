@@ -16,4 +16,3 @@ file	crypto/aes/arch/arm/aes_neon.c		aes & (cpu_cortex | aarch64)
 file	crypto/aes/arch/arm/aes_neon_impl.c	aes & (cpu_cortex | aarch64)
 file	crypto/aes/arch/arm/aes_neon_subr.c	aes & (cpu_cortex | aarch64)
 
-file	crypto/aes/arch/arm/aes_neon_32.S	aes & cpu_cortex & !aarch64

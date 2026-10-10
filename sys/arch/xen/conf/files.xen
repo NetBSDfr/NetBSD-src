@@ -11,7 +11,6 @@ file	arch/xen/xen/xenmem.c			xen & !xenpv
 file	arch/xen/x86/xen_mainbus.c		xen
 file	arch/xen/xen/xen_clock.c		xen
 file	arch/xen/x86/xen_bus_dma.c		xen
-file	arch/xen/xen/genfb_xen.c		xen & genfb
 
 file	arch/xen/x86/pvh_consinit.c		xenpvhvm
 
@@ -41,20 +40,12 @@ file	arch/xen/xen/xencons.c		xencons needs-flag
 # Xen Network driver
 device	xennet: arp, ether, ifnet
 attach xennet at xenbus
-file	arch/xen/xen/if_xennet_xenbus.c xennet needs-flag
-file	arch/xen/xen/xennet_checksum.c	xvif | xennet
 
 # Xen Block device driver and wd/sd/cd identities
 device	xbd: disk
 attach	xbd at xenbus
-file	arch/xen/xen/xbd_xenbus.c	xbd
 
 # Domain-0 operations
-file	arch/xen/xen/privcmd.c		dom0ops
-file 	arch/xen/x86/xen_shm_machdep.c	dom0ops
-file	arch/xen/xen/xenevt.c		xenevt & dom0ops
-file	arch/xen/xen/xennetback_xenbus.c xvif
-file	arch/xen/xen/xbdback_xenbus.c xbdback
 
 # Xen event peudo-device
 defpseudo xenevt

@@ -1,7 +1,6 @@
 # $NetBSD: files.pci,v 1.2 2021/08/07 21:23:37 jmcneill Exp $
 
 # PCI MSI/MSI-X support
-file	arch/arm/pci/pci_msi_machdep.c		pci & __have_pci_msi_msix
 
 # Arm PCI Configuration Space Access Firmware Interface (DEN0115)
 defflag	opt_pci.h	PCI_SMCCC

@@ -1,0 +1,24 @@
+#	$NetBSD: files.ixm1200,v 1.5 2007/12/03 15:33:31 ad Exp $
+#
+# Intel IXM1200 evaluation board configuration info
+#
+
+
+# IXP12x0 Network Processor CPU support
+include "arch/arm/ixp12x0/files.ixp12x0"
+
+# IXP12x0 IX,PCI,SRAM bus support
+attach	ixpio at mainbus with ixpio_mainbus
+
+# IXP12x0 slow peripheral bus support
+attach	ixpsip at mainbus
+
+device	nappinr
+attach	nappinr at ixpsip
+
+device	nppb: pcibus
+attach	nppb at pci
+
+# IXM1200 serial port
+# "device" declaration in files.evbarm (because of needs-flag)
+attach	ixpcom at ixpsip with ixpcom_ixm

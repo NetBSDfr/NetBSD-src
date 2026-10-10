@@ -15,15 +15,11 @@ file	conf/debugsyms.c		kern
 file	conf/param.c			kern
 file	kern/bufq_disksort.c		bufq_disksort
 file	kern/bufq_fcfs.c		bufq_fcfs
-file	kern/bufq_priocscan.c		bufq_priocscan
-file	kern/bufq_readprio.c		bufq_readprio | new_bufq_strategy
 file	kern/compat_stub.c		kern
 file	kern/core_elf32.c		exec_elf32 & coredump
 file	kern/core_elf64.c		exec_elf64 & coredump
 file	kern/core_netbsd.c		coredump
 file	kern/cnmagic.c			kern
-file	kern/exec_aout.c		exec_aout
-file	kern/exec_ecoff.c		exec_ecoff
 file	kern/exec_elf32.c		exec_elf32
 file	kern/exec_elf64.c		exec_elf64
 file	kern/exec_script.c		exec_script
@@ -50,11 +46,8 @@ file	kern/kern_exec.c		kern
 file	kern/kern_exit.c		kern
 file	kern/kern_fork.c		kern
 file	kern/kern_idle.c		kern
-file	kern/kern_heartbeat.c		kern & heartbeat
 file	kern/kern_hook.c		kern
 file	kern/kern_kthread.c		kern
-file	kern/kern_ktrace.c		ktrace
-file	kern/kern_ktrace_vfs.c		ktrace
 file	kern/kern_ksyms.c		ksyms | ddb | modular needs-flag
 file	kern/kern_lock.c		kern
 file	kern/kern_lwp.c			kern
@@ -64,9 +57,7 @@ file	kern/kern_module_hook.c		kern
 file	kern/kern_module_vfs.c		kern
 file	kern/kern_mutex.c		kern
 file	kern/kern_mutex_obj.c		kern
-file	kern/kern_fileassoc.c		fileassoc
 file	kern/kern_ntptime.c		kern
-file	kern/kern_pax.c			pax_mprotect | pax_segvguard | pax_aslr
 file	kern/kern_physio.c		kern
 file	kern/kern_pmf.c			kern
 file	kern/kern_proc.c		kern
@@ -79,7 +70,6 @@ file	kern/kern_runq.c		kern
 file	kern/kern_rwlock.c		kern
 file	kern/kern_rwlock_obj.c		kern
 file	kern/kern_scdebug.c		kern
-file	kern/kern_sdt.c			kdtrace_hooks
 file	kern/kern_crashme.c		kern
 file	kern/kern_sig.c			kern
 file	kern/kern_sleepq.c		kern
@@ -98,12 +88,9 @@ file	kern/kern_turnstile.c		kern
 file	kern/kern_todr.c		kern
 file	kern/kern_uidinfo.c		kern
 file	kern/kern_uuid.c		kern
-file	kern/kgdb_stub.c		kgdb
 file	kern/sched_4bsd.c		sched_4bsd
-file	kern/sched_m2.c			sched_m2
 file	kern/subr_acl_posix1e.c		kern
 file	kern/subr_acl_nfs4.c		kern
-file	kern/subr_asan.c		kasan
 file	kern/subr_autoconf.c		kern
 file	kern/subr_blist.c		vmswap
 file	kern/subr_bufq.c		kern
@@ -112,8 +99,6 @@ file	kern/subr_cprng.c		kern
 file	kern/subr_cpu.c			kern
 file	kern/subr_cpufreq.c		kern
 file	kern/subr_copy.c		kern
-file	kern/subr_csan.c		kcsan
-file	kern/subr_debug.c		debug
 file	kern/subr_device.c		kern
 file	kern/subr_devsw.c		kern
 file	kern/subr_disk.c		kern
@@ -124,14 +109,12 @@ file	kern/subr_emul.c		kern
 file	kern/subr_evcnt.c		kern
 file	kern/subr_exec_fd.c		kern
 file	kern/subr_extent.c		kern
-file	kern/subr_fault.c		fault
 file	kern/subr_hash.c		kern
 file	kern/subr_humanize.c		kern
 file	kern/subr_interrupt.c		kern
 file	kern/subr_iostat.c		kern
 file	kern/subr_ipi.c			kern
 file	kern/subr_kcpuset.c		kern
-file	kern/subr_kcov.c		kcov
 defflag	opt_kmem.h			KMEM_SIZE
 file	kern/subr_kmem.c		kern
 file	kern/subr_kobj.c		kern
@@ -140,7 +123,6 @@ file	kern/subr_localcount.c		kern
 file	kern/subr_lockdebug.c		kern
 file	kern/subr_log.c			kern
 file	kern/subr_lwp_specificdata.c	kern
-file	kern/subr_msan.c		kmsan
 file	kern/subr_once.c		kern
 file	kern/subr_optstr.c		kern
 file	kern/subr_pcq.c			kern
@@ -152,11 +134,9 @@ file	kern/subr_prof.c		kern
 file	kern/subr_pserialize.c		kern
 file	kern/subr_psref.c		kern
 file	kern/subr_specificdata.c	kern
-file	kern/subr_tftproot.c		tftproot
 file	kern/subr_time.c		kern
 file	kern/subr_time_arith.c		kern
 file	kern/subr_thmap.c		kern
-file	kern/subr_userconf.c		userconf
 file	kern/subr_vmem.c		kern
 file	kern/subr_workqueue.c		kern
 file	kern/subr_xcall.c		kern
@@ -171,7 +151,6 @@ file	kern/sys_memfd.c		kern
 file	kern/sys_module.c		kern
 file	kern/sys_mqueue.c		mqueue
 file	kern/sys_lwp.c			kern
-file	kern/sys_pipe.c			!pipe_socketpair
 file	kern/sys_process.c		ptrace_hooks | ktrace
 file	kern/sys_process_lwpstatus.c	kern
 file	kern/sys_ptrace.c		ptrace
@@ -182,14 +161,8 @@ file	kern/sys_sig.c			kern
 file	kern/sys_sched.c		kern
 file	kern/sys_socket.c		kern
 file	kern/sys_timerfd.c		kern
-file	kern/syscalls.c			syscall_debug | kdtrace_hooks
-file	kern/sysv_ipc.c			sysvshm | sysvsem | sysvmsg
-file	kern/sysv_msg.c			sysvmsg
-file	kern/sysv_sem.c			sysvsem
-file	kern/sysv_shm.c			sysvshm
 file	kern/tty.c			kern
 file	kern/tty_conf.c			kern
-file	kern/tty_bsdpty.c		compat_bsdpty
 file	kern/tty_pty.c			pty 			needs-flag
 file	kern/tty_ptm.c			pty
 file	kern/tty_subr.c			kern
@@ -197,7 +170,6 @@ file	kern/tty_tty.c			kern
 file	kern/uipc_accf.c		kern
 file	kern/uipc_domain.c		kern
 file	kern/uipc_mbuf.c		kern
-file	kern/uipc_mbufdebug.c		kern & ether & ddb
 file	net/link_proto.c		kern	# XXX
 file	kern/uipc_proto.c		kern
 file	kern/uipc_sem.c			kern
@@ -236,15 +208,11 @@ file	miscfs/genfs/genfs_vfsops.c	vfs
 file	miscfs/genfs/genfs_vnops.c	vfs
 
 define	layerfs
-file	miscfs/genfs/layer_subr.c	layerfs
-file	miscfs/genfs/layer_vfsops.c	layerfs
-file	miscfs/genfs/layer_vnops.c	layerfs
 
 file	miscfs/specfs/spec_vnops.c	vfs
 
 defflag	KUBSAN
 prefix	../common/lib/libc/misc
-file	ubsan.c				kubsan
 prefix
 makeoptions	kubsan	CFLAGS+="-fsanitize=undefined"
 makeoptions	kubsan	CPPFLAGS+="-DACPI_MISALIGNMENT_NOT_SUPPORTED"

@@ -3,15 +3,4 @@
 deffs	UDF
 
 define	udf: vfs
-file	fs/udf/udf_osta.c		udf
-file	fs/udf/udf_vfsops.c		udf
-file	fs/udf/udf_vnops.c		udf
-file	fs/udf/udf_subr.c		udf
-file	fs/udf/udf_readwrite.c		udf
-file	fs/udf/udf_strat_bootstrap.c	udf
-file	fs/udf/udf_strat_sequential.c	udf
-file	fs/udf/udf_strat_direct.c	udf
-file	fs/udf/udf_strat_rmw.c		udf
-file	fs/udf/udf_allocation.c		udf
-file	fs/udf/udf_rename.c		udf
 

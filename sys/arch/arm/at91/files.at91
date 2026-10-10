@@ -1,0 +1,63 @@
+#	$Id: files.at91,v 1.3 2011/11/04 17:20:54 aymeric Exp $
+
+#
+# Configuration info for AT91 based CPUs
+#
+defflag opt_at91types.h			AT91RM9200
+defflag opt_at91types.h			AT91SAM9260
+defflag opt_at91types.h			AT91SAM9261
+
+
+# standard memory-mapped bus ops
+
+# generic PDC code:
+
+# AT91 MCU:
+device	at91bus { [addr=-1], [size=0], [pid=-1], [index=0] }: bus_space_generic
+attach	at91bus at mainbus
+
+# chips:
+
+# AT91 Advanced Interrupt controller:
+device	at91aic
+attach	at91aic at at91bus
+
+# AT91 debug serial port
+device	at91dbgu: tty
+attach	at91dbgu at at91bus
+
+# AT91(RM9200) system timer
+device	at91st
+attach	at91st at at91bus
+
+# Timer counter based timer:
+device	at91tctmr
+attach	at91tctmr at at91bus
+
+# AT91 Power Management Controller
+
+# AT91 serial port
+device	at91usart: tty
+
+# OHCI USB Controller
+device	at91ohci
+attach	ohci at at91bus with at91ohci
+
+# CF interface (needs machine specific part)
+device	at91cf: pcmciabus
+
+# PIO
+device	at91pio { [pid=-1], [bit=-1] }: gpiobus
+attach	at91pio at at91bus
+
+# SPI
+device	at91spi: spibus
+
+# I2C
+device	at91twi: i2cbus
+attach	at91twi at at91bus
+
+# ethernet device
+device	at91emac: ether, ifnet, arp, mii
+attach	at91emac at at91bus
+

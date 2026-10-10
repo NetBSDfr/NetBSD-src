@@ -1,0 +1,38 @@
+#	$NetBSD: std.bcm53xx,v 1.22 2024/02/25 14:19:08 skrll Exp $
+#
+# standard NetBSD/evbarm for BCM5301X options
+
+machine		evbarm arm
+include 	"arch/evbarm/conf/std.evbarm"
+
+# Pull in BCM53xx config definitions.
+include		"arch/evbarm/conf/files.bcm53xx"
+
+options 	ARM_GENERIC_TODR
+options 	ARM_HAS_VBAR
+options 	ARM_INTR_IMPL="<arch/arm/broadcom/bcm53xx_intr.h>"
+options 	COM_TOLERANCE=40
+options 	CORTEX_PMC
+options 	EVBARM_BOARDTYPE="bcm53xx"
+options 	FPU_VFP
+options 	PMAP_NEED_ALLOC_POOLPAGE
+options 	SOSEND_NO_LOAN
+options 	TPIDRPRW_IS_CURCPU
+options 	_ARM32_NEED_BUS_DMA_BOUNCE
+options 	__HAVE_CPU_COUNTER
+options 	__HAVE_CPU_UAREA_ALLOC_IDLELWP
+options 	__HAVE_FAST_SOFTINTS		# should be in types.h
+options 	__HAVE_GENERIC_START
+options 	__HAVE_MM_MD_CACHE_ALIASING
+options 	__HAVE_MM_MD_DIRECT_MAPPED_PHYS
+options 	__HAVE_PCI_CONF_HOOK
+
+makeoptions	BOARDMKFRAG="${THISARM}/conf/mk.bcm53xx"
+makeoptions	BOARDTYPE="bcm53xx"
+
+# Prevent the addition of a command line -DKERNEL_BASE_VOFFSET= as it
+# is done at runtime.
+makeoptions	KERNEL_VOFFSET_RUNTIME=1
+
+makeoptions	KERNEL_BASE_VIRT="0x80100000"
+makeoptions	LOADADDRESS="0x00100000"

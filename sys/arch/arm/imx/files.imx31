@@ -1,0 +1,60 @@
+#	$NetBSD: files.imx31,v 1.8 2017/09/08 05:29:12 hkenken Exp $
+#
+# Configuration info for the Freescale i.MX31
+#
+
+defparam opt_imx.h				MEMSIZE
+defflag opt_imx.h				IMX51
+
+define	bus_dma_generic
+
+
+# iMX L2 Cache Controller
+device	l2cc
+attach	l2cc at mainbus
+
+# iMX AHB
+device	ahb  { [addr=-1], [size=0], [intr=-1], [irqbase=-1]} : bus_space_generic
+attach	ahb at mainbus
+
+# iMX AdVanced Interrupt Controller
+include "arch/arm/pic/files.pic"
+device	avic: pic, pic_splfuncs
+attach	avic at ahb
+
+# iMX IP bus
+device	aips { [addr=-1], [size=0], [intr=-1]} : bus_space_generic
+attach	aips at ahb
+
+# iMX EMI (external memory interface)
+device	emi { [offset=-1], [size=0], [intr=-1] } : bus_space_generic
+attach	emi at ahb
+
+# iMX GPIO
+device	imxgpio: gpiobus
+attach	imxgpio at ahb
+
+# iMX M3IF - Multi Master Memory Interface
+# iMX ESDCTL/MDDRC - Enhanced SDRAM/LPDDR memory controller
+# iMX PCMCIA - PCMCIA memory controller
+# iMX NANDFC - NAND Flash memory controller
+# iMX WEIM - Wireless External Interface Module
+
+# iMX clock
+
+# Clock Control Module
+device	imxccm
+attach	imxccm	at aips
+
+defparam opt_imx31clk.h IMX31_IPGCLK_FREQ
+
+# iMX UART
+device	imxuart
+attach	imxuart at aips with imx31_uart
+defflag	opt_imxuart.h				IMXUARTCONSOLE
+
+attach	ehci at ahb with ehci_ahb : bus_dma_generic
+
+attach	ohci at ahb with ohci_ahb : bus_dma_generic
+
+attach	wdc at ahb with wdc_ahb : bus_dma_generic

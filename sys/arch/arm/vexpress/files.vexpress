@@ -1,0 +1,9 @@
+#	$NetBSD: files.vexpress,v 1.6 2018/08/11 10:20:44 jmcneill Exp $
+#
+# Configuration info for ARM Ltd. Versatile Express peripherals
+#
+#
+
+
+device	vxsysreg
+attach	vxsysreg at fdt with vexpress_sysreg

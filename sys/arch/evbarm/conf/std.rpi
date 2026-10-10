@@ -1,0 +1,32 @@
+#	$NetBSD: std.rpi,v 1.26 2021/09/03 21:58:36 andvar Exp $
+#
+# standard NetBSD/evbarm for Raspberry Pi options
+
+machine		evbarm arm
+include		"arch/evbarm/conf/std.evbarm"
+
+# Pull in Raspberry Pi config definitions.
+include		"arch/evbarm/conf/files.rpi"
+
+# Architecture options
+options 	ARM_GENERIC_TODR
+options 	ARM_HAS_VBAR
+options 	ARM_INTR_IMPL="<arch/arm/fdt/fdt_intr.h>"
+options 	DRAM_BLOCKS=256
+options 	EVBARM_BOARDTYPE="rpi"
+options 	FDT				# Flattened Device Tree support
+options 	FPU_VFP
+options 	MODULAR
+options 	MODULAR_DEFAULT_AUTOLOAD
+options 	__HAVE_CPU_COUNTER
+options 	__HAVE_CPU_UAREA_ALLOC_IDLELWP
+options 	__HAVE_FAST_SOFTINTS		# should be in types.h
+options 	__HAVE_GENERIC_START
+options 	__HAVE_MM_MD_DIRECT_MAPPED_PHYS
+
+makeoptions 	BOARDMKFRAG="${THISARM}/conf/mk.rpi"
+makeoptions 	LOADADDRESS="0x80008000"
+
+# Prevent the addition of a command line -DKERNEL_BASE_VOFFSET= as it
+# is done at runtime.
+makeoptions	KERNEL_VOFFSET_RUNTIME=1

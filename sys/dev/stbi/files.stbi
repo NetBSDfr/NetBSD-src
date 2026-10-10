@@ -1,6 +1,0 @@
-# $NetBSD: files.stbi,v 1.2 2017/12/09 13:25:38 jmcneill Exp $
-
-defflag	opt_stbi.h		STB_IMAGE
-
-define stbi
-file dev/stbi/stb_image.c	stbi & stb_image
