@@ -360,9 +360,6 @@ ENTRY(start)
 	getstarttsc
 #endif
 
-	/* Warm boot */
-	movw	$0x1234,0x472
-
 #if defined(MULTIBOOT)
 	jmp	1f
 
@@ -613,17 +610,11 @@ multiboot2_loader:
 
 1:
 	/*
-	 * At this point, we know that a NetBSD-specific boot loader
-	 * booted this kernel.
-	 *
-	 * Load parameters from the stack (32 bits):
-	 *     boothowto, [bootdev], bootinfo, esym, biosextmem, biosbasemem
-	 * We are not interested in 'bootdev'.
+	 * supasmol: the native boot block entry (boot0x66/boot2 parameters on
+	 * the stack: boothowto, bootinfo, esym, biosextmem, biosbasemem, via
+	 * native_loader()) is not used; this kernel boots only via the PVH
+	 * entry below.
 	 */
-
-	addl	$4,%esp		/* Discard return address to boot loader */
-	call	_C_LABEL(native_loader)
-	addl	$24,%esp
 
 .Lstart_common:
 	/* First, reset the PSL. */
