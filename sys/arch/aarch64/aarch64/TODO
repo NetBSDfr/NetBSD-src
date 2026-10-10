@@ -1,5 +1,0 @@
-$NetBSD: TODO,v 1.10 2021/10/30 09:42:01 skrll Exp $
-
-TODO list for NetBSD/aarch64
-  - kernel preemption
-  - TLB ASID in pmap should be randomized
