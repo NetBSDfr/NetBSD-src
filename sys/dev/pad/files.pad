@@ -1,4 +1,0 @@
-# $NetBSD: files.pad,v 1.6 2019/05/08 13:40:18 isaki Exp $
-
-defpseudodev pad: audiobus
-file	dev/pad/pad.c		pad

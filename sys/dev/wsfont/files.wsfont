@@ -4,8 +4,6 @@ defpseudo wsfont
 
 # Note: `wsfont_glue' is only here to force the header file's name
 #	hence it must be mentioned first  (shudder...)
-file	dev/wsfont/wsfont.c	(wsfont_glue & rasops_rotation) |
-    rasterconsole | wsdisplay | wsfont | vcons		needs-flag
 
 defflag	opt_wsfont.h		FONT_BOLD8x16
 				FONT_BOLD16x32
@@ -41,4 +39,3 @@ defflag	opt_wsfont.h		FONT_BOLD8x16
 				FONT_LIBERATION_MONO12x21
 				FONT_TERMINAL8x13
 
-file	dev/wsfont/wsfontdev.c	wsfont needs-flag

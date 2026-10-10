@@ -19,16 +19,3 @@ attach	spkr at audio with spkr_audio
 #
 define	audiobell
 
-file	dev/audio/alaw.c		audio
-file	dev/audio/linear.c		audio
-file	dev/audio/audio.c		audio			needs-flag
-file	dev/audio/audiobell.c		spkr_audio		needs-flag
-file	dev/audio/mulaw.c		audio
-file	dev/midi.c			midi | sequencer	needs-flag
-file	dev/midi_mod.c			midi | sequencer	needs-flag
-file	dev/midi_seq_mod.c		midi | sequencer	needs-flag
-file	dev/midictl.c			midisyn
-file	dev/midisyn.c			midisyn
-file	dev/sequencer.c			sequencer		needs-flag
-file	dev/sequencer_mod.c		sequencer		needs-flag
-file	dev/spkr_audio.c		spkr_audio		needs-flag

@@ -1,0 +1,17 @@
+#	$NetBSD: files.armadillo9,v 1.4 2008/03/17 09:30:02 kiyohara Exp $
+#
+# First try for arm-specific configuration info
+#
+
+
+# EP93xx Processor CPU support
+include "arch/arm/ep93xx/files.ep93xx"
+
+attach	epsoc at mainbus
+
+attach	epcom at epsoc with armadillo9com
+
+device	armadillo9iic: i2cbus, i2c_bitbang
+attach	armadillo9iic at epgpio
+
+attach	eppcic at epsoc with armadillo9pcic

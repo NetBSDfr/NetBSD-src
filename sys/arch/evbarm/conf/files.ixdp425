@@ -1,0 +1,29 @@
+#	$NetBSD: files.ixdp425,v 1.10 2022/08/07 09:51:00 andvar Exp $
+#
+# Intel IXP425 network processor board configuration info
+#
+
+# IXP425 Network Processor CPU support
+include "arch/arm/xscale/files.ixp425"
+
+
+
+# IXP425 PCI bus support
+attach	ixpio at mainbus with ixpio_mainbus
+
+
+# IXP425 slow peripheral bus support
+attach	ixpsip at mainbus
+
+# LED
+device	ixdpled
+attach	ixdpled at ixpsip
+
+#
+# Machine-independent CardBus drivers
+#
+
+# XXX dev/pcmcia needs fdc
+#device fdc {drive = -1}
+
+#file	arch/evbarm/ixdp425/rbus_machdep.c		cardbus

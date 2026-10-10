@@ -1,0 +1,25 @@
+#	$NetBSD: files.sa11x0,v 1.6 2007/01/08 16:21:45 ichiro Exp $
+#
+# First try for arm-specific configuration info
+#
+
+# SA11[01]0 integrated peripherals
+# parent to sacom, gpio, fb, saost,  XXX
+# also provides irq and timer services
+device saip { [addr=-1], [size=0], [intr=-1], [gpio=-1]}
+attach saip at mainbus
+
+# clock device
+device	saost
+attach	saost at saip
+
+device	sacom: tty
+attach	sacom at saip
+
+# SA11[01]0 companion chips
+device	sacc { [addr=-1], [size=0], [intr=-1] }
+attach	sacc at saip
+
+device	sacpcic: pcmciabus
+attach	sacpcic at sacc
+

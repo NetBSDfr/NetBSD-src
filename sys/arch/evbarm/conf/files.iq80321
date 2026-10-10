@@ -1,0 +1,17 @@
+#	$NetBSD: files.iq80321,v 1.9 2013/01/23 14:24:14 skrll Exp $
+#
+# Intel IQ80321 evaluation board configuration info
+#
+
+
+# IQ80321 on-board devices
+device	obio {addr, [size = -1], [width = -1], [xint = -1]}: bus_space_generic
+attach	obio at mainbus
+
+# on-board TI 165C50 UART
+attach	com at obio with com_obio
+
+# i80321 I/O Processor CPU support
+include "arch/arm/xscale/files.i80321"
+
+attach	iopxs at mainbus with iopxs_mainbus

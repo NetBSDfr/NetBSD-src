@@ -1,0 +1,5 @@
+#	$NetBSD: files.linux_m68k,v 1.8 2020/05/03 01:06:56 thorpej Exp $
+#
+# Config file description for m68k-dependent Linux compat code.
+
+

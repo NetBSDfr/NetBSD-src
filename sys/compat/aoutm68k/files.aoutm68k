@@ -1,0 +1,8 @@
+#	$NetBSD: files.aoutm68k,v 1.8 2019/01/27 02:08:39 pgoyette Exp $
+#
+# Config file description for m68k a.out compat code.
+
+# ports should define any machine-specific files they need in their
+# own file lists.
+
+define	compat_aout_m68k : exec_aout

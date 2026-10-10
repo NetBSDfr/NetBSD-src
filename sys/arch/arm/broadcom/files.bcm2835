@@ -1,0 +1,118 @@
+#	$NetBSD: files.bcm2835,v 1.43 2022/04/22 12:41:06 skrll Exp $
+#
+# Configuration info for Broadcom BCM2835 ARM Peripherals
+#
+
+
+define bcmmboxbus { }
+
+# Interrupt Controller (BCM2835_ARMICU_BASE)
+device	bcmicu: pic, pic_splfuncs
+attach	bcmicu at fdt with bcmicu
+
+# VC Mailbox (BCM2835_ARMMBOX_BASE)
+device	bcmmbox: bcmmboxbus
+attach	bcmmbox at fdt with bcmmbox_fdt
+
+ifdef acpinodebus
+attach  bcmmbox at acpinodebus with bcmmbox_acpi
+endif
+
+# System Timer (BCM2835_TIMER_BASE)
+device	bcmtmr
+attach	bcmtmr at fdt with bcmtmr_fdt
+
+# Power Management, Reset Controller, and Watchdog (BCM2835_PM_BASE)
+device	bcmpmwdog: sysmon_wdog
+attach	bcmpmwdog at fdt with bcmpmwdog_fdt
+
+# Random number generator (BCM2835_RNG_BASE)
+device	bcmrng
+attach bcmrng at fdt with bcmrng_fdt
+
+# Random number generator (BCM2835_RNG_BASE (!))
+device	bcm2838rng
+attach bcm2838rng at fdt with bcm2838rng_fdt
+
+# Broadcom STB PCIE host
+device	bcm2838pcie: pcibus
+attach bcm2838pcie at fdt with bcm2838pcie_fdt
+
+# AUX
+device	bcmaux
+attach	bcmaux at fdt with bcmaux_fdt
+
+# AUX UART (BCM2835_AUX_UART_BASE)
+attach	com at fdt with bcmcom
+
+ifdef acpinodebus
+attach	com at acpinodebus with bcmcom_acpi
+endif
+
+# External Mass Media Controller (BCM2835_EMMC_BASE)
+attach	sdhc at fdt with bcmemmc
+
+ifdef acpinodebus
+attach	sdhc at acpinodebus with bcmemmc_acpi
+attach	sdhc at acpinodebus with bcmemmc2_acpi
+endif
+
+# SD Host Controller (BCM2835_SDHOST_BASE)
+device	bcmsdhost: sdmmcbus
+attach	bcmsdhost at fdt with bcmsdhost
+
+# DMA Controller (BCM2835_DMA0_BASE)
+device	bcmdmac
+attach	bcmdmac at fdt with bcmdmac_fdt
+
+# USB (BCM2835_USB_BASE)
+attach dwctwo at fdt with bcmdwctwo
+
+# SPI controller (BCM2835_SPI0_BASE)
+device	bcmspi: spibus, bcm2835_gpio_subr
+attach	bcmspi at fdt
+
+# BSC (I2C) controller (BCM2835_BSC[01]_BASE)
+device	bsciic: i2cbus, bcm2835_gpio_subr
+attach	bsciic at fdt with bsciic_fdt
+ifdef acpinodebus
+attach	bsciic at acpinodebus with bsciic_acpi
+endif
+
+# Generic framebuffer console driver
+attach genfb at fdt with bcmgenfb: edid
+
+# VCHIQ
+include "external/bsd/vchiq/conf/files.vchiq"
+
+# VC audio
+device	vcaudio: audiobus
+attach	vcaudio at vchiqbus
+
+# GPIO
+device	bcmgpio: gpiobus
+attach	bcmgpio at fdt
+
+# Clock Manager (BCM2835_CM_BASE)
+device	bcmcprman
+attach	bcmcprman at fdt with bcmcprman_fdt
+
+# PWM Controller (BCM2835_PWM_BASE)
+device	bcmpwm
+attach	bcmpwm at fdt with bcmpwm
+
+# VideoCore IV property interface
+makeoptions     "COPTS.vcprop_subr.c"+="-fno-stack-protector"
+
+# Raspberry Pi Mailbox interface
+device  vcmbox: sysmon_envsys
+attach  vcmbox at bcmmboxbus
+
+# Maximum command-line length
+defparam opt_vcprop.h                           VCPROP_MAXCMDLINE
+defflag opt_rpi.h                               RPI_HWCURSOR
+
+# SOC parameters
+defflag	opt_bcm283x.h			SOC_BCM2835
+defflag	opt_bcm283x.h			SOC_BCM2836
+defflag opt_bcm283x.h			SOC_BCM2837: SOC_BCM2836

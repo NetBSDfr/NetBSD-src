@@ -1,0 +1,22 @@
+#	$NetBSD: files.dec,v 1.10 2023/08/19 19:21:34 andvar Exp $
+#
+# Config file and device description for  machine-independent
+# code for devices for Digital Equipment Corp. systems.
+# Included by ports that need it.
+
+# Attribute for DEC lance padded-DMA copy functions.  Lance attachments
+# which need it should specify the le_dec_subr attribute.
+define	le_dec_subr
+
+#  DMA copy functions.
+
+#  LK201 keyboard
+
+define	lkkbdmap
+
+# DZ-11 (-compatible) tty device driver.
+device	dz { line = -1 }: tty
+
+device	vsms: wsmousedev
+device	lkkbd: wskbddev, lkkbdmap
+

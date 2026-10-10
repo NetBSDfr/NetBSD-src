@@ -1,0 +1,22 @@
+#	$NetBSD: files.altera,v 1.2 2018/11/22 21:08:19 aymeric Exp $
+#
+# Configuration for Altera SoC
+#
+
+
+device 	cycvfdt : bus_space_generic, fdtbus
+attach 	cycvfdt at mainbus with cycv_fdt
+
+# Clock manager
+device 	cycvclkmgr : fdtbus
+attach 	cycvclkmgr at fdt
+
+# Reset manager
+device 	cycvrstmgr : fdtbus
+attach 	cycvrstmgr at fdt
+
+# GMAC
+attach	awge at fdt with cycv_gmac
+
+# SD/MMC Host Controller
+attach	dwcmmc at fdt with cycv_dwcmmc

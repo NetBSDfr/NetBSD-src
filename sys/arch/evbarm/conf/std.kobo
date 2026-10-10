@@ -1,0 +1,34 @@
+#	$NetBSD: std.kobo,v 1.6 2021/09/24 08:04:15 skrll Exp $
+#
+# standard NetBSD/evbarm options for Kobo
+
+machine		evbarm arm
+include		"arch/evbarm/conf/std.evbarm"
+
+# Pull in i.mx51 config definitions.
+include		"arch/evbarm/conf/files.kobo"
+
+options 	ARM_GENERIC_TODR
+options 	ARM_HAS_VBAR
+options 	ARM_INTR_IMPL="<arch/arm/imx/imx51_intr.h>"
+options 	CORTEX_PMC
+options 	CORTEX_PMC_CCNT_HZ=800000000
+options 	EVBARM_BOARDTYPE="kobo"
+options 	FPU_VFP
+options 	MODULAR
+options 	MODULAR_DEFAULT_AUTOLOAD
+options 	TPIDRPRW_IS_CURCPU
+options 	__HAVE_CPU_COUNTER
+options 	__HAVE_CPU_UAREA_ALLOC_IDLELWP
+options 	__HAVE_FAST_SOFTINTS		# should be in types.h
+options 	__HAVE_GENERIC_START
+options 	__HAVE_MM_MD_DIRECT_MAPPED_PHYS
+
+makeoptions 	LOADADDRESS_VIRT="0x80100000"
+makeoptions 	LOADADDRESS="0x70100000"
+makeoptions 	BOARDMKFRAG="${THISARM}/conf/mk.kobo"
+
+# Prevent the addition of a command line -DKERNEL_BASE_VOFFSET= as it
+# is done at runtime.
+makeoptions	KERNEL_VOFFSET_RUNTIME=1
+

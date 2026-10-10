@@ -1,0 +1,34 @@
+#	$NetBSD: files.zynq,v 1.5 2022/11/11 20:31:30 jmcneill Exp $
+#
+# Configuration info for Xilinx Zynq-7000 SoC
+#
+#
+
+
+# SOC parameters
+defflag	opt_soc.h				SOC_ZYNQ
+defflag	opt_soc.h				SOC_ZYNQ7000: SOC_ZYNQ
+
+# PS clock subsystem
+device	zynqclk
+attach	zynqclk at fdt with zynq7000_clkc
+
+# GPIO
+device	zynqgpio: gpiobus
+attach	zynqgpio at fdt
+
+# UART
+device	zynquart
+attach	zynquart at fdt
+defflag	opt_zynquart.h				ZYNQUARTCONSOLE
+
+# Gigabit Ethernet Controller
+device	cemac: ether, ifnet, arp, mii, bus_dma_generic
+attach	cemac at fdt
+
+# USB controller
+attach	ehci at fdt with zynqusb
+
+# Xilinx 7 series ADC
+device	zynqxadc: sysmon_envsys
+attach	zynqxadc at fdt

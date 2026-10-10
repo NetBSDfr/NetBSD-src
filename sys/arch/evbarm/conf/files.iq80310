@@ -1,0 +1,30 @@
+#	$NetBSD: files.iq80310,v 1.12 2007/12/03 15:33:30 ad Exp $
+#
+# Intel IQ80310 evaluation board configuration info
+#
+
+# Define the (IQ80310-based) board types that we support:
+#
+#	IOP310_TEAMASA_NPWR
+#		Team ASA, Inc. Npwr http://www.teamasa.com/
+#
+# If no board type options are specified, the default is the
+# Intel/Cyclone IQ80310 (which is the IOP310 reference design
+# eval board).
+defflag opt_iop310.h	IOP310_TEAMASA_NPWR
+
+
+# IQ80310 on-board devices (including CPLD)
+device	obio {addr, [size = -1], [width = -1], [xint3 = -1]}: bus_space_generic
+attach	obio at mainbus
+
+# on-board XR 16550 UARTs
+attach	com at obio with com_obio
+
+# i80200 CPU support
+include "arch/arm/xscale/files.i80200"
+
+# i80312 Companion I/O support
+include	"arch/arm/xscale/files.i80312"
+
+attach	iopxs at mainbus with iopxs_mainbus

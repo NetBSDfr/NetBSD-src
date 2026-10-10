@@ -1,0 +1,28 @@
+#	$NetBSD: files.s3c2xx0,v 1.8 2007/12/03 15:33:19 ad Exp $
+#
+# Configuration info common to Samsung S3C2800/S3C24[10]0
+#
+
+
+#
+# External Xtal clock frequency.
+#
+defparam opt_cpuoptions.h      S3C2XX0_XTAL_CLK
+
+
+#
+# S3C2XX0's integrated peripherals bus.
+#
+device ssio { [index=-1], [addr=0], [size=0], [intr=-1] } : bus_space_generic
+attach ssio at mainbus
+
+#
+# built-in UART
+#
+device sscom
+attach sscom at ssio
+defflag	opt_sscom.h	SSCOM0CONSOLE SSCOM1CONSOLE
+defparam opt_sscom.h	SSCOM_FREQ       # PCLK
+defflag	opt_sscom.h	SSCOM_S3C2410	SSCOM_S3C2400	SSCOM_S3C2800
+
+

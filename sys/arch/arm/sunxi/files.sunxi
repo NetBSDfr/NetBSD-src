@@ -1,0 +1,307 @@
+#	$NetBSD: files.sunxi,v 1.72 2022/07/20 10:01:11 riastradh Exp $
+#
+# Configuration info for Allwinner sunxi family SoCs
+#
+#
+
+
+
+# CCU
+define	sunxi_ccu
+
+# CCU (A10/A20)
+device	sun4ia10ccu: sunxi_ccu
+attach	sun4ia10ccu at fdt with sunxi_a10_ccu
+
+# CCU (A13)
+device	sun5ia13ccu: sunxi_ccu
+attach	sun5ia13ccu at fdt with sunxi_a13_ccu
+
+# CCU (A31)
+device	sun6ia31ccu: sunxi_ccu
+attach	sun6ia31ccu at fdt with sunxi_a31_ccu
+
+# CCU (A83T)
+device	sun8ia83tccu: sunxi_ccu
+attach	sun8ia83tccu at fdt with sunxi_a83t_ccu
+
+# CCU (H3)
+device	sun8ih3ccu: sunxi_ccu
+attach	sun8ih3ccu at fdt with sunxi_h3_ccu
+
+# CCU (H3 PRCM)
+device	sun8ih3rccu: sunxi_ccu
+attach	sun8ih3rccu at fdt with sunxi_h3_r_ccu
+
+# CCU (V3s)
+device	sun8iv3sccu: sunxi_ccu
+attach	sun8iv3sccu at fdt with sunxi_v3s_ccu
+
+# CCU (A80)
+device	sun9ia80ccu: sunxi_ccu
+attach	sun9ia80ccu at fdt with sunxi_a80_ccu
+
+# CCU (A64)
+device	sun50ia64ccu: sunxi_ccu
+attach	sun50ia64ccu at fdt with sunxi_a64_ccu
+
+# CCU (A64 PRCM)
+device	sun50ia64rccu: sunxi_ccu
+attach	sun50ia64rccu at fdt with sunxi_a64_r_ccu
+
+# CCU (H6)
+device	sun50ih6ccu: sunxi_ccu
+attach	sun50ih6ccu at fdt with sunxi_h6_ccu
+
+# CCU (H6 PRCM)
+device	sun50ih6rccu: sunxi_ccu
+attach	sun50ih6rccu at fdt with sunxi_h6_r_ccu
+
+# Misc. clock resets
+device	sunxiresets
+attach	sunxiresets at fdt with sunxi_resets
+
+# Misc. clock gates
+device	sunxigates
+attach	sunxigates at fdt with sunxi_gates
+
+# GMAC MII/RGMII clock mux
+device	sunxigmacclk
+attach	sunxigmacclk at fdt with sunxi_gmacclk
+
+# SD/MMC-COMM (A80)
+device	sun9immcclk
+attach	sun9immcclk at fdt with sunxi_a80_mmcclk
+
+# USB HCI clocks (A80)
+device	sun9iusbclk
+attach	sun9iusbclk at fdt with sunxi_a80_usbclk
+
+# CPUS clock driver (A80)
+device	sun9icpusclk
+attach	sun9icpusclk at fdt with sunxi_a80_cpusclk
+
+# APB0 clock driver (A80)
+device	sun8iapbclk
+attach	sun8iapbclk at fdt with sunxi_a23_apbclk
+
+# Interrupt controller
+device	sunxiintc: pic, pic_splfuncs
+attach	sunxiintc at fdt with sunxi_intc
+
+device	sunxinmi
+attach	sunxinmi at fdt with sunxi_nmi
+
+# GPIO
+device	sunxigpio: gpiobus
+attach	sunxigpio at fdt with sunxi_gpio
+
+# PWM
+device	sunxipwm: pwm
+attach	sunxipwm at fdt with sunxi_pwm
+
+# SD/MMC
+device	sunximmc: sdmmcbus
+attach	sunximmc at fdt with sunxi_mmc
+defparam opt_sunximmc.h				SUNXI_MMC_DEBUG
+
+# USB PHY
+device	sunxiusbphy
+attach	sunxiusbphy at fdt with sunxi_usbphy
+
+device	sunxiusb3phy
+attach	sunxiusb3phy at fdt with sunxi_usb3phy
+
+device	sun9iusbphy
+attach	sun9iusbphy at fdt with sunxi_a80_usbphy
+
+# TWI
+device	sunxitwi: i2cbus, i2cexec, mvi2c
+attach	sunxitwi at fdt with sunxi_twi
+
+# P2WI/RSB
+device	sunxirsb: i2cbus, i2cexec
+attach	sunxirsb at fdt with sunxi_rsb
+
+# RTC
+device	sunxirtc
+attach	sunxirtc at fdt with sunxi_rtc
+
+# EMAC (common)
+device	emac: arp, ether, ifnet, mii
+
+# EMAC (sun4i/sun5i/sun7i)
+ifdef arm
+attach	emac at fdt with sun4i_emac
+endif
+
+# EMAC (sun8i/sun50i)
+attach	emac at fdt with sunxi_emac
+
+# GMAC
+attach	awge at fdt with sunxi_gmac
+
+# Timer
+device	sunxitimer
+attach	sunxitimer at fdt with sunxi_timer
+
+# High Speed Timer
+device	sunxihstimer
+attach	sunxihstimer at fdt with sunxi_hstimer
+
+# Watchdog
+device	sunxiwdt: sysmon_wdog
+attach	sunxiwdt at fdt with sunxi_wdt
+
+# DMA controller (sun4i)
+device	sun4idma
+attach	sun4idma at fdt with sun4i_dma
+
+# DMA controller (sun6i)
+device	sun6idma
+attach	sun6idma at fdt with sun6i_dma
+
+# Audio codec
+device	sunxicodec: audiobus
+attach	sunxicodec at fdt with sunxi_codec
+
+# Audio codec (sun8i)
+device	sun8icodec
+attach	sun8icodec at fdt with sun8i_codec
+
+# H3 Audio codec (analog part)
+device	h3codec
+attach	h3codec at fdt with h3_codec
+
+# V3s Audio codec (analog part)
+device	v3scodec
+attach	v3scodec at fdt with v3s_codec
+
+# A64 Audio codec (analog part)
+device	a64acodec
+attach	a64acodec at fdt with a64_acodec
+
+# I2S/PCM controller
+device	sunxii2s
+attach	sunxii2s at fdt with sunxi_i2s
+
+# A10/A20 LCD/TV timing controller (TCON)
+device	sunxitcon
+attach	sunxitcon at fdt with sunxi_tcon
+
+# A10/A20 Display engine backend (DE-BE)
+device	sunxidebe { }
+attach	sunxidebe at fdt with sunxi_debe
+
+attach	genfb at sunxidebe with sunxi_befb
+
+# A10/A20 HDMI
+device	sunxihdmi: edid, videomode
+attach	sunxihdmi at fdt with sunxi_hdmi
+
+# A10/A20 display engine pipeline
+device sunxidep
+attach	sunxidep at fdt with sunxi_dep
+
+# Touch Screen controller
+device	sunxits: wsmousedev, tpcalib, sysmon_envsys
+attach	sunxits at fdt with sunxi_ts
+
+# USB OTG
+attach	motg at fdt with sunxi_musb
+
+# Security ID EFUSE
+device	sunxisid
+attach	sunxisid at fdt with sunxi_sid
+
+# Thermal sensor controller
+device	sunxithermal: sysmon_envsys, sysmon_taskq
+attach	sunxithermal at fdt with sunxi_thermal
+
+# SATA
+attach	ahcisata at fdt with sunxi_sata
+
+# SRAM Controller
+device	sunxisramc
+attach	sunxisramc at fdt with sunxi_sramc
+
+# NAND Flash Controller
+device	sunxinand: nandbus
+attach	sunxinand at fdt with sunxi_nand
+
+# SPI Controller
+device	sun4ispi: spibus
+attach	sun4ispi at fdt with sun4i_spi
+device	sun6ispi: spibus
+attach	sun6ispi at fdt with sun6i_spi
+
+# A10/A20 CAN
+device	sunxican { } : ifnet
+attach	sunxican at fdt with sunxi_can
+
+# LRADC
+device	sunxilradc
+attach	sunxilradc at fdt with sunxi_lradc
+
+# DE2 bus
+device	sunxide2bus { }: fdt, sunxi_sramc
+attach	sunxide2bus at fdt with sunxi_de2bus
+
+# DE2 clocks
+device	sunxide2ccu: sunxi_ccu
+attach	sunxide2ccu at fdt with sunxi_de2ccu
+
+# DE2 mixer
+device	sunximixer: drmkms
+attach	sunximixer at fdt with sunxi_mixer
+makeoptions	sunxi_mixer	"CPPFLAGS.sunxi_mixer"+="${CPPFLAGS.drmkms}"
+
+# DE2 timing controller
+device	sunxilcdc: drmkms
+attach	sunxilcdc at fdt with sunxi_lcdc
+makeoptions	sunxi_lcdc	"CPPFLAGS.sunxi_lcdc"+="${CPPFLAGS.drmkms}"
+
+# Display Pipeline
+define	sunxifbbus { }
+device	sunxidrm: drmkms, ddc_read_edid, sunxifbbus
+attach	sunxidrm at fdt with sunxi_drm
+makeoptions	sunxi_drm	"CPPFLAGS.sunxi_drm"+="${CPPFLAGS.drmkms}"
+
+# DRM framebuffer console
+device	sunxifb: sunxifbbus, drmfb, wsemuldisplaydev
+attach	sunxifb at sunxifbbus with sunxi_fb
+makeoptions	sunxi_fb	"CPPFLAGS.sunxi_fb"+="${CPPFLAGS.drmkms}"
+
+# Allwinner HDMI (Designware based)
+attach	dwhdmi at fdt with sunxi_dwhdmi
+makeoptions	sunxi_dwhdmi	"CPPFLAGS.sunxi_dwhdmi"+="${CPPFLAGS.drmkms}"
+
+# Allwinner HDMI TX PHY
+device	sunxihdmiphy: drmkms
+attach	sunxihdmiphy at fdt with sunxi_hdmiphy
+
+# Allwinner Crypto Engine
+device	sun8icrypto
+attach	sun8icrypto at fdt with sun8i_crypto
+
+# SOC parameters
+defflag	opt_soc.h			SOC_SUNXI
+defflag	opt_soc.h			SOC_SUNXI_MC
+defflag	opt_soc.h			SOC_SUN4I: SOC_SUNXI
+defflag	opt_soc.h			SOC_SUN4I_A10: SOC_SUN4I
+defflag	opt_soc.h			SOC_SUN5I: SOC_SUNXI
+defflag	opt_soc.h			SOC_SUN5I_A13: SOC_SUN5I
+defflag	opt_soc.h			SOC_SUN6I: SOC_SUNXI
+defflag	opt_soc.h			SOC_SUN6I_A31: SOC_SUN6I
+defflag	opt_soc.h			SOC_SUN7I: SOC_SUNXI
+defflag	opt_soc.h			SOC_SUN7I_A20: SOC_SUN7I
+defflag	opt_soc.h			SOC_SUN8I: SOC_SUNXI
+defflag	opt_soc.h			SOC_SUN8I_A83T: SOC_SUN8I, SOC_SUNXI_MC
+defflag	opt_soc.h			SOC_SUN8I_H3: SOC_SUN8I
+defflag	opt_soc.h			SOC_SUN8I_V3S: SOC_SUN8I
+defflag	opt_soc.h			SOC_SUN9I: SOC_SUNXI
+defflag	opt_soc.h			SOC_SUN9I_A80: SOC_SUN9I, SOC_SUNXI_MC
+defflag	opt_soc.h			SOC_SUN50I: SOC_SUNXI
+defflag	opt_soc.h			SOC_SUN50I_A64: SOC_SUN50I
+defflag	opt_soc.h			SOC_SUN50I_H5: SOC_SUN50I, SOC_SUN8I_H3
+defflag	opt_soc.h			SOC_SUN50I_H6: SOC_SUN50I

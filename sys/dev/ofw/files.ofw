@@ -8,13 +8,11 @@ define	of_network_dev
 define	ofw_subr
 
 defpseudo openfirm
-file	dev/ofw/openfirmio.c		openfirm needs-flag
 file 	dev/ofw/ofw_sysctl.c		openfirm | ofw_subr
 
 file	dev/ofw/ofw_subr.c		ofbus | openfirm | ofw_subr
 
 file	dev/ofw/ofw_i2c_subr.c		ofbus | openfirm | ofw_subr
-file	dev/ofw/ofw_network_subr.c	of_network_dev
 file	dev/ofw/ofw_spi_subr.c		ofbus | openfirm | ofw_subr
 
 # Let individual ports pull this in, as necessary.
@@ -23,24 +21,19 @@ file	dev/ofw/ofw_spi_subr.c		ofbus | openfirm | ofw_subr
 # Generic disk support
 device	ofdisk: disk
 attach	ofdisk at ofbus
-file	dev/ofw/ofdisk.c		ofdisk needs-flag
 
 # Generic net support
 device	ofnet: ether, ifnet, arp
 attach	ofnet at ofbus
-file	dev/ofw/ofnet.c			ofnet needs-flag
 
 # Generic console support
 device	ofcons: tty
 attach	ofcons at ofbus
-file	dev/ofw/ofcons.c		ofcons needs-flag
 
 # Generic RTC support
 device	ofrtc
 attach	ofrtc at ofbus
-file	dev/ofw/ofrtc.c			ofrtc needs-flag
 
 # Generic bus support
 device	ofbus: ofbus
 attach	ofbus at ofbus
-file	dev/ofw/ofbus.c			ofbus

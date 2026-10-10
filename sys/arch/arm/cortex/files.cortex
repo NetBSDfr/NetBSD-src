@@ -2,14 +2,11 @@
 
 defflag opt_cpu_in_cksum.h			NEON_IN_CKSUM
 
-file	arch/arm/cortex/cpu_in_cksum_neon.c	(inet | inet6) & neon_in_cksum
-file	arch/arm/cortex/cpu_in_cksum_asm_neon.S	(inet | inet6) & neon_in_cksum
 
 define	mpcorebus {}
 
 device	armperiph: mpcorebus
 attach	armperiph at mainbus
-file	arch/arm/cortex/armperiph.c		armperiph
 
 # ARM Generic Interrupt Controller (initially on Cortex-A9)
 device	armgic: pic, pic_splfuncs
@@ -19,15 +16,12 @@ file	arch/arm/cortex/gic.c			armgic
 # ARM Generic Interrupt Controller v3+
 device	gicvthree: pic, pic_splfuncs
 file	arch/arm/cortex/gicv3.c			gicvthree
-file	arch/arm/cortex/gicv3_its.c		gicvthree & pci & __have_pci_msi_msix
 
 # ARM GICv2m MSI support
-file	arch/arm/cortex/gic_v2m.c		(armgic | gicvthree) & pci & __have_pci_msi_msix
 
 # ARM PL310 L2 Cache Controller(initially on Cortex-A9)
 device	arml2cc
 attach	arml2cc at mpcorebus
-file	arch/arm/cortex/pl310.c			arml2cc	needs-flag
 
 # ARMv7 Generic Timer
 device	armgtmr
@@ -37,14 +31,11 @@ file	arch/arm/cortex/gtmr.c			armgtmr needs-flag
 # A9 MPCore Global Timer
 device	arma9tmr
 attach	arma9tmr at mpcorebus
-file	arch/arm/cortex/a9tmr.c			arma9tmr needs-flag
 
 # A9 MPcore Private Timer
 device	arma9ptmr
 attach	arma9ptmr at mpcorebus
-file	arch/arm/cortex/a9ptmr.c		arma9ptmr
 
 # A9 MPcore Watchdog Timer
 device	arma9wdt: sysmon_wdog
 attach	arma9wdt at mpcorebus
-file	arch/arm/cortex/a9wdt.c			arma9wdt

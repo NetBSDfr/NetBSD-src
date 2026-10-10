@@ -1,0 +1,20 @@
+#	$NetBSD: std.npwr_fc,v 1.8 2018/10/07 07:48:44 skrll Exp $
+#
+# standard NetBSD/evbarm for IQ80321 options
+
+machine		evbarm arm
+include		"arch/evbarm/conf/std.evbarm"
+
+# Pull in IQ80321 config definitions.
+include		"arch/evbarm/conf/files.npwr_fc"
+
+options 	EXEC_AOUT
+
+options 	KERNEL_BASE_EXT=0xc0000000
+makeoptions 	BOARDTYPE="iq80321"
+makeoptions 	BOARDMKFRAG="${THISARM}/conf/mk.iq80321"
+
+options 	ARM_INTR_IMPL="<arch/arm/xscale/i80321_intr.h>"
+
+# We need to configure the PCI bus.
+options 	PCI_NETBSD_CONFIGURE

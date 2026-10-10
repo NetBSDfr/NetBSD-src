@@ -1,0 +1,14 @@
+#	$NetBSD: files.rpi,v 1.12 2020/02/20 08:31:17 rin Exp $
+#
+# Raspberry Pi
+#
+
+include "arch/arm/pic/files.pic"
+include "arch/arm/cortex/files.cortex"
+
+include "arch/evbarm/conf/files.fdt"
+
+file	arch/arm/arm/arm_generic_dma.c
+
+# CPU support and integrated peripherals
+include "arch/arm/broadcom/files.bcm2835"

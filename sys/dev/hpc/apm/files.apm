@@ -1,0 +1,11 @@
+# $NetBSD: files.apm,v 1.4 2009/04/03 05:01:10 uwe Exp $
+
+#
+# Common APM support files
+#
+
+
+
+define	apmdevif {}
+device	apmdev
+attach	apmdev at apmdevif

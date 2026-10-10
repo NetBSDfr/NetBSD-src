@@ -1,0 +1,26 @@
+#	$NetBSD: files.integrator,v 1.14 2021/08/07 19:41:13 andvar Exp $
+#
+# ARM, Ltd. Integrator evaluation board configuration info
+#
+
+
+
+# Integrator fpga specific files
+device	ifpga {[offset = -1], [irq = -1]}: pcibus, bus_space_generic
+attach	ifpga at mainbus
+
+# Integrator fpga serial port
+# "device" declaration in files.evbarm (because of needs-flag)
+attach	plcom at ifpga with plcom_ifpga
+
+# Integrator MMCI host controller
+attach	plmmc at ifpga with plmmc_ifpga
+
+# Integrator real-time clock
+# XXX: dev/ic/pl031.c
+attach plrtc at ifpga
+
+# Integrator PCI support
+
+# SMSC LAN91C111
+attach	sm at ifpga with sm_ifpga

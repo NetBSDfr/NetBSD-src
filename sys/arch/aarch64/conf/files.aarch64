@@ -47,7 +47,6 @@ file	arch/arm/arm/psci.c			psci
 file	arch/arm/arm/psci_arm.S			psci
 
 # EFI support
-file	arch/arm/arm/efi_runtime.c		efi_runtime
 
 # PMAP options
 defflag opt_pmap.h		PMAPHIST : KERNHIST
@@ -63,11 +62,6 @@ defflag	opt_pmap.h		PMAP_MI
 file	dev/cons.c
 
 # DDB
-file	arch/aarch64/aarch64/db_disasm.c		ddb
-file	arch/aarch64/aarch64/db_interface.c		ddb|kgdb
-file	arch/aarch64/aarch64/db_trace.c			ddb
-file	arch/aarch64/aarch64/db_machdep.c		ddb
-file	arch/aarch64/aarch64/disasm.c			ddb
 #file	arch/aarch64/aarch64/kgdb_machdep.c		kgdb # XXX: not implemented
 
 # mainbus files
@@ -79,7 +73,6 @@ file	arch/aarch64/aarch64/cpu.c			cpu
 
 # VMware Tools driver
 attach	vmt at cpufeaturebus
-file	arch/aarch64/aarch64/vmt.c			vmt
 
 # bus_space(9)
 define	bus_space_generic
@@ -98,7 +91,6 @@ file	arch/aarch64/aarch64/aarch64_machdep.c
 file	arch/aarch64/aarch64/aarch64_reboot.c
 file	arch/aarch64/aarch64/core_machdep.c		coredump
 file	arch/aarch64/aarch64/copyinout.S
-file	arch/aarch64/aarch64/cpu_in_cksum.S		(inet | inet6) & cpu_in_cksum
 file	arch/aarch64/aarch64/cpu_machdep.c
 file	arch/aarch64/aarch64/cpuswitch.S
 file	arch/aarch64/aarch64/cpufunc.c
@@ -123,34 +115,24 @@ file	arch/aarch64/aarch64/aarch64_tlb.c
 file	arch/aarch64/aarch64/pmap.c		!pmap_mi
 file	arch/aarch64/aarch64/pmapboot.c
 file	arch/aarch64/aarch64/pmap_page.S
-file	arch/aarch64/aarch64/pmap_machdep.c	pmap_mi
-file	uvm/pmap/pmap.c				pmap_mi
 file	uvm/pmap/pmap_devmap.c
 file	uvm/pmap/pmap_pvt.c
-file	uvm/pmap/pmap_segtab.c			pmap_mi
 file	uvm/pmap/pmap_tlb.c
 
 # EFI runtime (machdep)
-file	arch/aarch64/aarch64/efi_machdep.c		efi_runtime
 
 # NetBSD 32-bit binary compatibility
 include "compat/netbsd32/files.netbsd32"
-file	arch/aarch64/aarch64/netbsd32_machdep.c		compat_netbsd32
-file	arch/aarch64/aarch64/netbsd32_syscall.c		compat_netbsd32
 
 # Linux binary compatibility (COMPAT_LINUX)
-include "compat/ossaudio/files.ossaudio"
 include "compat/linux/files.linux"
 include "compat/linux/arch/aarch64/files.linux_aarch64"
-file	arch/aarch64/aarch64/linux_syscall.c		compat_linux
 
 # Linux 32 bit compatibility (COMPAT_LINUX32)
 include "compat/linux32/files.linux32"
 include "compat/linux32/arch/aarch64/files.linux32_aarch64"
-file	arch/aarch64/aarch64/linux32_syscall.c		compat_linux32
 
 # profiling support
-file	dev/tprof/tprof_armv8.c			tprof	needs-flag
 
 # ARMv8.0-AES
 include "crypto/aes/arch/arm/files.aesarmv8"

@@ -4,7 +4,6 @@ define	spibus { }
 
 device	spi { [slave = -1] }
 attach	spi at spibus
-file	dev/spi/spi.c			spi | spibus
 
 #
 # SPI client devices
@@ -14,40 +13,31 @@ file	dev/spi/spi.c			spi | spibus
 define	spiflashbus { }
 device	spiflash: disk
 attach	spiflash at spiflashbus
-file	dev/spi/spiflash.c		spiflash | spiflashbus
 
 # STMicro M25P SPI flash
 device	m25p: spiflashbus
 attach	m25p at spi
-file	dev/spi/m25p.c			m25p
 
 # TI TMP121 digital temperature sensor
 device	tmp121temp: sysmon_envsys
 attach	tmp121temp at spi
-file	dev/spi/tmp121.c		tmp121temp
 
 # MCP48x1 DAC 
 device	mcp48x1dac
 attach	mcp48x1dac at spi
-file	dev/spi/mcp48x1.c		mcp48x1dac	
 
 # MCP23S17 16-bit GPIO
 attach	mcpgpio at spi with mcpgpio_spi
-file	dev/spi/mcp23xxxgpio_spi.c	mcpgpio_spi
 
 # Solomon Systech SSD13xx PLED/OLED display
 attach	ssdfb at spi with ssdfb_spi
-file	dev/spi/ssdfb_spi.c		ssdfb_spi
 
 # MCP3x0x ADC
 device	mcp3kadc: sysmon_envsys
 attach	mcp3kadc at spi
-file	dev/spi/mcp3k.c			mcp3kadc
 
 # Sparkfun Serial motor controller
 attach  scmd at spi with scmdspi
-file	dev/spi/scmdspi.c		scmdspi
 
 # Bosch BMP280 / BME280 sensor
 attach  bmx280thp at spi with bmx280thpspi
-file	dev/spi/bmx280thpspi.c		bmx280thpspi

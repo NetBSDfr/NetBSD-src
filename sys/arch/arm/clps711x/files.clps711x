@@ -1,0 +1,15 @@
+#
+# Configuration info for CL PS-711x support
+#
+device	clpssoc {[irq = -1]} : bus_space_generic
+attach	clpssoc at internal
+
+
+device	clpscom
+attach	clpscom at clpssoc
+
+device	clpslcd : rasops2, rasops4, wsemuldisplaydev
+attach	clpslcd at clpssoc
+
+device	clpsrtc
+attach	clpsrtc at clpssoc
