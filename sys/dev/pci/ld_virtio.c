@@ -220,8 +220,19 @@ static int
 ld_virtio_alloc_reqs(struct ld_virtio_softc *sc, int qsize)
 {
 	int allocsize, r, rsegs, i;
+	int nseg_max;
 	struct ld_softc *ld = &sc->sc_ld;
 	void *vaddr;
+
+	/*
+	 * A kernel buffer of ld->sc_maxxfer bytes spans at most
+	 * howmany(sc_maxxfer, PAGE_SIZE) + 1 pages, so bus_dmamap_load()
+	 * can never produce more segments than that.  Declaring the
+	 * device's full seg_max (QEMU reports queue_size - 2) wastes
+	 * ~16 KB of zeroed kernel memory per request.
+	 */
+	nseg_max = MIN(sc->sc_seg_max,
+	    (int)howmany(ld->sc_maxxfer, PAGE_SIZE) + 1);
 
 	allocsize = sizeof(struct virtio_blk_req) * qsize;
 	r = bus_dmamem_alloc(virtio_dmat(sc->sc_virtio), allocsize, 0, 0,
@@ -270,7 +281,7 @@ ld_virtio_alloc_reqs(struct ld_virtio_softc *sc, int qsize)
 		}
 		r = bus_dmamap_create(virtio_dmat(sc->sc_virtio),
 				      /*size*/ld->sc_maxxfer,
-				      /*nseg*/sc->sc_seg_max,
+				      /*nseg*/nseg_max,
 				      /*maxsegsz*/sc->sc_size_max,
 				      /*boundary*/0,
 				      BUS_DMA_WAITOK|BUS_DMA_ALLOCNOW,
