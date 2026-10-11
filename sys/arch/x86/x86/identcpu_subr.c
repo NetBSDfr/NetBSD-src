@@ -166,6 +166,7 @@ tsc_freq_cpuid(struct cpu_info *ci)
 #if defined(_KERNEL) &&  NLAPIC > 0
 		if ((khz != 0) && (lapic_per_second == 0)) {
 			lapic_per_second = khz * 1000;
+			lapic_from_cpuid = true;
 			aprint_debug_dev(ci->ci_dev,
 			    "lapic_per_second set to %" PRIu32 "\n",
 			    lapic_per_second);
