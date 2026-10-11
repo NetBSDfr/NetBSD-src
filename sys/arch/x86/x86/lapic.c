@@ -657,50 +657,62 @@ lapic_calibrate_timer(bool secondpass)
 	lapic_writereg(LAPIC_ICR_TIMER, 0x80000000);
 	(void)lapic_gettick();
 
-	if (secondpass && cpu_hascounter()) {
-		/*
-		 * Second pass calibration, using the TSC which has ideally
-		 * been calibrated using the HPET or information gleaned
-		 * from MSRs by this point.
-		 *
-		 * A 10ms window is plenty to derive lapic_per_second
-		 * (the LAPIC counter ticks at least 10^8 times a second);
-		 * 50ms only burns boot time.
-		 */
-		uint64_t l0, l1, t0, t1;
+	if (lapic_per_second == 0 || secondpass) {
+		if (cpu_hascounter() && cpu_frequency(ci) != 0) {
+			/*
+			 * Calibrate using the TSC.  On the second pass the
+			 * TSC has ideally been recalibrated using the HPET
+			 * or information gleaned from MSRs by this point;
+			 * on the first pass cpu_get_tsc_freq() has already
+			 * produced an approximate frequency, which is good
+			 * enough for this inaccurate pass.
+			 *
+			 * A 1ms window is plenty to derive
+			 * lapic_per_second (the LAPIC counter ticks at
+			 * least 10^8 times a second); 10ms only burns
+			 * boot time.
+			 */
+			uint64_t l0, l1, t0, t1;
 
-		(void)cpu_counter();
-		t0 = cpu_counter();
-		l0 = lapic_gettick();
-		t0 += cpu_counter();
-		DELAY(10000);
-		t1 = cpu_counter();
-		l1 = lapic_gettick();
-		t1 += cpu_counter();
+			(void)cpu_counter();
+			t0 = cpu_counter();
+			l0 = lapic_gettick();
+			t0 += cpu_counter();
+			DELAY(1000);
+			t1 = cpu_counter();
+			l1 = lapic_gettick();
+			t1 += cpu_counter();
 
-		tmp = (l0 - l1) * cpu_frequency(ci) / ((t1 - t0 + 1) / 2);
-		lapic_per_second = rounddown(tmp + 500, 1000);
-	} else if (lapic_per_second == 0) {
-		/*
-		 * Inaccurate first pass calibration using the i8254.
-		 */
-		unsigned int seen, delta, initial_i8254, initial_lapic;
-		unsigned int cur_i8254, cur_lapic;
+			tmp = (l0 - l1) * cpu_frequency(ci) /
+			    ((t1 - t0 + 1) / 2);
+			lapic_per_second = rounddown(tmp + 500, 1000);
+		} else if (lapic_per_second == 0) {
+			/*
+			 * Inaccurate first pass calibration using the
+			 * i8254.
+			 */
+			unsigned int seen, delta, initial_i8254,
+			    initial_lapic;
+			unsigned int cur_i8254, cur_lapic;
 
-		(void)gettick();
-		initial_lapic = lapic_gettick();
-		initial_i8254 = gettick();
-		for (seen = 0; seen < TIMER_FREQ / 100; seen += delta) {
-			cur_i8254 = gettick();
-			if (cur_i8254 > initial_i8254)
-				delta = x86_rtclock_tval - (cur_i8254 - initial_i8254);
-			else
-				delta = initial_i8254 - cur_i8254;
-			initial_i8254 = cur_i8254;
+			(void)gettick();
+			initial_lapic = lapic_gettick();
+			initial_i8254 = gettick();
+			for (seen = 0; seen < TIMER_FREQ / 100;
+			    seen += delta) {
+				cur_i8254 = gettick();
+				if (cur_i8254 > initial_i8254)
+					delta = x86_rtclock_tval -
+					    (cur_i8254 - initial_i8254);
+				else
+					delta = initial_i8254 - cur_i8254;
+				initial_i8254 = cur_i8254;
+			}
+			cur_lapic = lapic_gettick();
+			tmp = initial_lapic - cur_lapic;
+			lapic_per_second =
+			    (tmp * TIMER_FREQ + seen / 2) / seen;
 		}
-		cur_lapic = lapic_gettick();
-		tmp = initial_lapic - cur_lapic;
-		lapic_per_second = (tmp * TIMER_FREQ + seen / 2) / seen;
 	}
 	x86_enable_intr();
 
