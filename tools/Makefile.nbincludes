@@ -25,11 +25,35 @@ _ARCH_INCS+=	ews4800mips/include/pdinfo.h ews4800mips/include/vtoc.h
 _ARCH_INCS+=	${sh3mach}/include/endian_machdep.h
 .endfor
 
+# skip headers of architectures not present in the tree (e.g. custom
+# trees that have wiped architectures)
+.for _archinc in ${_ARCH_INCS}
+.if exists(${_ARCHDIR}/${_archinc})
+_ARCH_INCS_PRESENT+=	${_archinc}
+.endif
+.endfor
+_ARCH_INCS=	${_ARCH_INCS_PRESENT}
+
 _INCS=		disktab.h
 _SYSINCS=	bootblock.h \
 		disklabel.h disklabel_acorn.h disklabel_gpt.h disklabel_rdb.h \
 		dkbad.h \
 		exec_elf.h exec_ecoff.h
+
+# ditto for missing sys/ and fs/ headers (disklabel_rdb.h etc. go away
+# when architectures are removed from the tree)
+.for _sysinc in ${_SYSINCS}
+.if exists(${_SYSDIR}/${_sysinc})
+_SYSINCS_PRESENT+=	${_sysinc}
+.endif
+.endfor
+_SYSINCS=	${_SYSINCS_PRESENT}
+.for _fsinc in ${_FS_INCS}
+.if exists(${_FSDIR}/${_fsinc})
+_FS_INCS_PRESENT+=	${_fsinc}
+.endif
+.endfor
+_FS_INCS=	${_FS_INCS_PRESENT}
 
 HOST_CPPFLAGS+=	-I${TOOLDIR}/include -I${TOOLDIR}/include/nbinclude
 

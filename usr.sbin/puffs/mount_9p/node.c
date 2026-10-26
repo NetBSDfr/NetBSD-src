@@ -27,14 +27,17 @@
 
 #include <sys/cdefs.h>
 #ifndef lint
-__RCSID("$NetBSD: node.c,v 1.32 2025/03/10 21:21:20 riastradh Exp $");
+__RCSID("$NetBSD: node.c,v 1.32 2025-03-10 21:21:20 riastradh Exp $");
 #endif /* !lint */
+
+#include <sys/param.h>
 
 #include <assert.h>
 #include <errno.h>
 #include <puffs.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "ninepuffs.h"
 #include "nineproto.h"
@@ -248,6 +251,14 @@ puffs9p_node_setattr(struct puffs_usermount *pu, void *opc,
 
 	if (p9pbuf_get_type(pb) != P9PROTO_R_WSTAT) {
 		rv = proto_handle_rerror(pu, pb);
+	} else {
+		/*
+		 * Refresh the attribute mirror from the server so that
+		 * e.g. a truncate is visible to subsequent reads (which
+		 * use pn_va as the upper bound).  Not exactly cheap, but
+		 * a stale mirror loses file status.
+		 */
+		do_getattr(pu, pn, &pn->pn_va);
 	}
 
  out:
@@ -410,6 +421,12 @@ puffs9p_node_write(struct puffs_usermount *pu, void *opc, uint8_t *buf,
 
 		p9pbuf_recycleout(pb);
 	}
+
+	/* keep the attribute mirror in sync (read bounds on it) */
+	if (nwrite > 0 && (uint64_t)(offset + nwrite) > pn->pn_va.va_size) {
+		pn->pn_va.va_size = offset + nwrite;
+		pn->pn_va.va_bytes = offset + nwrite;
+	}
 			
  out:
 	RETURN(rv);
@@ -500,6 +517,199 @@ puffs9p_node_mkdir(struct puffs_usermount *pu, void *opc, struct puffs_newinfo *
 
 	return nodecreate(pu, opc, pni, pcn->pcn_name,
 	    va, P9PROTO_CPERM_DIR);
+}
+
+/*
+ * readlink: 9P2000 (all flavors) models symlinks as files whose content
+ * is the link target, so just read the link file.  Dup a fid so that a
+ * possible concurrent I/O on the node's other fids is not disturbed.
+ */
+int
+puffs9p_node_readlink(struct puffs_usermount *pu, void *opc,
+	const struct puffs_cred *pcr, char *buf, size_t *sizep)
+{
+	AUTOVAR(pu);
+	struct puffs_node *pn = opc;
+	struct p9pnode *p9n = pn->pn_data;
+	p9pfid_t nfid = NEXTFID(p9p);
+	uint32_t count;
+	size_t len = 0;
+	int orv;
+
+	/*
+	 * 9P2000.L TREADLINK is the primary method: Linux-flavoured
+	 * dotu backends (qemu) store the link target out of band, so
+	 * a plain read yields 0 bytes there; servers without .L
+	 * support answer Rerror and we fall back to reading the link
+	 * as a file.  The fallback must TOPEN first: 9P2000 only
+	 * allows TREAD on opened fids (an unopened TREAD wedges some
+	 * servers).  Dup a fid so concurrent I/O on the node is not
+	 * disturbed.
+	 */
+	/*
+	 * try the 9P2000.L readlink on the node's own fid first: a
+	 * walked-clone fid confuses some servers' readlink (qemu
+	 * answers ENOENT for it), and the node fid needs no dup
+	 * since readlink takes no offset state.
+	 */
+	tag = NEXTTAG(p9p);
+	p9pbuf_put_1(pb, P9PROTO_T_L_READLINK);
+	p9pbuf_put_2(pb, tag);
+	p9pbuf_put_4(pb, p9n->fid_base);
+	GETRESPONSE(pb);
+	if (p9pbuf_get_type(pb) == P9PROTO_R_ERROR)
+		(void) proto_handle_rerror(pu, pb);	/* prints string */
+
+	if (p9pbuf_get_type(pb) == P9PROTO_R_L_READLINK) {
+		char *str = NULL;
+		uint16_t slen = 0;
+
+		rv = p9pbuf_get_str(pb, &str, &slen);
+		if (rv == 0) {
+			len = MIN((size_t)slen, *sizep - 1);
+			memcpy(buf, str, len);
+			buf[len] = '\0';
+			*sizep = len;
+		}
+		free(str);
+		goto out;
+	}
+	rv = 0;
+
+	/*
+	 * legacy fallback: T_OPEN + T_READ on a fresh fid.  Some
+	 * servers (e.g. qemu in 9P2000.u mode) refuse to open() a
+	 * symlink fid but happily serve TREAD on the walked fid, so
+	 * tolerate an open failure and try the read anyway.
+	 */
+	nfid = NEXTFID(p9p);
+	orv = proto_cc_open(pu, p9n->fid_base, nfid, P9PROTO_OMODE_READ);
+
+	p9pbuf_recycleout(pb);
+	tag = NEXTTAG(p9p);
+	p9pbuf_put_1(pb, P9PROTO_T_READ);
+	p9pbuf_put_2(pb, tag);
+	p9pbuf_put_4(pb, nfid);
+	p9pbuf_put_8(pb, 0);
+	p9pbuf_put_4(pb, MAXPATHLEN);
+	GETRESPONSE(pb);
+
+	if (p9pbuf_get_type(pb) != P9PROTO_R_READ) {
+		rv = proto_handle_rerror(pu, pb);
+		if (orv != 0)
+			rv = orv;	/* more descriptive than read error */
+	} else {
+		p9pbuf_get_4(pb, &count);
+		len = MIN((size_t)count, *sizep - 1);
+		rv = p9pbuf_read_data(pb, (uint8_t *)buf, len);
+		if (rv == 0) {
+			buf[len] = '\0';
+			*sizep = len;
+		}
+	}
+	proto_cc_clunkfid(pu, nfid, 1);
+
+	/*
+	 * last resort: 9P2000.u carries the link target in the
+	 * stat extension field
+	 */
+	if (rv != 0 && p9p->protover == P9PROTO_VERSION_U) {
+		char *ext = NULL;
+		int erv;
+
+		erv = proto_cc_symlink_target(pu, p9n->fid_base, &ext);
+		if (erv == 0) {
+			len = MIN(strlen(ext), *sizep - 1);
+			memcpy(buf, ext, len);
+			buf[len] = '\0';
+			*sizep = len;
+			rv = 0;
+		}
+		free(ext);
+	}
+
+ out:
+	RETURN(rv);
+}
+
+/*
+ * symlink creation in 9P2000.u: Tcreate with the symlink mode bit and
+ * the link target in the extension field, exactly as done by the
+ * Linux 9p client's dotu flavor.
+ */
+int
+puffs9p_node_symlink(struct puffs_usermount *pu, void *opc,
+	struct puffs_newinfo *pni, const struct puffs_cn *pcn,
+	const struct vattr *vap, const char *target)
+{
+	AUTOVAR(pu);
+	struct puffs_node *pn = opc;
+	struct p9pnode *p9n = pn->pn_data;
+	struct puffs_node *pn_new;
+	p9pfid_t nfid = NEXTFID(p9p);
+	struct qid9p nqid;
+	uint32_t tlen;
+
+	if (p9p->protover != P9PROTO_VERSION_U)
+		return EOPNOTSUPP;
+
+	tlen = strlen(target);
+
+	rv = proto_cc_dupfid(pu, p9n->fid_base, nfid);
+	if (rv)
+		goto out;
+
+	tag = NEXTTAG(p9p);
+	p9pbuf_put_1(pb, P9PROTO_T_CREATE);
+	p9pbuf_put_2(pb, tag);
+	p9pbuf_put_4(pb, nfid);
+	p9pbuf_put_str(pb, pcn->pcn_name);
+	p9pbuf_put_4(pb, 0777 | P9PROTO_CPERM_SYMLINK);
+	p9pbuf_put_1(pb, 0);
+	/* 9P2000.u carries the link target in the extension field */
+	p9pbuf_put_str(pb, target);
+	GETRESPONSE(pb);
+
+	rv = proto_expect_qid(pu, pb, P9PROTO_R_CREATE, &nqid);
+	if (rv)
+		goto out;
+
+	/* create returned an open fid we do not need: clunk it */
+	rv = proto_cc_clunkfid(pu, nfid, 0);
+	if (rv)
+		goto out;
+
+	/* walk ourselves a clean fid for the new node */
+	nfid = NEXTFID(p9p);
+	p9pbuf_recycleout(pb);
+	tag = NEXTTAG(p9p);
+	p9pbuf_put_1(pb, P9PROTO_T_WALK);
+	p9pbuf_put_2(pb, tag);
+	p9pbuf_put_4(pb, p9n->fid_base);
+	p9pbuf_put_4(pb, nfid);
+	p9pbuf_put_2(pb, 1);
+	p9pbuf_put_str(pb, pcn->pcn_name);
+	GETRESPONSE(pb);
+
+	if (p9pbuf_get_type(pb) != P9PROTO_R_WALK) {
+		rv = EIO;
+		goto out;
+	}
+
+	pn_new = newp9pnode_qid(pu, &nqid, nfid);
+	pn_new->pn_va.va_mode = 0777;
+	pn_new->pn_va.va_size = pn_new->pn_va.va_bytes = tlen;
+	/*
+	 * NOTE: puffs_newinfo_setvtype()/setsize() must NOT be called
+	 * here: the dispatcher only wires pni_vtype/pni_size for the
+	 * lookup op, so for symlink they would be NULL dereferences
+	 * (segfault, killing the daemon).  The kernel hardcodes VLNK
+	 * and size 0 when creating the vnode anyway (puffs_vnop_symlink).
+	 */
+	puffs_newinfo_setcookie(pni, pn_new);
+
+ out:
+	RETURN(rv);
 }
 
 /*
@@ -649,7 +859,7 @@ puffs9p_node_reclaim(struct puffs_usermount *pu, void *opc)
 
 int
 puffs9p_node_pathconf(struct puffs_usermount *pu, void *opc, int name,
-    register_t *retval)
+    __register_t *retval)
 {
 
 	/*

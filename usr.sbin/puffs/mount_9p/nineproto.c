@@ -32,12 +32,16 @@ __RCSID("$NetBSD: nineproto.c,v 1.14 2021/09/03 21:55:01 andvar Exp $");
 
 #include <sys/types.h>
 
+#include <ctype.h>
 #include <errno.h>
 #include <grp.h>
 #include <pwd.h>
 #include <puffs.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
+#include <strings.h>
 
 #include "ninepuffs.h"
 #include "nineproto.h"
@@ -56,38 +60,73 @@ proto_getqid(struct puffs_framebuf *pb, struct qid9p *qid)
 	return 0;
 }
 
+/*
+ * Map a stat owner/group string to a numeric id.  Servers send either a
+ * login name or (for ids unknown on the server) the numeric value as a
+ * decimal string, so fall back to numeric parsing before giving up.
+ */
 static uid_t
-ustr2uid(char *uid)
+ustr2uid(const char *uid)
 {
 	struct passwd *pw;
+	char *endp;
+	unsigned long n;
+
+	if (*uid == '\0')
+		return 0;
 
 	pw = getpwnam(uid);
-	if (pw == NULL)
-		return 0; /* XXXXX */
+	if (pw != NULL)
+		return pw->pw_uid;
 
-	return pw->pw_uid;
+	if (isdigit((unsigned char)uid[0])) {
+		n = strtoul(uid, &endp, 10);
+		if (*endp == '\0' && n < (unsigned long)INT32_MAX)
+			return (uid_t)n;
+	}
+
+	return 0;
 }
 
 static gid_t
-gstr2gid(char *gid)
+gstr2gid(const char *gid)
 {
 	struct group *grr;
+	char *endp;
+	unsigned long n;
+
+	if (*gid == '\0')
+		return 0;
 
 	grr = getgrnam(gid);
-	if (grr == NULL)
-		return 0; /* more XXXX */
+	if (grr != NULL)
+		return grr->gr_gid;
 
-	return grr->gr_gid;
+	if (isdigit((unsigned char)gid[0])) {
+		n = strtoul(gid, &endp, 10);
+		if (*endp == '\0' && n < (unsigned long)INT32_MAX)
+			return (gid_t)n;
+	}
+
+	return 0;
 }
 
+/*
+ * Map a numeric id to the string representation used in stat.  Send the
+ * numeric value back for ids unknown on the client (mapping them to a
+ * name valid only on the client would be wrong on the server).
+ */
 static const char *
 uid2ustr(uid_t uid)
 {
+	static char buf[16];
 	struct passwd *pw;
 
 	pw = getpwuid(uid);
-	if (pw == NULL)
-		return "root"; /* XXXXX */
+	if (pw == NULL) {
+		snprintf(buf, sizeof(buf), "%lu", (unsigned long)uid);
+		return buf;
+	}
 
 	return pw->pw_name;
 }
@@ -95,11 +134,14 @@ uid2ustr(uid_t uid)
 static const char *
 gid2gstr(gid_t gid)
 {
+	static char buf[16];
 	struct group *grr;
 
 	grr = getgrgid(gid);
-	if (grr == NULL)
-		return "wheel"; /* XXXXXX */
+	if (grr == NULL) {
+		snprintf(buf, sizeof(buf), "%lu", (unsigned long)gid);
+		return buf;
+	}
 
 	return grr->gr_name;
 }
@@ -174,14 +216,82 @@ proto_getstat(struct puffs_usermount *pu, struct puffs_framebuf *pb, struct vatt
 	/* muid, not used */
 	GETSTR(NULL, &v16);
 	if (p9p->protover == P9PROTO_VERSION_U) {
-		uint32_t dummy;
+		uint32_t dummy, n_uid, n_gid;
+
 		GETSTR(NULL, &v16); /* extension[s], not used */
-		GETFIELD(p9pbuf_get_4, &dummy, 4); /* n_uid[4], not used */
-		GETFIELD(p9pbuf_get_4, &dummy, 4); /* n_gid[4], not used */
+		GETFIELD(p9pbuf_get_4, &n_uid, 4);
+		GETFIELD(p9pbuf_get_4, &n_gid, 4);
 		GETFIELD(p9pbuf_get_4, &dummy, 4); /* n_muid[4], not used */
+
+		/* numeric ids take precedence over the name mapping */
+		if (n_uid != P9PROTO_NUNAME_UNSPECIFIED)
+			vap->va_uid = n_uid;
+		if (n_gid != P9PROTO_NUNAME_UNSPECIFIED)
+			vap->va_gid = n_gid;
 	}
 
 	return 0;
+}
+
+/*
+ * Convert a legacy 9P2000 Rerror string (the server's strerror(3) output,
+ * i.e. either NetBSD- or Linux-flavored) to an errno value.
+ */
+static int
+errstr2errno(const char *str)
+{
+	static const struct {
+		int err;
+		const char *str;
+	} errs[] = {
+		{ EPERM,	"operation not permitted" },
+		{ ENOENT,	"no such file or directory" },
+		{ ESRCH,	"no such process" },
+		{ EINTR,	"interrupted system call" },
+		{ EIO,		"input/output error" },
+		{ ENXIO,	"no such device or address" },
+		{ EBADF,	"bad file descriptor" },
+		{ EAGAIN,	"resource temporarily unavailable" },
+		{ ENOMEM,	"cannot allocate memory" },
+		{ EACCES,	"permission denied" },
+		{ EFAULT,	"bad address" },
+		{ EBUSY,	"resource busy" },
+		{ EBUSY,	"device or resource busy" },
+		{ EEXIST,	"file exists" },
+		{ EXDEV,	"cross-device link" },
+		{ EXDEV,	"invalid cross-device link" },
+		{ ENODEV,	"no such device" },
+		{ ENODEV,	"operation not supported by device" },
+		{ ENOTDIR,	"not a directory" },
+		{ EISDIR,	"is a directory" },
+		{ EINVAL,	"invalid argument" },
+		{ ENFILE,	"too many open files in system" },
+		{ EMFILE,	"too many open files" },
+		{ EFBIG,	"file too large" },
+		{ ENOSPC,	"no space left on device" },
+		{ ESPIPE,	"illegal seek" },
+		{ EROFS,	"read-only file system" },
+		{ EMLINK,	"too many links" },
+		{ EPIPE,	"broken pipe" },
+		{ ENAMETOOLONG,	"file name too long" },
+		{ ENOSYS,	"function not implemented" },
+		{ ENOTEMPTY,	"directory not empty" },
+		{ ELOOP,	"too many levels of symbolic links" },
+		{ EMSGSIZE,	"message too long" },
+		{ EPROTO,	"protocol error" },
+		{ EREMOTE,	"remote error" },
+		{ ETIMEDOUT,	"connection timed out" },
+		{ EDQUOT,	"disk quota exceeded" },
+		{ EDQUOT,	"disc quota exceeded" },
+		{ ENOTSUP,	"operation not supported" },
+	};
+	size_t i;
+
+	for (i = 0; i < __arraycount(errs); i++)
+		if (strcasecmp(str, errs[i].str) == 0)
+			return errs[i].err;
+
+	return EIO;		/* unrecognized server error */
 }
 
 static int
@@ -199,17 +309,32 @@ proto_rerror(struct puffs_usermount *pu, struct puffs_framebuf *pb,
 	if (rv == -1)
 		return EPROTO;
 
+	/* rfc9p2000.u: size[4] Rerror tag[2] ename[s] errno[4] */
 	rv = p9pbuf_get_str(pb, &name, &size);
 	if (rv != 0)
 		return rv;
-	if (p9p->protover == P9PROTO_VERSION_U) {
-		rv = p9pbuf_get_4(pb, _errno);
-	} else {
-		/* TODO Convert error string to errno */
-		rv = EPROTO;
-	}
 
-	return rv;
+	if (p9p->protover == P9PROTO_VERSION_U) {
+		uint32_t errn = 0;
+
+		(void) p9pbuf_get_4(pb, &errn);
+
+		/*
+		 * The spec mandates preferring the error string over
+		 * the numeric errno: error numbers are not portable
+		 * between unix flavors, e.g. Linux ELOOP (40) would
+		 * otherwise surface as NetBSD EMSGSIZE (40).
+		 */
+		rv = errstr2errno(name);
+		if (rv == EIO && errn != 0 && errn != 0xffffffff)
+			rv = (int) errn;
+	} else {
+		rv = errstr2errno(name);
+	}
+	*_errno = rv;
+	free(name);
+
+	return 0;
 }
 
 int
@@ -223,7 +348,7 @@ proto_handle_rerror(struct puffs_usermount *pu, struct puffs_framebuf *pb)
 
 	rv = proto_rerror(pu, pb, &_errno);
 	if (rv == 0)
-		rv = _errno;
+		rv = _errno != 0 ? _errno : EIO;
 	return rv;
 }
 
@@ -318,6 +443,82 @@ proto_cc_open(struct puffs_usermount *pu, p9pfid_t fid,
 	return rv;
 }
 
+/*
+ * 9P2000.u: for a symlink, the extension field of its stat entry
+ * holds the link target (rfc9p2000.u).  Use as readlink fallback on
+ * servers that reject T_L_READLINK and refuse to open() or TREAD a
+ * symlink fid (qemu in 9P2000.u mode does both).
+ */
+int
+proto_cc_symlink_target(struct puffs_usermount *pu, p9pfid_t fid,
+    char **targetp)
+{
+	struct puffs_cc *pcc = puffs_cc_getcc(pu);
+	struct puffs9p *p9p = puffs_getspecific(pu);
+	struct puffs_framebuf *pb;
+	p9ptag_t tag;
+	uint16_t v16;
+	char *str;
+	int rv;
+
+	*targetp = NULL;
+
+	pb = p9pbuf_makeout();
+	tag = NEXTTAG(p9p);
+	p9pbuf_put_1(pb, P9PROTO_T_STAT);
+	p9pbuf_put_2(pb, tag);
+	p9pbuf_put_4(pb, fid);
+	GETRESPONSE(pb);
+
+	if (p9pbuf_get_type(pb) != P9PROTO_R_STAT) {
+		rv = proto_handle_rerror(pu, pb);
+		goto out;
+	}
+	rv = 0;
+
+	/*
+	 * stat[n] = count[2] followed by the stat entry itself (size[2]
+	 * type[2] dev[4] qid[13] mode[4] atime[4] mtime[4] length[8]
+	 * name[s] uid[s] gid[s] muid[s] extension[s] ...), mirroring
+	 * the two 16-bit reads of proto_expect_stat plus proto_getstat.
+	 */
+	if ((rv = p9pbuf_get_2(pb, &v16)))	/* count */
+		goto out;
+	if ((rv = p9pbuf_get_2(pb, &v16)))	/* stat size */
+		goto out;
+	if (puffs_framebuf_telloff(pb) + 2+4+13+4+4+4+8
+	    > puffs_framebuf_tellsize(pb)) {
+		rv = EPROTO;
+		goto out;
+	}
+	puffs_framebuf_seekset(pb, puffs_framebuf_telloff(pb) + 2+4+13+4+4+4+8);
+
+	/* name[s] uid[s] gid[s] muid[s] */
+	for (unsigned i = 0; i < 4; i++) {
+		rv = p9pbuf_get_str(pb, &str, &v16);
+		if (rv != 0)
+			goto out;
+		if (i == 0)
+			*targetp = str;
+		else
+			free(str);
+	}
+	/* NB: targetp now holds name, restore below */
+	str = *targetp;
+
+	rv = p9pbuf_get_str(pb, targetp, &v16);	/* extension[s] */
+	free(str);
+	if (rv == 0 && **targetp == '\0') {
+		free(*targetp);
+		*targetp = NULL;
+		rv = ENOENT;	/* not a symlink or no target info */
+	}
+
+ out:
+	puffs_framebuf_destroy(pb);
+	return rv;
+}
+
 void
 proto_make_stat(struct puffs_usermount *pu, struct puffs_framebuf *pb,
     const struct vattr *vap, const char *filename, enum vtype vt)
@@ -325,6 +526,7 @@ proto_make_stat(struct puffs_usermount *pu, struct puffs_framebuf *pb,
 	struct puffs9p *p9p = puffs_getspecific(pu);
 	struct vattr fakeva;
 	uint32_t mode, atime, mtime;
+	uint32_t n_uid, n_gid;
 	uint64_t flen;
 	const char *owner, *group;
 	int startoff, curoff;
@@ -353,14 +555,20 @@ proto_make_stat(struct puffs_usermount *pu, struct puffs_framebuf *pb,
 		flen = vap->va_size;
 	else
 		flen = P9PROTO_STAT_NOVAL8;
-	if (vap->va_uid != (uid_t)PUFFS_VNOVAL)
+	if (vap->va_uid != (uid_t)PUFFS_VNOVAL) {
 		owner = uid2ustr(vap->va_uid);
-	else
+		n_uid = vap->va_uid;
+	} else {
 		owner = "";
-	if (vap->va_gid != (gid_t)PUFFS_VNOVAL)
+		n_uid = P9PROTO_NUNAME_UNSPECIFIED;
+	}
+	if (vap->va_gid != (gid_t)PUFFS_VNOVAL) {
 		group = gid2gstr(vap->va_gid);
-	else
+		n_gid = vap->va_gid;
+	} else {
 		group = "";
+		n_gid = P9PROTO_NUNAME_UNSPECIFIED;
+	}
 
 	p9pbuf_put_2(pb, P9PROTO_STAT_NOVAL2);	/* kernel type	*/
 	p9pbuf_put_4(pb, P9PROTO_STAT_NOVAL4);	/* dev		*/
@@ -377,8 +585,8 @@ proto_make_stat(struct puffs_usermount *pu, struct puffs_framebuf *pb,
 	p9pbuf_put_str(pb, "");			/* muid		*/
 	if (p9p->protover == P9PROTO_VERSION_U) {
 		p9pbuf_put_str(pb, P9PROTO_STAT_NOSTR);	/* extensions[s] */
-		p9pbuf_put_4(pb, P9PROTO_STAT_NOVAL4);	/* n_uid[4] */
-		p9pbuf_put_4(pb, P9PROTO_STAT_NOVAL4);	/* n_gid[4] */
+		p9pbuf_put_4(pb, n_uid);			/* n_uid[4] */
+		p9pbuf_put_4(pb, n_gid);			/* n_gid[4] */
 		p9pbuf_put_4(pb, P9PROTO_STAT_NOVAL4);	/* n_muid[4] */
 	}
 
