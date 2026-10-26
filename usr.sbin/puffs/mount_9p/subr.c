@@ -33,6 +33,7 @@ __RCSID("$NetBSD: subr.c,v 1.8 2020/05/26 19:38:14 uwe Exp $");
 #include <sys/types.h>
 
 #include <errno.h>
+#include <err.h>
 #include <puffs.h>
 #include <stdlib.h>
 #include <util.h>
@@ -48,6 +49,8 @@ qid2vattr(struct vattr *vap, const struct qid9p *qid)
 	vap->va_gen = qid->qidvers;
 	if (qid->qidtype & P9PROTO_QID_TYPE_DIR)
 		vap->va_type = VDIR;
+	else if (qid->qidtype & P9PROTO_QID_TYPE_LINK)
+		vap->va_type = VLNK;
 	else
 		vap->va_type = VREG;
 }
@@ -65,7 +68,7 @@ makep9pnode(struct puffs_usermount *pu, p9pfid_t fid)
 
 	pn = puffs_pn_new(pu, p9n);
 	if (pn == NULL)
-		abort();
+		err(1, "puffs_pn_new fid %u", fid);
 
 	return pn;
 }

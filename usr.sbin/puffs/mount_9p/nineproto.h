@@ -65,13 +65,20 @@
 #define P9PROTO_R_STAT		125
 #define P9PROTO_T_WSTAT		126
 #define P9PROTO_R_WSTAT		127
+/*
+ * 9P2000.L readlink: served by many modern servers (e.g. qemu) even
+ * when the negotiated version is 9P2000.u
+ */
+#define P9PROTO_T_L_READLINK	72
+#define P9PROTO_R_L_READLINK	73
 #define P9PROTO_MIN		9PROTO_T_VERSION
 #define P9PROTO_MAX		9PROTO_R_MAX
 
 #define P9PROTO_NOFID		(uint32_t)~0
 #define P9PROTO_NOTAG		(uint16_t)~0
 
-#define P9PROTO_NUNAME_UNSPECIFIED	(uint16_t)~0
+/* 9P2000.u n_uname[4] is a uint32; ~0 means "unspecified" */
+#define P9PROTO_NUNAME_UNSPECIFIED	(uint32_t)~0
 
 /* type field in a qid */
 #define P9PROTO_QID_TYPE_DIR	0x80

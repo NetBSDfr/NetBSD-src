@@ -233,6 +233,8 @@ main(int argc, char *argv[])
 	PUFFSOP_SET(pops, puffs9p, node, create);
 	PUFFSOP_SET(pops, puffs9p, node, open);
 	PUFFSOP_SET(pops, puffs9p, node, mkdir);
+	PUFFSOP_SET(pops, puffs9p, node, readlink);
+	PUFFSOP_SET(pops, puffs9p, node, symlink);
 	PUFFSOP_SET(pops, puffs9p, node, remove);
 	PUFFSOP_SET(pops, puffs9p, node, rmdir);
 	PUFFSOP_SET(pops, puffs9p, node, read);

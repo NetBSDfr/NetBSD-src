@@ -165,6 +165,7 @@ int	proto_handle_rerror(struct puffs_usermount *, struct puffs_framebuf *);
 int	proto_cc_dupfid(struct puffs_usermount *, p9pfid_t, p9pfid_t);
 int	proto_cc_clunkfid(struct puffs_usermount *, p9pfid_t, int);
 int	proto_cc_open(struct puffs_usermount *, p9pfid_t, p9pfid_t, int);
+int	proto_cc_symlink_target(struct puffs_usermount *, p9pfid_t, char **);
 
 void	proto_make_stat(struct puffs_usermount *, struct puffs_framebuf *,
 	                const struct vattr *, const char *, enum vtype);

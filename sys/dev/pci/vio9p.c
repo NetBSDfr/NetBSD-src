@@ -98,35 +98,59 @@ struct vio9p_softc {
 	int			sc_flags;
 #define VIO9P_INUSE		__BIT(0)
 
-	int			sc_state;
-#define VIO9P_S_INIT		0
-#define VIO9P_S_REQUESTING	1
-#define VIO9P_S_REPLIED		2
-#define VIO9P_S_CONSUMING	3
+	/*
+	 * The transport supports a few concurrent requests.  Each
+	 * virtqueue cookie gets its own tx/rx buffer pair (a pipelined
+	 * client, e.g. puffs framev, keeps requests outstanding while
+	 * earlier replies are still unread; qemu may also complete
+	 * requests out of order).  Completions are pumped out of the
+	 * used ring into the REPLIED state so virtqueue slots are
+	 * recycled even when the client reads replies late or not at
+	 * all (fire-and-forget clunks); write(2) returns EAGAIN when
+	 * the pool is exhausted instead of blocking, because the
+	 * single-threaded file server is also the only thread that
+	 * drains it -- blocking there would self-deadlock.  Replies
+	 * are delivered in completion order; puffs routes them by the
+	 * 9p tag embedded in each message.  A completion whose tag is
+	 * not one we have outstanding (previous session's teardown,
+	 * stale clunk) is discarded.
+	 */
+#define VIO9P_NREQ		8
+#define VIO9P_P_FREE		0
+#define VIO9P_P_INFLIGHT	1
+#define VIO9P_P_REPLIED		2
+	bus_dmamap_t		sc_map_tx[VIO9P_NREQ];
+	bus_dmamap_t		sc_map_rx[VIO9P_NREQ];
+	char			*sc_buf_tx[VIO9P_NREQ];
+	char			*sc_buf_rx[VIO9P_NREQ];
+	int			sc_pstate[VIO9P_NREQ];
+	size_t			sc_replen[VIO9P_NREQ];
+	int			sc_ninflight;
+	int			sc_nreplied;
+	int8_t			*sc_slot2pool;	/* cookie slot -> pool idx */
+	unsigned int		sc_vqnum;
+
 	kcondvar_t		sc_wait;
 	struct selinfo		sc_sel;
 	kmutex_t		sc_lock;
 
-	bus_dmamap_t		sc_dmamap_tx;
-	bus_dmamap_t		sc_dmamap_rx;
-	char			*sc_buf_tx;
-	char			*sc_buf_rx;
+	/* staging for the reply being copied out to the client */
+	char			*sc_stage;
 	size_t			sc_buf_rx_len;
 	off_t			sc_buf_rx_offset;
+	uint16_t		sc_itag[VIO9P_NREQ];
+	uint32_t		sc_gen;
 };
 
 /*
  * Locking notes:
- * - sc_state, sc_wait and sc_sel are protected by sc_lock
+ * - all sc_* fields below sc_lock are protected by sc_lock
  *
- * The state machine (sc_state):
- * - INIT       =(write from client)=> REQUESTING
- * - REQUESTING =(reply from host)=>   REPLIED
- * - REPLIED    =(read from client)=>  CONSUMING
- * - CONSUMING  =(read completed(*))=> INIT
- *
- * (*) read may not finish by one read(2) request, then
- *     the state remains CONSUMING.
+ * Per-pool-slot state machine:
+ *   FREE =(write/pick slot)=> INFLIGHT =(completion pumped from used
+ *   ring)=> REPLIED =(copied to stage for readout)=> FREE.
+ * A reply may be copied out to the client by several read(2)s; the
+ * remainder lives in sc_stage while sc_buf_rx_len > 0.
  */
 
 static int	vio9p_match(device_t, cfdata_t, void *);
@@ -192,6 +216,7 @@ vio9p_dev_open(dev_t dev, int flag, int mode, struct lwp *l)
 		return error;
 
 	sc->sc_flags |= VIO9P_INUSE;
+	sc->sc_gen++;  /* invalidates any in-flight drain of a prior close */
 
 	return fd_clone(fp, fd, flag, &vio9p_fileops, sc);
 }
@@ -212,85 +237,137 @@ vio9p_ioctl(struct file *fp, u_long cmd, void *addr)
 	return error;
 }
 
+/*
+ * Move completions out of the used ring into REPLIED pool slots.
+ * This recycles virtqueue cookies and pool slots independently of
+ * when (or whether) the client reads the replies: a reply sitting
+ * in the used ring must not keep its virtqueue descriptor claimed,
+ * nor keep its pool slot INFLIGHT (which would block new writes and
+ * self-deadlock the single-threaded server that is the only reader).
+ * Unknown tags (previous session leftovers, stale clunks) are
+ * discarded here.  Caller holds sc_lock.
+ */
+static void
+vio9p_pump(struct vio9p_softc *sc)
+{
+	struct virtio_softc *vsc = sc->sc_virtio;
+	struct virtqueue *vq = &sc->sc_vq[0];
+	int slot, len, pool;
+	uint16_t rtag;
+
+	while (virtio_dequeue(vsc, vq, &slot, &len) == 0) {
+		pool = (slot >= 0 && (unsigned)slot < sc->sc_vqnum) ?
+		    sc->sc_slot2pool[slot] : -1;
+		if (pool < 0 || pool >= VIO9P_NREQ ||
+		    sc->sc_pstate[pool] != VIO9P_P_INFLIGHT) {
+			DLOG("bogus slot %d len %d", slot, len);
+			virtio_dequeue_commit(vsc, vq, slot);
+			continue;
+		}
+		rtag = 0;
+		if (len >= 7) {
+			rtag = (uint8_t)sc->sc_buf_rx[pool][5] |
+			    (uint16_t)(uint8_t)sc->sc_buf_rx[pool][6] << 8;
+		}
+		bus_dmamap_sync(virtio_dmat(vsc), sc->sc_map_rx[pool], 0,
+		    VIO9P_MAX_REQLEN, BUS_DMASYNC_POSTREAD);
+		virtio_dequeue_commit(vsc, vq, slot);
+		sc->sc_slot2pool[slot] = -1;
+		KASSERT(sc->sc_ninflight > 0);
+		sc->sc_ninflight--;
+		if (len < 7 || sc->sc_itag[pool] != rtag) {
+			sc->sc_pstate[pool] = VIO9P_P_FREE;
+			DLOG("discard rtag %d len %d pool %d", (int)rtag,
+			    len, pool);
+			continue;
+		}
+		sc->sc_replen[pool] = MIN((size_t)len,
+		    (size_t)VIO9P_MAX_REQLEN);
+		sc->sc_pstate[pool] = VIO9P_P_REPLIED;
+		sc->sc_nreplied++;
+	}
+}
+
 static int
 vio9p_read(struct file *fp, off_t *offp, struct uio *uio,
     kauth_cred_t cred, int flags)
 {
 	struct vio9p_softc *sc = fp->f_data;
-	struct virtio_softc *vsc = sc->sc_virtio;
-	struct virtqueue *vq = &sc->sc_vq[0];
-	int error, slot, len;
+	int error, len, i;
 
 	DLOG("enter");
 
 	mutex_enter(&sc->sc_lock);
 
-	if (sc->sc_state == VIO9P_S_INIT) {
-		DLOG("%s: not requested", device_xname(sc->sc_dev));
-		error = EAGAIN;
-		goto out;
-	}
-
-	if (sc->sc_state == VIO9P_S_CONSUMING) {
-		KASSERT(sc->sc_buf_rx_len > 0);
+	if (sc->sc_buf_rx_len > 0) {
 		/* We already have some remaining, consume it. */
 		len = sc->sc_buf_rx_len - sc->sc_buf_rx_offset;
 		goto consume;
 	}
 
-#if 0
-	if (uio->uio_resid != VIO9P_MAX_REQLEN)
-		return EINVAL;
-#else
 	if (uio->uio_resid > VIO9P_MAX_REQLEN) {
 		error = EINVAL;
 		goto out;
 	}
-#endif
 
-	error = 0;
-	while (sc->sc_state == VIO9P_S_REQUESTING) {
-		error = cv_timedwait_sig(&sc->sc_wait, &sc->sc_lock, hz);
-		if (error != 0)
-			break;
-	}
-	if (sc->sc_state == VIO9P_S_REPLIED)
-		sc->sc_state = VIO9P_S_CONSUMING;
+	/*
+	 * Wait for a reply.
+	 *
+	 * Poll the completion ring in addition to the interrupt-driven
+	 * wakeup (completions can be coalesced such that an interrupt
+	 * gets spent waking some other state transition and sleeping
+	 * for the "next edge" would miss a completion already sitting
+	 * in the used ring forever): the interrupt is a wakeup hint
+	 * only, the ring is the source of truth.
+	 *
+	 * A timeout merely re-polls: the host may legitimately take a
+	 * long time and returning early stalls the edge-triggered
+	 * puffs kqueue.  A real signal (e.g. the SIGTERM puffs sends
+	 * to the file server at unmount) aborts the read, otherwise
+	 * the dying server cannot exit, close() never runs, and the
+	 * next mount inherits a wedged session.  vio9p_close()
+	 * broadcasts to break this loop when the session goes away.
+	 */
+	for (;;) {
+		int w;
 
-	if (error != 0)
-		goto out;
+		vio9p_pump(sc);
 
-	error = virtio_dequeue(vsc, vq, &slot, &len);
-	if (error != 0) {
-		log(LOG_ERR, "%s: virtio_dequeue failed: %d\n",
-		       device_xname(sc->sc_dev), error);
-		goto out;
+		for (i = 0; i < VIO9P_NREQ; i++)
+			if (sc->sc_pstate[i] == VIO9P_P_REPLIED)
+				break;
+		if (i < VIO9P_NREQ) {
+			len = sc->sc_replen[i];
+			memcpy(sc->sc_stage, sc->sc_buf_rx[i], len);
+			sc->sc_pstate[i] = VIO9P_P_FREE;
+			sc->sc_nreplied--;
+			sc->sc_buf_rx_len = len;
+			sc->sc_buf_rx_offset = 0;
+			cv_broadcast(&sc->sc_wait);
+			selnotify(&sc->sc_sel, 0, 1);
+			DLOG("reply len %d pool %d", len, i);
+			goto consume;
+		}
+
+		if (sc->sc_ninflight == 0) {
+			/* nothing requested (or session torn down) */
+			error = EAGAIN;
+			goto out;
+		}
+
+		w = cv_timedwait_sig(&sc->sc_wait, &sc->sc_lock, hz);
+		if (w != 0 && w != EWOULDBLOCK) {
+			DLOG("interrupted %d", w);
+			error = EAGAIN;
+			goto out;
+		}
+		DLOG("repoll: no reply yet, inflight %d", sc->sc_ninflight);
 	}
-	DLOG("len=%d", len);
-	sc->sc_buf_rx_len = len;
-	sc->sc_buf_rx_offset = 0;
-	bus_dmamap_sync(virtio_dmat(vsc), sc->sc_dmamap_tx, 0, VIO9P_MAX_REQLEN,
-	    BUS_DMASYNC_POSTWRITE);
-	bus_dmamap_sync(virtio_dmat(vsc), sc->sc_dmamap_rx, 0, VIO9P_MAX_REQLEN,
-	    BUS_DMASYNC_POSTREAD);
-	virtio_dequeue_commit(vsc, vq, slot);
-#ifdef VIO9P_DUMP
-	int i;
-	log(LOG_DEBUG, "%s: buf: ", __func__);
-	for (i = 0; i < len; i++) {
-		log(LOG_DEBUG, "%c", (char)sc->sc_buf_rx[i]);
-	}
-	log(LOG_DEBUG, "\n");
-#endif
 
 consume:
 	DLOG("uio_resid=%lu", uio->uio_resid);
-	if (len < uio->uio_resid) {
-		error = EINVAL;
-		goto out;
-	}
-	len = uio->uio_resid;
-	error = uiomove(sc->sc_buf_rx + sc->sc_buf_rx_offset, len, uio);
+	len = MIN(len, uio->uio_resid);
+	error = uiomove(sc->sc_stage + sc->sc_buf_rx_offset, len, uio);
 	if (error != 0)
 		goto out;
 
@@ -298,8 +375,6 @@ consume:
 	if (sc->sc_buf_rx_offset == sc->sc_buf_rx_len) {
 		sc->sc_buf_rx_len = 0;
 		sc->sc_buf_rx_offset = 0;
-
-		sc->sc_state = VIO9P_S_INIT;
 		selnotify(&sc->sc_sel, 0, 1);
 	}
 
@@ -315,70 +390,90 @@ vio9p_write(struct file *fp, off_t *offp, struct uio *uio,
 	struct vio9p_softc *sc = fp->f_data;
 	struct virtio_softc *vsc = sc->sc_virtio;
 	struct virtqueue *vq = &sc->sc_vq[0];
-	int error, slot;
+	int error, i, slot, pool = -1;
 	size_t len;
+	uint16_t tag = 0;
 
 	DLOG("enter");
 
+	if (uio->uio_resid == 0)
+		return 0;
+
+	if (uio->uio_resid > VIO9P_MAX_REQLEN)
+		return EINVAL;
+
 	mutex_enter(&sc->sc_lock);
 
-	if (sc->sc_state != VIO9P_S_INIT) {
-		DLOG("already requesting");
+	/*
+	 * Recycle completed replies first, then take a free pool slot.
+	 * If the pool is exhausted return EAGAIN rather than blocking:
+	 * the single-threaded file server is also the only thread that
+	 * drains the ring, so blocking here against its own unread
+	 * replies would self-deadlock.  puffs framev retries on the
+	 * EVFILT_WRITE edge, which selnotify() from completion/delivery
+	 * generates.
+	 */
+	vio9p_pump(sc);
+	for (i = 0; i < VIO9P_NREQ; i++)
+		if (sc->sc_pstate[i] == VIO9P_P_FREE) {
+			pool = i;
+			break;
+		}
+	if (pool == -1) {
+		DLOG("pool full, inflight %d replied %d",
+		    sc->sc_ninflight, sc->sc_nreplied);
 		error = EAGAIN;
 		goto out;
 	}
 
-	if (uio->uio_resid == 0) {
-		error = 0;
-		goto out;
-	}
-
-	if (uio->uio_resid > VIO9P_MAX_REQLEN) {
-		error = EINVAL;
-		goto out;
-	}
-
 	len = uio->uio_resid;
-	error = uiomove(sc->sc_buf_tx, len, uio);
+	error = uiomove(sc->sc_buf_tx[pool], len, uio);
 	if (error != 0)
 		goto out;
 
-	DLOG("len=%lu", len);
-#ifdef VIO9P_DUMP
-	int i;
-	log(LOG_DEBUG, "%s: buf: ", __func__);
-	for (i = 0; i < len; i++) {
-		log(LOG_DEBUG, "%c", (char)sc->sc_buf_tx[i]);
-	}
-	log(LOG_DEBUG, "\n");
-#endif
+	if (len >= 7)
+		tag = (uint16_t)(unsigned char)sc->sc_buf_tx[pool][5] |
+		    ((uint16_t)(unsigned char)sc->sc_buf_tx[pool][6] << 8);
 
 	error = virtio_enqueue_prep(vsc, vq, &slot);
 	if (error != 0) {
-		log(LOG_ERR, "%s: virtio_enqueue_prep failed\n",
-		       device_xname(sc->sc_dev));
+		log(LOG_ERR, "%s: virtio_enqueue_prep failed: %d\n",
+		    device_xname(sc->sc_dev), error);
 		goto out;
 	}
-	DLOG("slot=%d", slot);
 	error = virtio_enqueue_reserve(vsc, vq, slot,
-	    sc->sc_dmamap_tx->dm_nsegs + sc->sc_dmamap_rx->dm_nsegs);
+	    sc->sc_map_tx[pool]->dm_nsegs + sc->sc_map_rx[pool]->dm_nsegs);
 	if (error != 0) {
 		log(LOG_ERR, "%s: virtio_enqueue_reserve failed\n",
-		       device_xname(sc->sc_dev));
+		    device_xname(sc->sc_dev));
+		virtio_enqueue_abort(vsc, vq, slot);
 		goto out;
 	}
+	sc->sc_slot2pool[slot] = pool;
 
 	/* Tx */
-	bus_dmamap_sync(virtio_dmat(vsc), sc->sc_dmamap_tx, 0,
+	bus_dmamap_sync(virtio_dmat(vsc), sc->sc_map_tx[pool], 0,
 	    len, BUS_DMASYNC_PREWRITE);
-	virtio_enqueue(vsc, vq, slot, sc->sc_dmamap_tx, true);
+	virtio_enqueue(vsc, vq, slot, sc->sc_map_tx[pool], true);
 	/* Rx */
-	bus_dmamap_sync(virtio_dmat(vsc), sc->sc_dmamap_rx, 0,
+	bus_dmamap_sync(virtio_dmat(vsc), sc->sc_map_rx[pool], 0,
 	    VIO9P_MAX_REQLEN, BUS_DMASYNC_PREREAD);
-	virtio_enqueue(vsc, vq, slot, sc->sc_dmamap_rx, false);
+	virtio_enqueue(vsc, vq, slot, sc->sc_map_rx[pool], false);
+
+	/*
+	 * Publish the bookkeeping before making the request visible to
+	 * the host, so a completion pumped on another CPU always finds
+	 * the slot mapped and tagged.
+	 */
+	sc->sc_itag[pool] = tag;
+	sc->sc_pstate[pool] = VIO9P_P_INFLIGHT;
+	sc->sc_ninflight++;
 	virtio_enqueue_commit(vsc, vq, slot, true);
 
-	sc->sc_state = VIO9P_S_REQUESTING;
+	DLOG("tx type %d tag %d len %zu slot %d pool %d",
+	    (int)(unsigned char)sc->sc_buf_tx[pool][4], (int)tag, len,
+	    slot, pool);
+	error = 0;
 out:
 	mutex_exit(&sc->sc_lock);
 	return error;
@@ -388,9 +483,66 @@ static int
 vio9p_close(struct file *fp)
 {
 	struct vio9p_softc *sc = fp->f_data;
+	struct virtio_softc *vsc = sc->sc_virtio;
+	struct virtqueue *vq = &sc->sc_vq[0];
+	int slot;
+	int dlen;
+	int round;
+	int i;
+	uint32_t mygen;
 
 	KASSERT(ISSET(sc->sc_flags, VIO9P_INUSE));
+
+	mutex_enter(&sc->sc_lock);
+	mygen = sc->sc_gen;
 	sc->sc_flags &= ~VIO9P_INUSE;
+	/*
+	 * The session is gone.  Reset the bookkeeping so that a
+	 * subsequent open() starts fresh even if we closed with
+	 * requests in flight or a reply half consumed; otherwise the
+	 * next mount inherits a stuck session.
+	 */
+	if (sc->sc_gen == mygen) {
+		sc->sc_buf_rx_len = 0;
+		sc->sc_buf_rx_offset = 0;
+		for (i = 0; i < VIO9P_NREQ; i++)
+			sc->sc_pstate[i] = VIO9P_P_FREE;
+		sc->sc_ninflight = 0;
+		sc->sc_nreplied = 0;
+		memset(sc->sc_slot2pool, -1, sc->sc_vqnum);
+	}
+	cv_broadcast(&sc->sc_wait);
+
+	/*
+	 * Drop any already-completed replies from the used ring; the
+	 * new session must not inherit them (the first reply of the
+	 * next mount would be a stale message).  The device may
+	 * still complete teardown requests (e.g. Rflush) a moment
+	 * after we drained, so wait briefly and repeat until the ring
+	 * stays quiet.  A new open() bumps the generation: our close()
+	 * may run after umount() returned and the next mount_9p
+	 * already started, so stop touching the ring the moment it
+	 * belongs to a new session.  Anything that still slips
+	 * through is caught by the inflight-tag discard in
+	 * vio9p_read().
+	 */
+	for (round = 0; round < 10; round++) {
+		int drained = 0;
+		while (sc->sc_gen == mygen &&
+		    virtio_dequeue(vsc, vq, &slot, &dlen) == 0) {
+			if (slot >= 0 && (unsigned)slot < sc->sc_vqnum)
+				sc->sc_slot2pool[slot] = -1;
+			virtio_dequeue_commit(vsc, vq, slot);
+			drained++;
+		}
+		if (sc->sc_gen != mygen || (drained == 0 && round > 0))
+			break;
+		mutex_exit(&sc->sc_lock);
+		tsleep(sc, PRIBIO, "vio9pcl", 2);
+		mutex_enter(&sc->sc_lock);
+	}
+
+	mutex_exit(&sc->sc_lock);
 
 	return 0;
 }
@@ -413,7 +565,8 @@ filt_vio9p_read(struct knote *kn, long hint)
 
 	kn->kn_data = sc->sc_buf_rx_len;
 	/* XXX need sc_lock? */
-	rv = (kn->kn_data > 0) || sc->sc_state != VIO9P_S_INIT;
+	rv = (kn->kn_data > 0) || (sc->sc_nreplied > 0) ||
+	    (sc->sc_ninflight > 0);
 
 	return rv;
 }
@@ -431,7 +584,7 @@ filt_vio9p_write(struct knote *kn, long hint)
 	struct vio9p_softc *sc = kn->kn_hook;
 
 	/* XXX need sc_lock? */
-	return sc->sc_state == VIO9P_S_INIT;
+	return sc->sc_ninflight + sc->sc_nreplied < VIO9P_NREQ;
 }
 
 static const struct filterops vio9p_write_filtops = {
@@ -489,7 +642,7 @@ vio9p_attach(device_t parent, device_t self, void *aux)
 	struct vio9p_softc *sc = device_private(self);
 	struct virtio_softc *vsc = device_private(parent);
 	uint64_t features;
-	int error;
+	int error, i;
 	const struct sysctlnode *node;
 
 	if (virtio_child(vsc) != NULL) {
@@ -512,42 +665,54 @@ vio9p_attach(device_t parent, device_t self, void *aux)
 	error = virtio_alloc_vq(vsc, &sc->sc_vq[0], VIO9P_MAX_REQLEN,
 	    VIO9P_N_SEGMENTS * 2, "vio9p");
 	if (error != 0)
-		goto err_none;
-
-	sc->sc_buf_tx = kmem_alloc(VIO9P_MAX_REQLEN, KM_SLEEP);
-	sc->sc_buf_rx = kmem_alloc(VIO9P_MAX_REQLEN, KM_SLEEP);
-
-	error = bus_dmamap_create(virtio_dmat(vsc), VIO9P_MAX_REQLEN,
-	    VIO9P_N_SEGMENTS, VIO9P_SEGSIZE, 0, BUS_DMA_WAITOK, &sc->sc_dmamap_tx);
-	if (error != 0) {
-		aprint_error_dev(sc->sc_dev, "bus_dmamap_create failed: %d\n",
-		    error);
 		goto err_vq;
-	}
-	error = bus_dmamap_create(virtio_dmat(vsc), VIO9P_MAX_REQLEN,
-	    VIO9P_N_SEGMENTS, VIO9P_SEGSIZE, 0, BUS_DMA_WAITOK, &sc->sc_dmamap_rx);
-	if (error != 0) {
-		aprint_error_dev(sc->sc_dev, "bus_dmamap_create failed: %d\n",
-		    error);
-		goto err_vq;
-	}
 
-	error = bus_dmamap_load(virtio_dmat(vsc), sc->sc_dmamap_tx,
-	    sc->sc_buf_tx, VIO9P_MAX_REQLEN, NULL, BUS_DMA_WAITOK | BUS_DMA_WRITE);
-	if (error != 0) {
-		aprint_error_dev(sc->sc_dev, "bus_dmamap_load failed: %d\n",
-		    error);
-		goto err_dmamap;
-	}
-	error = bus_dmamap_load(virtio_dmat(vsc), sc->sc_dmamap_rx,
-	    sc->sc_buf_rx, VIO9P_MAX_REQLEN, NULL, BUS_DMA_WAITOK | BUS_DMA_READ);
-	if (error != 0) {
-		aprint_error_dev(sc->sc_dev, "bus_dmamap_load failed: %d\n",
-		    error);
-		goto err_dmamap;
-	}
+	sc->sc_vqnum = sc->sc_vq[0].vq_num;
+	sc->sc_slot2pool = kmem_alloc(sc->sc_vqnum * sizeof(int8_t), KM_SLEEP);
+	for (i = 0; i < sc->sc_vqnum; i++)
+		sc->sc_slot2pool[i] = -1;
+	sc->sc_stage = kmem_alloc(VIO9P_MAX_REQLEN, KM_SLEEP);
 
-	sc->sc_state = VIO9P_S_INIT;
+	for (i = 0; i < VIO9P_NREQ; i++) {
+		sc->sc_buf_tx[i] = kmem_alloc(VIO9P_MAX_REQLEN, KM_SLEEP);
+		sc->sc_buf_rx[i] = kmem_alloc(VIO9P_MAX_REQLEN, KM_SLEEP);
+		error = bus_dmamap_create(virtio_dmat(vsc), VIO9P_MAX_REQLEN,
+		    VIO9P_N_SEGMENTS, VIO9P_SEGSIZE, 0, BUS_DMA_WAITOK,
+		    &sc->sc_map_tx[i]);
+		if (error != 0) {
+			aprint_error_dev(sc->sc_dev,
+			    "bus_dmamap_create failed: %d\n", error);
+			goto err_dmamap;
+		}
+		error = bus_dmamap_create(virtio_dmat(vsc), VIO9P_MAX_REQLEN,
+		    VIO9P_N_SEGMENTS, VIO9P_SEGSIZE, 0, BUS_DMA_WAITOK,
+		    &sc->sc_map_rx[i]);
+		if (error != 0) {
+			aprint_error_dev(sc->sc_dev,
+			    "bus_dmamap_create failed: %d\n", error);
+			goto err_dmamap;
+		}
+		error = bus_dmamap_load(virtio_dmat(vsc), sc->sc_map_tx[i],
+		    sc->sc_buf_tx[i], VIO9P_MAX_REQLEN, NULL,
+		    BUS_DMA_WAITOK | BUS_DMA_WRITE);
+		if (error != 0) {
+			aprint_error_dev(sc->sc_dev,
+			    "bus_dmamap_load failed: %d\n", error);
+			goto err_dmamap;
+		}
+		error = bus_dmamap_load(virtio_dmat(vsc), sc->sc_map_rx[i],
+		    sc->sc_buf_rx[i], VIO9P_MAX_REQLEN, NULL,
+		    BUS_DMA_WAITOK | BUS_DMA_READ);
+		if (error != 0) {
+			aprint_error_dev(sc->sc_dev,
+			    "bus_dmamap_load failed: %d\n", error);
+			goto err_dmamap;
+		}
+		sc->sc_pstate[i] = VIO9P_P_FREE;
+	}
+	sc->sc_ninflight = 0;
+	sc->sc_nreplied = 0;
+
 	mutex_init(&sc->sc_lock, MUTEX_DEFAULT, IPL_NONE);
 	cv_init(&sc->sc_wait, "vio9p");
 
@@ -579,8 +744,18 @@ err_mutex:
 	cv_destroy(&sc->sc_wait);
 	mutex_destroy(&sc->sc_lock);
 err_dmamap:
-	bus_dmamap_destroy(virtio_dmat(vsc), sc->sc_dmamap_tx);
-	bus_dmamap_destroy(virtio_dmat(vsc), sc->sc_dmamap_rx);
+	for (i = 0; i < VIO9P_NREQ; i++) {
+		if (sc->sc_map_tx[i] != NULL) {
+			(void)bus_dmamap_unload(virtio_dmat(vsc),
+			    sc->sc_map_tx[i]);
+			bus_dmamap_destroy(virtio_dmat(vsc), sc->sc_map_tx[i]);
+		}
+		if (sc->sc_map_rx[i] != NULL) {
+			(void)bus_dmamap_unload(virtio_dmat(vsc),
+			    sc->sc_map_rx[i]);
+			bus_dmamap_destroy(virtio_dmat(vsc), sc->sc_map_rx[i]);
+		}
+	}
 err_vq:
 	virtio_free_vq(vsc, &sc->sc_vq[0]);
 err_none:
@@ -622,7 +797,12 @@ vio9p_request_done(struct virtqueue *vq)
 	DLOG("enter");
 
 	mutex_enter(&sc->sc_lock);
-	sc->sc_state = VIO9P_S_REPLIED;
+	/*
+	 * A completion only wakes sleepers and knotes; the reader
+	 * dequeues and validates tags itself (the interrupt is a hint,
+	 * the ring is the source of truth), so there is no state to
+	 * flip here.
+	 */
 	cv_broadcast(&sc->sc_wait);
 	selnotify(&sc->sc_sel, 0, 1);
 	mutex_exit(&sc->sc_lock);
