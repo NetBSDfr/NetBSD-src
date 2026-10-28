@@ -1,6 +1,6 @@
 #	$NetBSD: files.drmkms_virtio,v 1.1 2026-10-26 smolBSD Exp $
 
-device	virtiodrm: drmkms, i2cbus, firmload
+device	virtiodrm: drmkms, i2cbus, firmload, wsemuldisplaydev, vcons, rasops32
 attach	virtiodrm at virtio
 
 # This code comes from the Linux kernel, which assumes signed

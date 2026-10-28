@@ -60,6 +60,12 @@ __KERNEL_RCSID(0, "$NetBSD: virtio_compat.c,v 1.1 2026-10-26 smolBSD Exp $");
 
 #include "virtgpu_drv.h"
 
+#include <dev/rasops/rasops.h>
+
+#include <dev/wscons/wsconsio.h>
+#include <dev/wscons/wsdisplayvar.h>
+#include <dev/wscons/wsdisplay_vconsvar.h>
+
 /*
  * Per-device registry.  There are typically at most a couple of virtio
  * GPU devices, so a singly-linked list with linear lookups is plenty.
@@ -747,6 +753,47 @@ int	virtiodrm_match(device_t, cfdata_t, void *);
 void	virtiodrm_attach(device_t, device_t, void *);
 int	virtiodrm_detach(device_t, int);
 
+/*
+ * wscons console: the X server on NetBSD opens a wsdisplay virtual
+ * terminal (xf86OpenConsole) even when driving the GPU through DRM/KMS,
+ * so virtiodrm must provide a wsemuldisplaydev child.  The screen is a
+ * plain vcons/rasops buffer that nobody scans out: X (modesetting) only
+ * needs ttyE0 for VT bookkeeping, actual pixels go through DRM.
+ */
+
+#define	VIRTIODRM_CONSOLE_WIDTH		1024
+#define	VIRTIODRM_CONSOLE_HEIGHT	768
+
+struct virtiodrm_softc {
+	device_t		sc_dev;
+	struct vcons_data	sc_vd;
+	struct vcons_screen	sc_vcs;
+	struct wsscreen_descr	sc_wsd;
+	const struct wsscreen_descr *sc_scrlist[1];
+	struct wsscreen_list	sc_wsl;
+	void			*sc_fb;
+	u_int			sc_fbwidth;
+	u_int			sc_fbheight;
+};
+
+static void	virtiodrm_init_screen(void *, struct vcons_screen *, int,
+				    long *);
+static int	virtiodrm_wsioctl(void *, void *, u_long, void *, int,
+				    struct lwp *);
+static paddr_t	virtiodrm_wsmmap(void *, void *, off_t, int);
+
+static struct wsdisplay_accessops virtiodrm_accessops = {
+	.ioctl        = virtiodrm_wsioctl,
+	.mmap         = virtiodrm_wsmmap,
+	.alloc_screen = NULL,
+	.free_screen  = NULL,
+	.show_screen  = NULL,
+	.load_font    = NULL,
+	.pollc        = NULL,
+	.scroll       = NULL,
+};
+
+
 int
 virtiodrm_match(device_t parent, cfdata_t match, void *aux)
 {
@@ -782,8 +829,14 @@ virtiodrm_config_changed(void *arg)
 void
 virtiodrm_attach(device_t parent, device_t self, void *aux)
 {
+	struct virtiodrm_softc * const sc = device_private(self);
 	struct virtio_softc *vsc = device_private(parent);
 	struct virtio_device *vdev;
+	struct wsemuldisplaydev_attach_args waa;
+	struct rasops_info *ri;
+	long defattr;
+
+	sc->sc_dev = self;
 
 	if (virtio_child(vsc) != NULL) {
 		aprint_error_dev(self, "virtio parent already has a child\n");
@@ -814,6 +867,47 @@ virtiodrm_attach(device_t parent, device_t self, void *aux)
 	}
 
 	aprint_normal_dev(self, "virtio GPU\n");
+
+	/*
+	 * Console wsdisplay child (ttyE0) for X's xf86OpenConsole();
+	 * see the struct virtiodrm_softc comment above.
+	 */
+	sc->sc_fbwidth = VIRTIODRM_CONSOLE_WIDTH;
+	sc->sc_fbheight = VIRTIODRM_CONSOLE_HEIGHT;
+	sc->sc_fb = kmem_alloc((size_t)sc->sc_fbwidth * sc->sc_fbheight * 4,
+	    KM_SLEEP);
+
+	sc->sc_wsd = (struct wsscreen_descr){
+		"std",
+		0, 0,
+		NULL,
+		8, 16,
+		WSSCREEN_WSCOLORS | WSSCREEN_HILIT,
+		NULL
+	};
+	sc->sc_scrlist[0] = &sc->sc_wsd;
+	sc->sc_wsl.nscreens = __arraycount(sc->sc_scrlist);
+	sc->sc_wsl.screens = sc->sc_scrlist;
+
+	vcons_init(&sc->sc_vd, sc, &sc->sc_wsd, &virtiodrm_accessops);
+	sc->sc_vd.init_screen = virtiodrm_init_screen;
+
+	vcons_init_screen(&sc->sc_vd, &sc->sc_vcs, 1, &defattr);
+	sc->sc_vcs.scr_flags |= VCONS_SCREEN_IS_STATIC;
+	ri = &sc->sc_vcs.scr_ri;
+
+	sc->sc_wsd.textops = &ri->ri_ops;
+	sc->sc_wsd.capabilities = ri->ri_caps;
+	sc->sc_wsd.nrows = ri->ri_rows;
+	sc->sc_wsd.ncols = ri->ri_cols;
+
+	waa.scrdata = &sc->sc_wsl;
+	waa.accessops = &virtiodrm_accessops;
+	waa.accesscookie = &sc->sc_vd;
+	waa.console = false;	/* kernel console stays on the serial port */
+
+	config_found(self, &waa, wsemuldisplaydevprint, CFARGS_NONE);
+
 	return;
 
 fail:
@@ -837,5 +931,84 @@ virtiodrm_detach(device_t parent, int flags)
 	return 0;
 }
 
-CFATTACH_DECL_NEW(virtiodrm, 0,
+CFATTACH_DECL_NEW(virtiodrm, sizeof(struct virtiodrm_softc),
     virtiodrm_match, virtiodrm_attach, virtiodrm_detach, NULL);
+
+static void
+virtiodrm_init_screen(void *cookie, struct vcons_screen *scr, int existing,
+		      long *defattr)
+{
+	struct virtiodrm_softc *sc = cookie;
+	struct rasops_info *ri = &scr->scr_ri;
+
+	ri->ri_bits = sc->sc_fb;
+	ri->ri_flg = RI_CENTER | RI_CLEAR;
+#if BYTE_ORDER == BIG_ENDIAN
+	ri->ri_flg |= RI_BSWAP;
+#endif
+	ri->ri_depth = 32;
+	ri->ri_width = sc->sc_fbwidth;
+	ri->ri_height = sc->sc_fbheight;
+	ri->ri_stride = ri->ri_width * ri->ri_depth / 8;
+	ri->ri_bpos = 0;	/* B8G8R8X8 */
+	ri->ri_bnum = 8;
+	ri->ri_gpos = 8;
+	ri->ri_gnum = 8;
+	ri->ri_rpos = 16;
+	ri->ri_rnum = 8;
+	rasops_init(ri, 0, 0);
+	ri->ri_caps = WSSCREEN_WSCOLORS | WSSCREEN_HILIT;
+	rasops_reconfig(ri, sc->sc_fbheight / ri->ri_font->fontheight,
+	    sc->sc_fbwidth / ri->ri_font->fontwidth);
+}
+
+static int
+virtiodrm_wsioctl(void *v, void *vs, u_long cmd, void *data, int flag,
+		  struct lwp *l)
+{
+	struct rasops_info *ri = &((struct vcons_screen *)vs)->scr_ri;
+	struct wsdisplayio_fbinfo *fbi;
+	struct wsdisplay_fbinfo *wdf;
+	int error;
+
+	switch (cmd) {
+	case WSDISPLAYIO_GTYPE:
+		*(u_int *)data = WSDISPLAY_TYPE_PCIMISC;
+		return 0;
+	case WSDISPLAYIO_GET_FBINFO:
+		fbi = (struct wsdisplayio_fbinfo *)data;
+		error = wsdisplayio_get_fbinfo(ri, fbi);
+		if (error == 0)
+			fbi->fbi_flags |= WSFB_VRAM_IS_RAM;
+		return error;
+	case WSDISPLAYIO_GINFO:
+		wdf = (struct wsdisplay_fbinfo *)data;
+		wdf->height = ri->ri_height;
+		wdf->width = ri->ri_width;
+		wdf->depth = ri->ri_depth;
+		wdf->cmsize = 0;
+		return 0;
+	case WSDISPLAYIO_LINEBYTES:
+		*(u_int *)data = ri->ri_stride;
+		return 0;
+	case WSDISPLAYIO_DAMAGE:
+	case WSDISPLAYIO_SMODE:
+	case WSDISPLAYIO_GVIDEO:
+	case WSDISPLAYIO_SVIDEO:
+		return 0;
+	}
+
+	return EPASSTHROUGH;
+}
+
+static paddr_t
+virtiodrm_wsmmap(void *v, void *vs, off_t off, int prot)
+{
+
+	/*
+	 * The console framebuffer is ordinary kernel memory (nobody
+	 * scans it out; X uses DRM for pixels), so it cannot be mapped
+	 * into user space as a physical frame.
+	 */
+	return -1;
+}
