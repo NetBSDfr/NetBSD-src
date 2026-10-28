@@ -1,0 +1,42 @@
+#	$NetBSD: files.drmkms_virtio,v 1.1 2026-10-26 smolBSD Exp $
+
+device	virtiodrm: drmkms, i2cbus, firmload
+attach	virtiodrm at virtio
+
+# This code comes from the Linux kernel, which assumes signed
+# overflow is OK.
+makeoptions 	virtiodrm	"COPTS.virtiodrm"+="-fwrapv"
+
+makeoptions 	virtiodrm	"CPPFLAGS.virtiodrm"+="${CPPFLAGS.drmkms}"
+
+# Our overrides first.
+makeoptions 	virtiodrm	"CPPFLAGS.virtiodrm"+="-I$S/external/bsd/drm2/virtio"
+
+# Then their header files.
+makeoptions 	virtiodrm	"CPPFLAGS.virtiodrm"+="-I$S/external/bsd/drm2/dist/drm/virtio"
+
+makeoptions 	virtiodrm	"CWARNFLAGS.virtiodrm"+="-Wno-format"
+makeoptions 	virtiodrm	"CWARNFLAGS.virtiodrm"+="-Wno-cast-qual"
+makeoptions 	virtiodrm	"CWARNFLAGS.virtiodrm"+="-Wno-missing-field-initializers"
+makeoptions 	virtiodrm	"CWARNFLAGS.virtiodrm"+="-Wno-pointer-arith"
+makeoptions 	virtiodrm	"CWARNFLAGS.virtiodrm"+="-Wno-unused-but-set-variable"
+makeoptions 	virtiodrm	"CWARNFLAGS.virtiodrm"+="-Wno-unused-function"
+makeoptions 	virtiodrm	"CWARNFLAGS.virtgpu_vq.c"+="-Wno-shadow"
+
+# NetBSD bus glue and the LinuxKPI virtio compatibility layer.
+file	external/bsd/drm2/virtio/virtio_compat.c		virtiodrm
+
+# GEM shmem helper (from Linux v5.6; the dist core predates its import).
+file	external/bsd/drm2/dist/drm/drm_gem_shmem_helper.c	virtiodrm
+
+# The virtio-gpu DRM driver proper (from Linux v5.6-rc3).
+file	external/bsd/drm2/dist/drm/virtio/virtgpu_display.c	virtiodrm
+file	external/bsd/drm2/dist/drm/virtio/virtgpu_drv.c		virtiodrm
+file	external/bsd/drm2/dist/drm/virtio/virtgpu_fence.c	virtiodrm
+file	external/bsd/drm2/dist/drm/virtio/virtgpu_gem.c		virtiodrm
+file	external/bsd/drm2/dist/drm/virtio/virtgpu_ioctl.c	virtiodrm
+file	external/bsd/drm2/dist/drm/virtio/virtgpu_kms.c		virtiodrm
+file	external/bsd/drm2/dist/drm/virtio/virtgpu_object.c	virtiodrm
+file	external/bsd/drm2/dist/drm/virtio/virtgpu_plane.c	virtiodrm
+file	external/bsd/drm2/dist/drm/virtio/virtgpu_prime.c	virtiodrm
+file	external/bsd/drm2/dist/drm/virtio/virtgpu_vq.c		virtiodrm

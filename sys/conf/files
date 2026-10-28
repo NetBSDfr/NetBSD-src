@@ -1052,9 +1052,11 @@ attach	applesmctemp at applesmcbus with apple_smc_temp
 define drm {}
 
 # Linux API support
+include "external/bsd/common/conf/files.linux"
 
 # DRM/KMS - Newer direct rendering manager with kernel mode-switching
 include "external/bsd/drm2/drm/files.drmkms"
+include "external/bsd/drm2/virtio/files.drmkms_virtio"
 
 
 # Definitions for wscons

@@ -64,6 +64,14 @@ task_pid_nr(struct proc *p)
 	return p->p_pid;
 }
 
+static inline char *
+get_task_comm(char *buf, struct proc *p)
+{
+
+	strlcpy(buf, p->p_comm, TASK_COMM_LEN);
+	return buf;
+}
+
 static inline long
 schedule_timeout_uninterruptible(long timeout)
 {

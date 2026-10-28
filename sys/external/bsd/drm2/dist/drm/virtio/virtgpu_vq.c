@@ -275,6 +275,22 @@ void virtio_gpu_dequeue_cursor_func(struct work_struct *work)
 /* Create sg_table from a vmalloc'd buffer. */
 static struct sg_table *vmalloc_to_sgt(char *data, uint32_t size, int *sg_ents)
 {
+#ifdef __NetBSD__
+	struct sg_table *sgt;
+
+	/*
+	 * NetBSD kernel memory is contiguous in the KVA (there is
+	 * no vmalloc scatter/gather split), so one entry describes
+	 * the whole buffer; virtqueue_add_sgs() maps it through the
+	 * sg_kva flavor.
+	 */
+	*sg_ents = 1;
+	sgt = kmalloc(sizeof(*sgt), GFP_KERNEL);
+	if (sgt == NULL)
+		return NULL;
+	sg_init_one(&sgt->sgl[0], data, size);
+	return sgt;
+#else
 	int ret, s, i;
 	struct sg_table *sgt;
 	struct scatterlist *sg;
@@ -283,11 +299,12 @@ static struct sg_table *vmalloc_to_sgt(char *data, uint32_t size, int *sg_ents)
 	if (WARN_ON(!PAGE_ALIGNED(data)))
 		return NULL;
 
-	sgt = kmalloc(sizeof(*sgt), GFP_KERNEL);
+	*sg_ents = DIV_ROUND_UP(size, PAGE_SIZE);
+	/* NetBSD: struct sg_table carries an inline sgl[1] array that
+	 * sg_alloc_table() initializes for every entry. */
+	sgt = kmalloc(offsetof(struct sg_table, sgl[*sg_ents]), GFP_KERNEL);
 	if (!sgt)
 		return NULL;
-
-	*sg_ents = DIV_ROUND_UP(size, PAGE_SIZE);
 	ret = sg_alloc_table(sgt, *sg_ents, GFP_KERNEL);
 	if (ret) {
 		kfree(sgt);
@@ -303,6 +320,7 @@ static struct sg_table *vmalloc_to_sgt(char *data, uint32_t size, int *sg_ents)
 		}
 
 		s = min_t(int, PAGE_SIZE, size);
+		sgt->sgl->sg_pgs[i] = pg;
 		sg_set_page(sg, pg, s, 0);
 
 		size -= s;
@@ -310,6 +328,7 @@ static struct sg_table *vmalloc_to_sgt(char *data, uint32_t size, int *sg_ents)
 	}
 
 	return sgt;
+#endif /* __NetBSD__ */
 }
 
 static bool virtio_gpu_queue_ctrl_buffer_locked(struct virtio_gpu_device *vgdev,
@@ -595,7 +614,7 @@ void virtio_gpu_cmd_transfer_to_host_2d(struct virtio_gpu_device *vgdev,
 	bool use_dma_api = !virtio_has_iommu_quirk(vgdev->vdev);
 
 	if (use_dma_api)
-		dma_sync_sg_for_device(vgdev->vdev->dev.parent,
+		dma_sync_sg_for_device(virtio_dev_dmat(vgdev->vdev),
 				       bo->pages->sgl, bo->pages->nents,
 				       DMA_TO_DEVICE);
 
@@ -1010,7 +1029,7 @@ void virtio_gpu_cmd_transfer_to_host_3d(struct virtio_gpu_device *vgdev,
 	bool use_dma_api = !virtio_has_iommu_quirk(vgdev->vdev);
 
 	if (use_dma_api)
-		dma_sync_sg_for_device(vgdev->vdev->dev.parent,
+		dma_sync_sg_for_device(virtio_dev_dmat(vgdev->vdev),
 				       bo->pages->sgl, bo->pages->nents,
 				       DMA_TO_DEVICE);
 
@@ -1084,7 +1103,9 @@ int virtio_gpu_object_attach(struct virtio_gpu_device *vgdev,
 {
 	bool use_dma_api = !virtio_has_iommu_quirk(vgdev->vdev);
 	struct virtio_gpu_mem_entry *ents;
+#ifndef __NetBSD__
 	struct scatterlist *sg;
+#endif
 	int si, nents, ret;
 
 	if (WARN_ON_ONCE(!obj->created))
@@ -1103,7 +1124,7 @@ int virtio_gpu_object_attach(struct virtio_gpu_device *vgdev,
 	}
 
 	if (use_dma_api) {
-		obj->mapped = dma_map_sg(vgdev->vdev->dev.parent,
+		obj->mapped = dma_map_sg(virtio_dev_dmat(vgdev->vdev),
 					 obj->pages->sgl, obj->pages->nents,
 					 DMA_TO_DEVICE);
 		nents = obj->mapped;
@@ -1119,6 +1140,28 @@ int virtio_gpu_object_attach(struct virtio_gpu_device *vgdev,
 		return -ENOMEM;
 	}
 
+#ifdef __NetBSD__
+	/*
+	 * This driver always declines the DMA API (iommu quirk), so the
+	 * host wants guest-physical addresses.  NetBSD sg_tables built
+	 * from a page array keep the pages in the shared sgl->sg_pgs
+	 * array; scatterlist slots beyond index 0 are not actually
+	 * populated (the table is addressed through sgl[0] metadata),
+	 * so iterate the page array rather than for_each_sg().
+	 */
+	{
+		struct page **pgs = obj->pages->sgl->sg_pgs;
+
+		for (si = 0; si < nents; si++) {
+			const struct vm_page *vm =
+			    (const struct vm_page *)pgs[si];
+			ents[si].addr =
+			    cpu_to_le64(uvm_vm_page_to_phys(vm));
+			ents[si].length = cpu_to_le32(PAGE_SIZE);
+			ents[si].padding = 0;
+		}
+	}
+#else
 	for_each_sg(obj->pages->sgl, sg, nents, si) {
 		ents[si].addr = cpu_to_le64(use_dma_api
 					    ? sg_dma_address(sg)
@@ -1126,6 +1169,7 @@ int virtio_gpu_object_attach(struct virtio_gpu_device *vgdev,
 		ents[si].length = cpu_to_le32(sg->length);
 		ents[si].padding = 0;
 	}
+#endif
 
 	virtio_gpu_cmd_resource_attach_backing(vgdev, obj->hw_res_handle,
 					       ents, nents,
@@ -1149,7 +1193,7 @@ void virtio_gpu_object_detach(struct virtio_gpu_device *vgdev,
 		dma_fence_put(&fence->f);
 
 		/* ... then tear down iommu mappings */
-		dma_unmap_sg(vgdev->vdev->dev.parent,
+		dma_unmap_sg(virtio_dev_dmat(vgdev->vdev),
 			     obj->pages->sgl, obj->mapped,
 			     DMA_TO_DEVICE);
 		obj->mapped = 0;

@@ -64,6 +64,7 @@
 
 #define VIRTIO_PRIVATE
 #include <dev/virtio/virtio_mmiovar.h>
+#include <dev/virtio/virtio_mmioreg.h>
 #include <arch/x86/pv/pvvar.h>
 #include <xen/hypervisor.h>
 #include <uvm/uvm_extern.h>
@@ -285,6 +286,18 @@ virtio_mmio_cmdline_rescan(device_t self, const char *ifattr, const int *locs)
 
 	memset(&va, 0, sizeof(va));
 	va.sc_childdevid = vsc->sc_childdevid;
+
+	/*
+	 * Expose the device feature bits to child match functions so
+	 * that GPU variants can be steered to the right driver
+	 * (viogpu(4) console vs virtiodrm(4) KMS on virgl devices).
+	 */
+	virtio_mmio_reg_write(msc, VIRTIO_MMIO_DEVICE_FEATURES_SEL, 0);
+	va.sc_device_features =
+	    virtio_mmio_reg_read(msc, VIRTIO_MMIO_DEVICE_FEATURES);
+	virtio_mmio_reg_write(msc, VIRTIO_MMIO_DEVICE_FEATURES_SEL, 1);
+	va.sc_device_features |= (uint64_t)
+	    virtio_mmio_reg_read(msc, VIRTIO_MMIO_DEVICE_FEATURES) << 32;
 
 	config_found(self, &va, NULL, CFARGS_NONE);
 

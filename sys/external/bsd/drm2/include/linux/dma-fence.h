@@ -162,6 +162,13 @@ long	dma_fence_wait_timeout(struct dma_fence *, bool, long);
 bool	__dma_fence_signal(struct dma_fence *);
 void	__dma_fence_signal_wake(struct dma_fence *, ktime_t);
 
+static inline bool
+dma_fence_match_context(struct dma_fence *fence, uint64_t context)
+{
+
+	return fence->context == context;
+}
+
 static inline void __printflike(2, 3)
 DMA_FENCE_TRACE(struct dma_fence *f, const char *fmt, ...)
 {

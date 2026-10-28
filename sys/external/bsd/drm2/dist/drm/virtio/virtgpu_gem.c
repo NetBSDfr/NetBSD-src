@@ -33,6 +33,84 @@ __KERNEL_RCSID(0, "$NetBSD: virtgpu_gem.c,v 1.3 2021/12/18 23:45:45 riastradh Ex
 
 #include "virtgpu_drv.h"
 
+#ifdef __NetBSD__
+/*
+ * Map GEM objects into userland: NetBSD's UVM pager for a GEM object's
+ * gemo_uvmobj installs per-page mappings of the object's backing pages.
+ */
+#include <uvm/uvm_extern.h>
+
+#include <drm/drm_gem_shmem_helper.h>
+
+static int
+virtio_gpu_gem_uvm_fault(struct uvm_faultinfo *ufi, vaddr_t vaddr,
+    struct vm_page **pps, int npages, int centeridx, vm_prot_t access_type,
+    int flags)
+{
+	struct vm_map_entry *entry = ufi->entry;
+	struct uvm_object *const uobj = entry->object.uvm_obj;
+	struct drm_gem_object *const gem_obj = container_of(uobj,
+	    struct drm_gem_object, gemo_uvmobj);
+	struct drm_gem_shmem_object *const shmem =
+	    to_drm_gem_shmem_obj(gem_obj);
+	off_t curr_offset;
+	vaddr_t curr_va;
+	int lcv, retval;
+
+	if (UVM_ET_ISCOPYONWRITE(entry))
+		return EIO;
+
+	/*
+	 * The shmem pages are pinned for the lifetime of the resource
+	 * backing (virtio_gpu_object_attach() through
+	 * virtio_gpu_object_detach()), so no pinning is needed here.
+	 */
+	if (shmem->pages == NULL)
+		return EIO;
+
+	retval = 0;
+	curr_offset = entry->offset + (vaddr - entry->start);
+	curr_va = vaddr;
+	for (lcv = 0; lcv < npages; lcv++, curr_offset += PAGE_SIZE,
+	    curr_va += PAGE_SIZE) {
+		const voff_t poff = atop(curr_offset);
+		const struct vm_page *pg;
+		vm_prot_t mapprot;
+
+		if ((flags & PGO_ALLPAGES) == 0 && lcv != centeridx)
+			continue;
+		if (pps[lcv] == PGO_DONTCARE)
+			continue;
+		if (poff >= (gem_obj->size >> PAGE_SHIFT))
+			return EIO;
+
+		pg = (const struct vm_page *)shmem->pages[poff];
+		if (pg == NULL)
+			return EIO;
+
+		mapprot = ufi->entry->protection;
+		if (pmap_enter(ufi->orig_map->pmap, curr_va,
+		    uvm_vm_page_to_phys(pg), mapprot,
+		    PMAP_CANFAIL | mapprot) != 0) {
+			pmap_update(ufi->orig_map->pmap);
+			uvmfault_unlockall(ufi, ufi->entry->aref.ar_amap,
+			    uobj);
+			return ENOMEM;
+		}
+	}
+
+	pmap_update(ufi->orig_map->pmap);
+	uvmfault_unlockall(ufi, ufi->entry->aref.ar_amap, uobj);
+	return retval;
+}
+
+const struct uvm_pagerops virtio_gpu_gem_uvm_ops = {
+	.pgo_reference = drm_gem_pager_reference,
+	.pgo_detach = drm_gem_pager_detach,
+	.pgo_fault = virtio_gpu_gem_uvm_fault,
+};
+#endif /* __NetBSD__ */
+
 int virtio_gpu_gem_create(struct drm_file *file,
 			  struct drm_device *dev,
 			  struct virtio_gpu_object_params *params,
@@ -77,7 +155,11 @@ int virtio_gpu_mode_dumb_create(struct drm_file *file_priv,
 
 	pitch = args->width * 4;
 	args->size = pitch * args->height;
+#ifdef __NetBSD__	/* NetBSD sys/param.h ALIGN() takes one argument */
+	args->size = PAGE_ALIGN(args->size);
+#else
 	args->size = ALIGN(args->size, PAGE_SIZE);
+#endif
 
 	params.format = virtio_gpu_translate_format(DRM_FORMAT_HOST_XRGB8888);
 	params.width = args->width;

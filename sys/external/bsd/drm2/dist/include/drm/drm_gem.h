@@ -362,6 +362,15 @@ struct drm_gem_object {
 		.mmap		= drm_gem_mmap,\
 	}
 
+#ifdef __NetBSD__
+/*
+ * NetBSD drm2 uses a single cdev switch for all DRM drivers;
+ * per-driver file operations are not used.
+ */
+#undef DEFINE_DRM_GEM_FOPS
+#define DEFINE_DRM_GEM_FOPS(name)
+#endif
+
 void drm_gem_object_release(struct drm_gem_object *obj);
 void drm_gem_object_free(struct kref *kref);
 int drm_gem_object_init(struct drm_device *dev,

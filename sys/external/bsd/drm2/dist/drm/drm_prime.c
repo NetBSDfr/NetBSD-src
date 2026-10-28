@@ -984,7 +984,8 @@ struct sg_table *drm_prime_pages_to_sg(struct page **pages, unsigned int nr_page
 	struct sg_table *sg = NULL;
 	int ret;
 
-	sg = kmalloc(sizeof(struct sg_table), GFP_KERNEL);
+	/* struct sg_table has a 1-entry inline array; size for all. */
+	sg = kmalloc(offsetof(struct sg_table, sgl[nr_pages]), GFP_KERNEL);
 	if (!sg) {
 		ret = -ENOMEM;
 		goto out;
@@ -1141,7 +1142,8 @@ drm_prime_bus_dmamem_to_sg(bus_dma_tag_t dmat, const bus_dma_segment_t *segs,
 	struct sg_table *sg;
 	int ret;
 
-	sg = kmalloc(sizeof(*sg), GFP_KERNEL);
+	/* struct sg_table has a 1-entry inline array; size for all. */
+	sg = kmalloc(offsetof(struct sg_table, sgl[nsegs]), GFP_KERNEL);
 	if (sg == NULL) {
 		ret = -ENOMEM;
 		goto out;

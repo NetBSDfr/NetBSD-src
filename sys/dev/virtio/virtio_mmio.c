@@ -109,7 +109,7 @@ virtio_mmio_reg_read(struct virtio_mmio_softc *sc, bus_addr_t reg)
 	return val;
 }
 
-static void
+void
 virtio_mmio_reg_write(struct virtio_mmio_softc *sc, bus_addr_t reg,
     uint32_t val)
 {

@@ -122,6 +122,10 @@ struct virtqueue {
 
 struct virtio_attach_args {
 	int			sc_childdevid;
+	uint64_t		sc_device_features;
+					/* device feature bits, if the
+					 * transport can read them at
+					 * match time (0 otherwise) */
 };
 
 typedef int (*virtio_callback)(struct virtio_softc*);
