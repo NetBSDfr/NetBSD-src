@@ -480,6 +480,16 @@ wsmux_do_ioctl(device_t dv, u_long cmd, void *data, int flag,
 		break;
 #endif
 
+	case WSMOUSEIO_GTYPE:
+		/*
+		 * See the matching comment in wsmouse.c:  the X ws
+		 * input driver opens /dev/wsmouse and requires this
+		 * ioctl.  Report a generic PS/2 mouse
+		 * (WSM_TYPE_BAREPS2).
+		 */
+		*(u_int *)data = 13;	/* WSM_TYPE_BAREPS2 */
+		return 0;
+
 	case WSKBDIO_SETVERSION:
 	case WSMOUSEIO_SETVERSION:
 	case WSDISPLAYIO_SETVERSION:
