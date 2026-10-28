@@ -8,6 +8,7 @@ file	dev/dkwedge/dkwedge_gpt.c	dkwedge_method_gpt
 file	dev/lockstat.c			lockstat		needs-flag
 file	dev/md.c			md
 file	dev/mm.c			kern	# XXX
+file	dev/firmload.c			firmload
 file	dev/nullcons_subr.c		nullcons		needs-flag
 file	dev/radio.c			radio			needs-flag
 file	dev/random.c			rnd			needs-flag

@@ -1,0 +1,33 @@
+#	$NetBSD: files.ttm,v 1.10 2023/06/03 21:30:22 lukem Exp $
+
+# TTM, the texture and tiling manager.
+
+version	20180827
+
+define	drmkms_ttm: drmkms
+makeoptions	drmkms_ttm	"CPPFLAGS.drmkms_ttm"+="${CPPFLAGS.drmkms}"
+
+makeoptions	drmkms		"CWARNFLAGS.ttm_bo.c"+="${CC_WNO_IMPLICIT_FALLTHROUGH}"
+makeoptions	drmkms_ttm	"CPPFLAGS.drmkms_ttm"+="-DCONFIG_AGP=1"
+makeoptions	drmkms_ttm	"CWARNFLAGS.drmkms_ttm"+="-Wno-missing-field-initializers"
+makeoptions	drmkms_ttm	"CWARNFLAGS.drmkms_ttm"+="-Wno-shadow"
+
+file	external/bsd/drm2/ttm/ttm_agp_backend.c			drmkms_ttm
+file	external/bsd/drm2/dist/drm/ttm/ttm_memory.c		drmkms_ttm
+file	external/bsd/drm2/dist/drm/ttm/ttm_tt.c			drmkms_ttm
+file	external/bsd/drm2/dist/drm/ttm/ttm_bo.c			drmkms_ttm
+file	external/bsd/drm2/dist/drm/ttm/ttm_bo_util.c		drmkms_ttm
+file	external/bsd/drm2/ttm/ttm_bo_vm.c			drmkms_ttm
+file	external/bsd/drm2/ttm/ttm_module.c			drmkms_ttm
+# Used only by vmwgfx.  Needs porting for rcu -> pserialize.
+#file	external/bsd/drm2/dist/drm/ttm/ttm_object.c		drmkms_ttm
+# Used only by vmwgfx.  Needs porting.  Does silly things like SIGKILL.
+#file	external/bsd/drm2/dist/drm/ttm/ttm_lock.c		drmkms_ttm
+file	external/bsd/drm2/dist/drm/ttm/ttm_execbuf_util.c	drmkms_ttm
+# Replaced locally by ttm_bus_dma.c.
+#file	external/bsd/drm2/dist/drm/ttm/ttm_page_alloc.c		drmkms_ttm
+file	external/bsd/drm2/dist/drm/ttm/ttm_bo_manager.c		drmkms_ttm
+# Replaced locally by ttm_bus_dma.c.
+#file	external/bsd/drm2/dist/drm/ttm/ttm_page_alloc_dma.c	drmkms_ttm
+
+file	external/bsd/drm2/ttm/ttm_bus_dma.c			drmkms_ttm

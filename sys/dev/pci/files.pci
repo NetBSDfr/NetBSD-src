@@ -18,7 +18,12 @@ defflag	opt_pciide.h	PCIIDE_CMD064x_DISABLE PCIIDE_AMD756_ENABLEDMA
 
 device	pci {[dev = -1], [function = -1]}
 attach	pci at pcibus
-file	dev/pci/pci.c			pci			needs-flag
+file	dev/pci/pci.c				pci			needs-flag
+file	dev/pci/pci_quirks.c		pci			needs-flag
+file	dev/pci/pci_map.c		pci			needs-flag
+file	dev/pci/pci_subr.c		pci			needs-flag
+file	dev/pci/pci_stub.c		pci			needs-flag
+file	dev/pci/pci_usrreq.c		pci			needs-flag
 
 file	dev/pci/pcibusprint.c		pcibus
 

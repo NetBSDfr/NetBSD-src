@@ -5,3 +5,34 @@ define	drmkms_linux: i2cexec, i2c_bitbang
 makeoptions 	drmkms_linux	"CPPFLAGS.drmkms_linux"+="-I$S/external/bsd/common/include"
 makeoptions 	drmkms_linux	"CPPFLAGS.drmkms_linux"+="-I$S/external/bsd/drm2/include"
 
+file	external/bsd/drm2/linux/linux_acpi.c		drmkms_linux & acpi
+file	external/bsd/drm2/linux/linux_atomic64.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_backlight.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_dma_buf.c		drmkms_linux
+file	external/bsd/drm2/linux/linux_dma_fence.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_dma_fence_array.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_dma_fence_chain.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_dma_resv.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_dmi.c		drmkms_linux
+file	external/bsd/drm2/linux/linux_firmware.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_hdmi.c		drmkms_linux
+file	external/bsd/drm2/linux/linux_hrtimer.c		drmkms_linux
+file	external/bsd/drm2/linux/linux_i2c.c		drmkms_linux
+file	external/bsd/drm2/linux/linux_idr.c		drmkms_linux
+file	external/bsd/drm2/linux/linux_io_mapping.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_irq_work.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_kmap.c		drmkms_linux
+file	external/bsd/drm2/linux/linux_kthread.c		drmkms_linux
+file	external/bsd/drm2/linux/linux_list_sort.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_module.c		drmkms_linux
+file	external/bsd/drm2/linux/linux_notifier.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_pci.c		drmkms_linux
+file	external/bsd/drm2/linux/linux_radixtree.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_rwsem.c		drmkms_linux
+file	external/bsd/drm2/linux/linux_sgt.c		drmkms_linux
+file	external/bsd/drm2/linux/linux_stop_machine.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_sync_file.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_wait_bit.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_writecomb.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_ww_mutex.c	drmkms_linux
+file	external/bsd/drm2/linux/linux_xa.c		drmkms_linux

@@ -55,15 +55,23 @@ makeoptions	drmkms	"CPPFLAGS.drmkms"+="-DCONFIG_PCI=1"
 makeoptions	drmkms	"CWARNFLAGS.drmkms"+="-Wno-missing-field-initializers"
 
 # NetBSD additions.
+file	external/bsd/drm2/drm/drm_agp_hook.c		drmkms
+file	external/bsd/drm2/drm/drm_cdevsw.c		drmkms
+file	external/bsd/drm2/drm/drm_gem_vm.c		drmkms
+file	external/bsd/drm2/drm/drm_module.c		drmkms
 file	external/bsd/drm2/drm/drm_stub.c		!drmkms & !drmbase
+file	external/bsd/drm2/drm/drm_sysctl.c		drmkms
 
 # pci bus ids -- doesn't depend on all of pci, just the header files
+file	external/bsd/drm2/pci/drm_pci_busid.c		drmkms
 
 # Generic, unaccelerated kms framebuffer.
 define	drmfb: genfb
+file	external/bsd/drm2/drm/drmfb.c			drmfb
 
 makeoptions	drmfb	"CPPFLAGS.drmfb"+="${CPPFLAGS.drmkms}"
 
+include "external/bsd/drm2/ttm/files.ttm"
 
 makeoptions 	drmkms 	"CWARNFLAGS.drm_atomic_helper.c"+="-Wno-shadow"
 makeoptions 	drmkms 	"CWARNFLAGS.drm_bufs.c"+="-Wno-pointer-arith"
@@ -92,6 +100,12 @@ makeoptions 	drmkms 	"CWARNFLAGS.drm_modes.c"+="-Wno-shadow"
 define	drmums: drmkms
 makeoptions	drmums	"CPPFLAGS.drmkms"+="-DCONFIG_DRM_LEGACY"
 makeoptions	drmums	"CPPFLAGS.drmums"+="${CPPFLAGS.drmkms}"
+file	external/bsd/drm2/dist/drm/drm_bufs.c		drmums
+file	external/bsd/drm2/dist/drm/drm_context.c	drmums
+file	external/bsd/drm2/dist/drm/drm_dma.c		drmums
+file	external/bsd/drm2/dist/drm/drm_legacy_misc.c	drmums
+file	external/bsd/drm2/drm/drm_lock.c		drmums
+file	external/bsd/drm2/drm/drm_scatter.c		drmums
 
 # Set `options DRM_LEGACY' to allow loading modules requiring drmums
 # even if none are statically linked into the kernel.
@@ -101,10 +115,75 @@ defflag		DRM_LEGACY: drmums
 define	drmkms_sched: drmkms
 makeoptions	drmkms_sched	"CPPFLAGS.drmkms_sched"+="${CPPFLAGS.drmkms}"
 
+file	external/bsd/drm2/dist/drm/scheduler/sched_entity.c	drmkms_sched
+file	external/bsd/drm2/dist/drm/scheduler/sched_fence.c	drmkms_sched
+file	external/bsd/drm2/dist/drm/scheduler/sched_main.c	drmkms_sched
 
 # Generated from drm2netbsd.
 #file	external/bsd/drm2/dist/drm/drm_agpsupport.c	drmkms	# drmkms_pci
+file	external/bsd/drm2/dist/drm/drm_atomic.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_atomic_helper.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_atomic_state_helper.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_atomic_uapi.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_auth.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_blend.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_bridge.c	drmkms
+file	external/bsd/drm2/drm/drm_cache.c	drmkms
+file	external/bsd/drm2/drm/drm_client.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_client_modeset.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_color_mgmt.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_connector.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_crtc.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_crtc_helper.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_damage_helper.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_dp_dual_mode_helper.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_dp_helper.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_dp_mst_topology.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_drv.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_dsc.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_dumb_buffers.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_edid.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_encoder.c	drmkms
+file	external/bsd/drm2/i2c/drm_encoder_slave.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_fb_helper.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_file.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_flip_work.c	drmkms
 #file	external/bsd/drm2/dist/drm/drm_format_helper.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_fourcc.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_framebuffer.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_gem.c	drmkms
+file	external/bsd/drm2/drm/drm_gem_cma_helper.c	drmkms
+file	external/bsd/drm2/drm/drm_gem_framebuffer_helper.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_hashtab.c	drmkms
+file	external/bsd/drm2/drm/drm_hdcp.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_ioctl.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_irq.c	drmkms
 #file	external/bsd/drm2/dist/drm/drm_kms_helper_common.c	drmkms
+file	external/bsd/drm2/drm/drm_lease.c	drmkms
+file	external/bsd/drm2/drm/drm_memory.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_mm.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_mode_config.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_mode_object.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_modes.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_modeset_helper.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_modeset_lock.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_panel.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_panel_orientation_quirks.c	drmkms
 #file	external/bsd/drm2/dist/drm/drm_pci.c	drmkms	# drmkms_pci
+file	external/bsd/drm2/dist/drm/drm_plane.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_plane_helper.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_prime.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_print.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_probe_helper.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_property.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_rect.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_scdc_helper.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_self_refresh_helper.c	drmkms
 #file	external/bsd/drm2/dist/drm/drm_simple_kms_helper.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_syncobj.c	drmkms
+file	external/bsd/drm2/drm/drm_sysfs.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_trace_points.c	drmkms
+file	external/bsd/drm2/dist/drm/drm_vblank.c	drmkms
+file	external/bsd/drm2/drm/drm_vm.c	drmkms
+file	external/bsd/drm2/drm/drm_vma_manager.c	drmkms
+file	external/bsd/drm2/drm/drm_writeback.c	drmkms
