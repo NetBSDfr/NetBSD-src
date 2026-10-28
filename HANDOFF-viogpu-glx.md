@@ -1105,3 +1105,12 @@ DONE: meson-1.12.0nb1 and ninja-build-1.13.2 pkg_delete'd (nothing else
 depended on them).  smolBSD service/vioglx/ + vglx-pty.sh deliberately left
 UNCOMMITTED - user has different plans for them; do not delete, they will be
 useful.
+
+REPO/BRANCH STATE (2026-10-28): origin now = git@github.com:NetBSDfr/NetBSD-src
+(tatooine 192.168.17.1 kept as remote 'tatooine' only).  viogpu-glx history was
+SQUASHED 39 -> 12 topical code commits + md-only doc notes on top (tree
+hash-identical to pre-squash; backup branch viogpu-glx-orig).  Merge into
+supasmol (9d966e8, also on GitHub): still a pure fast-forward; to keep the
+process notes OUT of supasmol, ff merge up to ae2312b2043b (the last code
+commit; the doc commits on top are md-only).  If a plain branch merge is
+done instead, the notes go along.
