@@ -1,0 +1,79 @@
+/*	$NetBSD: shrinker.h,v 1.5 2021/12/19 01:22:37 riastradh Exp $	*/
+
+/*-
+ * Copyright (c) 2013 The NetBSD Foundation, Inc.
+ * All rights reserved.
+ *
+ * This code is derived from software contributed to The NetBSD Foundation
+ * by Taylor R. Campbell.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
+ * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#ifndef _LINUX_SHRINKER_H_
+#define _LINUX_SHRINKER_H_
+
+#include <uvm/uvm.h>
+
+struct shrink_control {
+	unsigned long	nr_to_scan;
+	unsigned long	nr_scanned;
+};
+
+struct shrinker {
+	int		(*shrink)(struct shrinker *, struct shrink_control *);
+	unsigned long	(*count_objects)(struct shrinker *,
+			    struct shrink_control *);
+	unsigned long	(*scan_objects)(struct shrinker *,
+			    struct shrink_control *);
+	int		seeks;
+	size_t		batch;
+};
+
+#define	SHRINK_STOP	(~0UL)
+
+#define	DEFAULT_SEEKS	2	/* XXX cargo-culted from Linux */
+
+static inline int
+register_shrinker(struct shrinker *shrinker __unused)
+{
+	return 0;
+}
+
+static inline void
+unregister_shrinker(struct shrinker *shrinker __unused)
+{
+}
+
+static inline bool
+current_is_kswapd(void)
+{
+	return curlwp == uvm.pagedaemon_lwp;
+}
+
+static inline size_t
+get_nr_swap_pages(void)
+{
+	return uvmexp.swpages;
+}
+
+#endif  /* _LINUX_SHRINKER_H_ */

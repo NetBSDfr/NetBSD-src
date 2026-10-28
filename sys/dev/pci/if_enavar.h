@@ -1,0 +1,590 @@
+/*	$NetBSD: if_enavar.h,v 1.10 2024/02/09 22:08:35 andvar Exp $	*/
+
+/*-
+ * BSD LICENSE
+ *
+ * Copyright (c) 2015-2017 Amazon.com, Inc. or its affiliates.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * $FreeBSD: head/sys/dev/ena/ena.h 333450 2018-05-10 09:06:21Z mw $
+ *
+ */
+
+#ifndef ENA_H
+#define ENA_H
+
+#include <sys/types.h>
+#include <sys/atomic.h>
+#include <sys/pcq.h>
+
+#include "external/bsd/ena-com/ena_com.h"
+#include "external/bsd/ena-com/ena_eth_com.h"
+
+#define DRV_MODULE_VER_MAJOR	0
+#define DRV_MODULE_VER_MINOR	8
+#define DRV_MODULE_VER_SUBMINOR 1
+
+#define DRV_MODULE_NAME		"ena"
+
+#ifndef DRV_MODULE_VERSION
+#define DRV_MODULE_VERSION				\
+	___STRING(DRV_MODULE_VER_MAJOR) "."		\
+	___STRING(DRV_MODULE_VER_MINOR) "."		\
+	___STRING(DRV_MODULE_VER_SUBMINOR)
+#endif
+#define DEVICE_NAME	"Elastic Network Adapter (ENA)"
+#define DEVICE_DESC	"ENA adapter"
+
+/* Calculate DMA mask - width for ena cannot exceed 48, so it is safe */
+#define ENA_DMA_BIT_MASK(x)		((1ULL << (x)) - 1ULL)
+
+/* 1 for AENQ + ADMIN */
+#define	ENA_ADMIN_MSIX_VEC		1
+#define	ENA_MAX_MSIX_VEC(io_queues)	(ENA_ADMIN_MSIX_VEC + (io_queues))
+
+#define	ENA_REG_BAR			PCI_BAR(0)
+#define	ENA_MEM_BAR			PCI_BAR(2)
+
+#define	ENA_BUS_DMA_SEGS		32
+
+#define	ENA_DEFAULT_RING_SIZE		1024
+
+#define	ENA_RX_REFILL_THRESH_DIVIDER	8
+
+#define	ENA_IRQNAME_SIZE		40
+
+#define	ENA_PKT_MAX_BUFS 		19
+
+#define	ENA_RX_RSS_TABLE_LOG_SIZE	7
+#define	ENA_RX_RSS_TABLE_SIZE		(1 << ENA_RX_RSS_TABLE_LOG_SIZE)
+
+#define	ENA_HASH_KEY_SIZE		40
+
+#define	ENA_MAX_FRAME_LEN		10000
+#define	ENA_MIN_FRAME_LEN 		60
+
+#define ENA_TX_CLEANUP_THRESHOLD	128
+
+#define DB_THRESHOLD	64
+
+#define TX_COMMIT	32
+ /*
+ * TX budget for cleaning. It should be half of the RX budget to reduce amount
+ *  of TCP retransmissions.
+ */
+#define TX_BUDGET	128
+/* RX cleanup budget. -1 stands for infinity. */
+#define RX_BUDGET	256
+/*
+ * How many times we can repeat cleanup in the io irq handling routine if the
+ * RX or TX budget was depleted.
+ */
+#define CLEAN_BUDGET	8
+
+#define RX_IRQ_INTERVAL 20
+#define TX_IRQ_INTERVAL 50
+
+#define	ENA_MIN_MTU		128
+
+#define	ENA_TSO_MAXSIZE		65536
+
+#define	ENA_MMIO_DISABLE_REG_READ	BIT(0)
+
+#define	ENA_TX_RING_IDX_NEXT(idx, ring_size) (((idx) + 1) & ((ring_size) - 1))
+
+#define	ENA_RX_RING_IDX_NEXT(idx, ring_size) (((idx) + 1) & ((ring_size) - 1))
+
+#define	ENA_IO_TXQ_IDX(q)		(2 * (q))
+#define	ENA_IO_RXQ_IDX(q)		(2 * (q) + 1)
+
+#define	ENA_MGMNT_IRQ_IDX		0
+#define	ENA_IO_IRQ_FIRST_IDX		1
+#define	ENA_IO_IRQ_IDX(q)		(ENA_IO_IRQ_FIRST_IDX + (q))
+
+/*
+ * ENA device should send keep alive msg every 1 sec.
+ * We wait for 6 sec just to be on the safe side.
+ */
+#define DEFAULT_KEEP_ALIVE_TO		(SBT_1S * 6)
+
+/* Time in jiffies before concluding the transmitter is hung. */
+#define DEFAULT_TX_CMP_TO		(SBT_1S * 5)
+
+/* Number of queues to check for missing queues per timer tick */
+#define DEFAULT_TX_MONITORED_QUEUES	(4)
+
+/* Max number of timeouted packets before device reset */
+#define DEFAULT_TX_CMP_THRESHOLD	(128)
+
+/*
+ * Supported PCI vendor and devices IDs
+ */
+#define	PCI_VENDOR_ID_AMAZON	0x1d0f
+
+#define	PCI_DEV_ID_ENA_PF	0x0ec2
+#define	PCI_DEV_ID_ENA_LLQ_PF	0x1ec2
+#define	PCI_DEV_ID_ENA_VF	0xec20
+#define	PCI_DEV_ID_ENA_LLQ_VF	0xec21
+
+/*
+ * Flags indicating current ENA driver state
+ */
+enum ena_flags_t {
+	ENA_FLAG_DEVICE_RUNNING,
+	ENA_FLAG_DEV_UP,
+	ENA_FLAG_LINK_UP,
+	ENA_FLAG_MSIX_ENABLED,
+	ENA_FLAG_TRIGGER_RESET,
+	ENA_FLAG_ONGOING_RESET,
+	ENA_FLAG_DEV_UP_BEFORE_RESET,
+	ENA_FLAG_RSS_ACTIVE,
+	ENA_FLAGS_NUMBER = ENA_FLAG_RSS_ACTIVE
+};
+
+#define ENA_FLAG_BITMASK(bit)	(~(uint32_t)__BIT(bit))
+#define ENA_FLAG_ZERO(adapter)	(adapter)->flags = 0;
+#define ENA_FLAG_ISSET(bit, adapter)	((adapter)->flags & __BIT(bit))
+#define ENA_FLAG_SET_ATOMIC(bit, adapter)	\
+	atomic_or_32(&(adapter)->flags, __BIT(bit))
+#define ENA_FLAG_CLEAR_ATOMIC(bit, adapter)	\
+	atomic_and_32(&(adapter)->flags, ENA_FLAG_BITMASK(bit))
+
+typedef __int64_t sbintime_t;
+
+struct msix_entry {
+	int entry;
+	int vector;
+};
+
+typedef struct _ena_vendor_info_t {
+	unsigned int vendor_id;
+	unsigned int device_id;
+	unsigned int index;
+} ena_vendor_info_t;
+
+struct ena_que {
+	struct ena_adapter *adapter;
+	struct ena_ring *tx_ring;
+	struct ena_ring *rx_ring;
+	uint32_t id;
+	int cpu;
+};
+
+struct ena_tx_buffer {
+	struct mbuf *mbuf;
+	/* # of ena desc for this specific mbuf
+	 * (includes data desc and metadata desc) */
+	unsigned int tx_descs;
+	/* # of buffers used by this mbuf */
+	unsigned int num_of_bufs;
+	bus_dmamap_t map;
+
+	/* Used to detect missing tx packets */
+	struct bintime timestamp;
+	bool print_once;
+
+	struct ena_com_buf bufs[ENA_PKT_MAX_BUFS];
+} __aligned(CACHE_LINE_SIZE);
+
+struct ena_rx_buffer {
+	struct mbuf *mbuf;
+	bus_dmamap_t map;
+	struct ena_com_buf ena_buf;
+} __aligned(CACHE_LINE_SIZE);
+
+struct ena_stats_tx {
+	char name[16];
+	struct evcnt cnt;
+	struct evcnt bytes;
+	struct evcnt prepare_ctx_err;
+	struct evcnt dma_mapping_err;
+	struct evcnt doorbells;
+	struct evcnt missing_tx_comp;
+	struct evcnt bad_req_id;
+	struct evcnt collapse;
+	struct evcnt collapse_err;
+	struct evcnt pcq_drops;
+};
+
+struct ena_stats_rx {
+	char name[16];
+	struct evcnt cnt;
+	struct evcnt bytes;
+	struct evcnt refil_partial;
+	struct evcnt bad_csum;
+	struct evcnt mbuf_alloc_fail;
+	struct evcnt dma_mapping_err;
+	struct evcnt bad_desc_num;
+	struct evcnt bad_req_id;
+	struct evcnt empty_rx_ring;
+};
+
+/*
+ * Locking notes:
+ * + For TX, a field in ena_ring is protected by ring_mtx (a spin mutex).
+ *   - protect them only when I/F is up.
+ *   - when I/F is down or attaching, detaching, no need to protect them.
+ * + For RX, a field "stopping" is protected by ring_mtx (a spin mutex).
+ *   - other fields in ena_ring are not protected.
+ * + a fields in ena_adapter is protected by global_mtx (a adaptive mutex).
+ *
+ * + a field marked "stable" is unlocked.
+ * + a field marked "atomic" is unlocked,
+ *   but must use atomic ops to read/write.
+ *
+ * Lock order:
+ * + global_mtx -> ring_mtx
+ */
+struct ena_ring {
+	/* Holds the empty requests for TX/RX out of order completions */
+	union {
+		uint16_t *free_tx_ids;
+		uint16_t *free_rx_ids;
+	};
+	struct ena_com_dev *ena_dev;
+	struct ena_adapter *adapter;
+	struct ena_com_io_cq *ena_com_io_cq;
+	struct ena_com_io_sq *ena_com_io_sq;
+
+	uint16_t qid;
+
+	/* Determines if device will use LLQ or normal mode for TX */
+	enum ena_admin_placement_policy_type tx_mem_queue_type;
+	/* The maximum length the driver can push to the device (For LLQ) */
+	uint8_t tx_max_header_size;
+
+	struct ena_com_rx_buf_info ena_bufs[ENA_PKT_MAX_BUFS];
+
+	/*
+	 * Fields used for Adaptive Interrupt Modulation - to be implemented in
+	 * the future releases
+	 */
+	uint32_t  smoothed_interval;
+	enum ena_intr_moder_level moder_tbl_idx;
+
+	struct ena_que *que;
+#ifdef LRO
+	struct lro_ctrl lro;
+#endif
+
+	uint16_t next_to_use;
+	uint16_t next_to_clean;
+
+	union {
+		struct ena_tx_buffer *tx_buffer_info; /* context of tx packet */
+		struct ena_rx_buffer *rx_buffer_info; /* context of rx packet */
+	};
+	int ring_size; /* number of tx/rx_buffer_info's entries */
+
+	pcq_t *br; /* only for TX */
+
+	kmutex_t ring_mtx;
+	char mtx_name[16];
+
+	union {
+		struct {
+			struct work enqueue_task;
+			struct workqueue *enqueue_tq;
+		};
+		struct {
+			struct work cleanup_task;
+			struct workqueue *cleanup_tq;
+		};
+	};
+	u_int task_pending; /* atomic */
+	bool stopping;
+
+	union {
+		struct ena_stats_tx tx_stats;
+		struct ena_stats_rx rx_stats;
+	};
+
+	int empty_rx_queue;
+} __aligned(CACHE_LINE_SIZE);
+
+struct ena_stats_dev {
+	char name[16];
+	struct evcnt wd_expired;
+	struct evcnt interface_up;
+	struct evcnt interface_down;
+	struct evcnt admin_q_pause;
+};
+
+struct ena_hw_stats {
+	char name[16];
+	struct evcnt rx_packets;
+	struct evcnt tx_packets;
+
+	struct evcnt rx_bytes;
+	struct evcnt tx_bytes;
+
+	struct evcnt rx_drops;
+};
+
+/* Board specific private data structure */
+struct ena_adapter {
+	struct ena_com_dev *ena_dev;
+
+	/* OS defined structs */
+	device_t pdev;
+        struct ethercom sc_ec;
+	struct ifnet *ifp;		/* set to point to sc_ec */
+	struct ifmedia	media;
+
+	/* OS resources */
+	kmutex_t global_mtx;
+
+	void *sc_ihs[ENA_MAX_MSIX_VEC(ENA_MAX_NUM_IO_QUEUES)];
+	pci_intr_handle_t *sc_intrs;
+	int sc_nintrs;
+	struct pci_attach_args sc_pa;
+
+	/* Registers */
+	bus_space_handle_t sc_bhandle;
+	bus_space_tag_t	sc_btag;
+	bus_addr_t sc_memaddr;
+	bus_size_t sc_mapsize;
+
+	/* DMA tag used throughout the driver adapter for Tx and Rx */
+	bus_dma_tag_t sc_dmat;
+	int dma_width;
+
+	uint32_t max_mtu;
+
+	uint16_t max_tx_sgl_size;
+	uint16_t max_rx_sgl_size;
+
+	uint32_t tx_offload_cap;
+
+	/* Tx fast path data */
+	int num_queues;
+
+	unsigned int tx_ring_size;
+	unsigned int rx_ring_size;
+
+	/* RSS*/
+	uint8_t	rss_ind_tbl[ENA_RX_RSS_TABLE_SIZE];
+	bool rss_support;
+	int initialized;
+
+	uint8_t mac_addr[ETHER_ADDR_LEN];
+	/* mdio and phy*/
+
+	uint32_t flags; /* atomic */
+
+	/* Queue will represent one TX and one RX ring */
+	struct ena_que que[ENA_MAX_NUM_IO_QUEUES]
+	    __aligned(CACHE_LINE_SIZE); /* stable */
+
+	/* TX */
+	struct ena_ring tx_ring[ENA_MAX_NUM_IO_QUEUES]
+	    __aligned(CACHE_LINE_SIZE);
+
+	/* RX */
+	struct ena_ring rx_ring[ENA_MAX_NUM_IO_QUEUES]
+	    __aligned(CACHE_LINE_SIZE);
+
+	/* Timer service */
+	struct callout timer_service;
+	sbintime_t keep_alive_timestamp;
+	uint32_t next_monitored_tx_qid;
+	struct work reset_task;
+	struct workqueue *reset_tq;
+	int wd_active;
+	sbintime_t keep_alive_timeout;
+	sbintime_t missing_tx_timeout;
+	uint32_t missing_tx_max_queues;
+	uint32_t missing_tx_threshold;
+
+	/* Statistics */
+	struct ena_stats_dev dev_stats;
+	struct ena_hw_stats hw_stats;
+
+	enum ena_regs_reset_reason_types reset_reason;
+};
+
+#define	ENA_RING_MTX_LOCK(_ring)	mutex_enter(&(_ring)->ring_mtx)
+#define	ENA_RING_MTX_TRYLOCK(_ring)	mutex_tryenter(&(_ring)->ring_mtx)
+#define	ENA_RING_MTX_UNLOCK(_ring)	mutex_exit(&(_ring)->ring_mtx)
+#define	ENA_RING_MTX_OWNED(_ring)	mutex_owned(&(_ring)->ring_mtx)
+
+#define	ENA_CORE_MTX_LOCK(_adapter)		mutex_enter(&(_adapter)->global_mtx)
+#define	ENA_CORE_MTX_TRYLOCK(_adapter)	mutex_tryenter(&(_adapter)->global_mtx)
+#define	ENA_CORE_MTX_UNLOCK(_adapter)	mutex_exit(&(_adapter)->global_mtx)
+#define	ENA_CORE_MTX_OWNED(_adapter)	mutex_owned(&(_adapter)->global_mtx)
+
+static inline int ena_mbuf_count(struct mbuf *mbuf)
+{
+	int count = 1;
+
+	while ((mbuf = mbuf->m_next) != NULL)
+		++count;
+
+	return count;
+}
+
+/* provide FreeBSD-compatible macros */
+#define	if_getcapenable(ifp)		(ifp)->if_capenable
+#define	if_setcapenable(ifp, s)		SET((ifp)->if_capenable, s)
+#define if_getcapabilities(ifp)		(ifp)->if_capabilities
+#define if_setcapabilities(ifp, s)	SET((ifp)->if_capabilities, s)
+#define if_setcapabilitiesbit(ifp, s, c) do {	\
+		CLR((ifp)->if_capabilities, c);	\
+		SET((ifp)->if_capabilities, s);	\
+	} while (0)
+#define	if_getsoftc(ifp)		(ifp)->if_softc
+#define if_setmtu(ifp, new_mtu)		(ifp)->if_mtu = (new_mtu)
+#define if_getdrvflags(ifp)		(ifp)->if_flags
+#define if_setdrvflagbits(ifp, s, c)	do {	\
+		CLR((ifp)->if_flags, c);	\
+		SET((ifp)->if_flags, s);	\
+	} while (0)
+#define	if_setflags(ifp, s)		SET((ifp)->if_flags, s)
+#define if_sethwassistbits(ifp, s, c)	do {		\
+		CLR((ifp)->if_csum_flags_rx, c);	\
+		SET((ifp)->if_csum_flags_rx, s);	\
+	} while (0)
+#define if_clearhwassist(ifp)		(ifp)->if_csum_flags_rx = 0
+#define if_setbaudrate(ifp, r)		(ifp)->if_baudrate = (r)
+#define if_setdev(ifp, dev)		do { } while (0)
+#define if_setsoftc(ifp, softc)		(ifp)->if_softc = (softc)
+#define if_setinitfn(ifp, initfn)	(ifp)->if_init = (initfn)
+#define if_settransmitfn(ifp, txfn)	(ifp)->if_transmit = (txfn)
+#define if_setioctlfn(ifp, ioctlfn)	(ifp)->if_ioctl = (ioctlfn)
+#define if_setsendqlen(ifp, sqlen)	\
+	IFQ_SET_MAXLEN(&(ifp)->if_snd, uimax(sqlen, IFQ_MAXLEN))
+#define if_setsendqready(ifp)		IFQ_SET_READY(&(ifp)->if_snd)
+#define if_setifheaderlen(ifp, len)	(ifp)->if_hdrlen = (len)
+
+#define	SBT_1S	((sbintime_t)1 << 32)
+#define bintime_clear(a)	((a)->sec = (a)->frac = 0)
+#define	bintime_isset(a)	((a)->sec || (a)->frac)
+
+static __inline sbintime_t
+bttosbt(const struct bintime _bt)
+{
+	return (((sbintime_t)_bt.sec << 32) + (_bt.frac >> 32));
+}
+
+static __inline sbintime_t
+getsbinuptime(void)
+{
+	struct bintime _bt;
+
+	getbinuptime(&_bt);
+	return (bttosbt(_bt));
+}
+
+/* Intentionally non-atomic, it's just unnecessary overhead */
+#define counter_u64_add(x, cnt)			(x).ev_count += (cnt)
+#define counter_u64_zero(x)			(x).ev_count = 0
+#define counter_u64_free(x)			evcnt_detach(&(x))
+
+#define counter_u64_add_protected(x, cnt)	(x).ev_count += (cnt)
+#define counter_enter()				do {} while (0)
+#define counter_exit()				do {} while (0)
+
+/* Misc other constants */
+#define	mp_ncpus			ncpu
+#define osreldate			__NetBSD_Version__
+
+/*
+ * XXX XXX XXX just to make compile, must provide replacement XXX XXX XXX
+ * Other than that, TODO:
+ * - decide whether to import <sys/buf_ring.h>
+ * - recheck the M_CSUM/IPCAP mapping
+ * - recheck workqueue use - FreeBSD taskqueues might have different semantics
+ */
+#define buf_ring_alloc(a, b, c, d)	(void *)&a
+#define drbr_free(ifp, b)		do { } while (0)
+#define drbr_flush(ifp, b)		IFQ_PURGE(&(ifp)->if_snd)
+#define drbr_advance(ifp, b)					\
+	({							\
+		struct mbuf *__m;				\
+		IFQ_DEQUEUE(&(ifp)->if_snd, __m);		\
+		__m;						\
+	})
+#define drbr_putback(ifp, b, m)		do { } while (0)
+#define drbr_empty(ifp, b)		IFQ_IS_EMPTY(&(ifp)->if_snd)
+#define drbr_peek(ifp, b)					\
+	({							\
+		struct mbuf *__m;				\
+		IFQ_POLL(&(ifp)->if_snd, __m);			\
+		__m;						\
+	})
+#define drbr_enqueue(ifp, b, m)					\
+	({							\
+		int __err;					\
+		IFQ_ENQUEUE(&(ifp)->if_snd, m, __err);		\
+		__err;						\
+	})
+#define m_getjcl(a, b, c, d)		NULL
+#define MJUM16BYTES			MCLBYTES
+#define m_append(m, len, cp)		ena_m_append(m, len, cp)
+#define m_collapse(m, how, maxfrags)	m_defrag(m, how)	/* XXX */
+/* XXX XXX XXX */
+
+static inline int
+ena_m_append(struct mbuf *m0, int len, const void *cpv)
+{
+	struct mbuf *m, *n;
+	int remainder, space;
+	const char *cp = cpv;
+
+	KASSERT(len != M_COPYALL);
+	for (m = m0; m->m_next != NULL; m = m->m_next)
+		continue;
+	remainder = len;
+	space = M_TRAILINGSPACE(m);
+	if (space > 0) {
+		/*
+		 * Copy into available space.
+		 */
+		if (space > remainder)
+			space = remainder;
+		memmove(mtod(m, char *) + m->m_len, cp, space);
+		m->m_len += space;
+		cp = cp + space, remainder -= space;
+	}
+	while (remainder > 0) {
+		/*
+		 * Allocate a new mbuf; could check space
+		 * and allocate a cluster instead.
+		 */
+		n = m_get(M_DONTWAIT, m->m_type);
+		if (n == NULL)
+			break;
+		n->m_len = uimin(MLEN, remainder);
+		memmove(mtod(n, void *), cp, n->m_len);
+		cp += n->m_len, remainder -= n->m_len;
+		m->m_next = n;
+		m = n;
+	}
+	if (m0->m_flags & M_PKTHDR)
+		m0->m_pkthdr.len += len - remainder;
+	return (remainder == 0);
+}
+#endif /* !(ENA_H) */

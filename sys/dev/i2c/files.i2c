@@ -7,10 +7,13 @@ define	i2cexec
 device	iic { [addr = -1] } : i2c_bitbang
 attach	iic at i2cbus
 file	dev/i2c/i2c.c				iic	needs-flag
+file	dev/i2c/i2c_exec.c			iic | i2cbus | i2cexec
+file	dev/i2c/i2c_subr.c			i2cbus
 defparam opt_i2c.h				I2C_MAX_ADDR
 
 # Common module for bit-bang'ing an I2C bus
 define	i2c_bitbang
+file	dev/i2c/i2c_bitbang.c			i2c_bitbang
 
 # Common module for i2c mux support
 define	i2cmux

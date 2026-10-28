@@ -1,0 +1,784 @@
+/* $NetBSD: ixgbe.h,v 1.100 2025/02/26 04:49:46 andvar Exp $ */
+
+/******************************************************************************
+  SPDX-License-Identifier: BSD-3-Clause
+
+  Copyright (c) 2001-2017, Intel Corporation
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+   1. Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+
+   2. Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+
+   3. Neither the name of the Intel Corporation nor the names of its
+      contributors may be used to endorse or promote products derived from
+      this software without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
+
+******************************************************************************/
+/*$FreeBSD: head/sys/dev/ixgbe/ixgbe.h 327031 2017-12-20 18:15:06Z erj $*/
+
+/*
+ * Copyright (c) 2011 The NetBSD Foundation, Inc.
+ * All rights reserved.
+ *
+ * This code is derived from software contributed to The NetBSD Foundation
+ * by Coyote Point Systems, Inc.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
+ * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
+
+#ifndef _IXGBE_H_
+#define _IXGBE_H_
+
+
+#include <sys/param.h>
+#include <sys/reboot.h>
+#include <sys/systm.h>
+#include <sys/pcq.h>
+#include <sys/mbuf.h>
+#include <sys/protosw.h>
+#include <sys/socket.h>
+#include <sys/malloc.h>
+#include <sys/kernel.h>
+#include <sys/module.h>
+#include <sys/sockio.h>
+#include <sys/percpu.h>
+
+#include <net/if.h>
+#include <net/if_arp.h>
+#include <net/bpf.h>
+#include <net/if_ether.h>
+#include <net/if_dl.h>
+#include <net/if_media.h>
+
+#include <net/if_types.h>
+#include <net/if_vlanvar.h>
+
+#include <netinet/in_systm.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/ip6.h>
+#include <netinet/tcp.h>
+#include <netinet/udp.h>
+
+#include <sys/bus.h>
+#include <dev/pci/pcivar.h>
+#include <dev/pci/pcireg.h>
+#include <sys/proc.h>
+#include <sys/sysctl.h>
+#include <sys/endian.h>
+#include <sys/workqueue.h>
+#include <sys/cpu.h>
+#include <sys/interrupt.h>
+#include <sys/bitops.h>
+
+#include "ixgbe_netbsd.h"
+#include "ixgbe_api.h"
+#include "ixgbe_common.h"
+#include "ixgbe_vf.h"
+#include "ixgbe_features.h"
+
+/* Tunables */
+
+/*
+ * TxDescriptors Valid Range: 64-4096 Default Value: 2048 This value is the
+ * number of transmit descriptors allocated by the driver. Increasing this
+ * value allows the driver to queue more transmits. Each descriptor is 16
+ * bytes. Performance tests have show the 2K value to be optimal for top
+ * performance.
+ */
+#define DEFAULT_TXD	2048
+#define MAX_TXD		4096
+#define MIN_TXD		64
+
+/*
+ * RxDescriptors Valid Range: 64-4096 Default Value: 2048 This value is the
+ * number of receive descriptors allocated for each RX queue. Increasing this
+ * value allows the driver to buffer more incoming packets. Each descriptor
+ * is 16 bytes.  A receive buffer is also allocated for each descriptor.
+ *
+ * Note: with 8 rings and a dual port card, it is possible to bump up
+ *	against the system mbuf pool limit, you can tune nmbclusters
+ *	to adjust for this.
+ */
+#define DEFAULT_RXD	2048
+#define MAX_RXD		4096
+#define MIN_RXD		64
+
+/* Alignment for rings */
+#define DBA_ALIGN	128
+
+/*
+ * This is the max watchdog interval, ie. the time that can
+ * pass between any two TX clean operations, such only happening
+ * when the TX hardware is functioning.
+ */
+#define IXGBE_WATCHDOG  (10 * hz)
+
+/*
+ * This parameters control when the driver calls the routine to reclaim
+ * transmit descriptors.
+ */
+#define IXGBE_TX_CLEANUP_THRESHOLD(_a)  ((_a)->num_tx_desc / 8)
+#define IXGBE_TX_OP_THRESHOLD(_a)       ((_a)->num_tx_desc / 32)
+
+/* These defines are used in MTU calculations */
+#define IXGBE_MAX_FRAME_SIZE  9728
+#define IXGBE_MTU_HDR         (ETHER_HDR_LEN + ETHER_CRC_LEN)
+#define IXGBE_MTU_HDR_VLAN    (ETHER_HDR_LEN + ETHER_CRC_LEN + \
+                               ETHER_VLAN_ENCAP_LEN)
+#define IXGBE_MAX_MTU         (IXGBE_MAX_FRAME_SIZE - IXGBE_MTU_HDR)
+#define IXGBE_MAX_MTU_VLAN    (IXGBE_MAX_FRAME_SIZE - IXGBE_MTU_HDR_VLAN)
+
+/* Flow control constants */
+#define IXGBE_FC_PAUSE        0xFFFF
+
+/*
+ * Used for optimizing small rx mbufs.  Effort is made to keep the copy
+ * small and aligned for the CPU L1 cache.
+ *
+ * MHLEN is typically 168 bytes, giving us 8-byte alignment.  Getting
+ * 32 byte alignment needed for the fast bcopy results in 8 bytes being
+ * wasted.  Getting 64 byte alignment, which _should_ be ideal for
+ * modern Intel CPUs, results in 40 bytes wasted and a significant drop
+ * in observed efficiency of the optimization, 97.9% -> 81.8%.
+ */
+#define IXGBE_RX_COPY_LEN_MAX     (MHLEN - ETHER_ALIGN)
+
+/*
+ * Default TX WTHRESH value.
+ * Currently, we don't use the Tx Head Pointer Write Back function.
+ */
+#define IXGBE_TX_WTHRESH	5
+
+/*
+ * The max number of descriptors that one packet can use is 40 - WTHRESH - 2.
+ * Though 82598 does not have this limit, we don't want long TX chain.
+ * 33 should be large enough even for 64K TSO
+ * (32 * 2K mbuf cluster and 1 x mbuf header).
+ *
+ * Reference: 82599-X550 datasheet 7.2.1.1 "Transmit Storage in System Memory".
+ */
+#define IXGBE_82599_SCATTER_MAX	(40 - IXGBE_TX_WTHRESH - 2)
+#define IXGBE_SCATTER_DEFAULT	33
+
+/* Defines for printing debug information */
+#define DEBUG_INIT  0
+#define DEBUG_IOCTL 0
+#define DEBUG_HW    0
+
+#define INIT_DEBUGOUT(S)            if (DEBUG_INIT)  printf(S "\n")
+#define INIT_DEBUGOUT1(S, A)        if (DEBUG_INIT)  printf(S "\n", A)
+#define INIT_DEBUGOUT2(S, A, B)     if (DEBUG_INIT)  printf(S "\n", A, B)
+#define IOCTL_DEBUGOUT(S)           if (DEBUG_IOCTL) printf(S "\n")
+#define IOCTL_DEBUGOUT1(S, A)       if (DEBUG_IOCTL) printf(S "\n", A)
+#define IOCTL_DEBUGOUT2(S, A, B)    if (DEBUG_IOCTL) printf(S "\n", A, B)
+#define HW_DEBUGOUT(S)              if (DEBUG_HW) printf(S "\n")
+#define HW_DEBUGOUT1(S, A)          if (DEBUG_HW) printf(S "\n", A)
+#define HW_DEBUGOUT2(S, A, B)       if (DEBUG_HW) printf(S "\n", A, B)
+
+#define MAX_NUM_MULTICAST_ADDRESSES     128
+#define MSIX_82598_BAR                  3
+#define MSIX_82599_BAR                  4
+#define IXGBE_TSO_SIZE                  262140
+#define IXGBE_RX_HDR                    128
+#define IXGBE_VFTA_SIZE                 128
+#define IXGBE_BR_SIZE                   2048
+#define IXGBE_QUEUE_MIN_FREE            32
+#define IXGBE_MAX_TX_BUSY               10
+#define IXGBE_QUEUE_HUNG                0x80000000
+
+#define IXGBE_EITR_DEFAULT		128
+
+/* IOCTL define to gather SFP+ Diagnostic data */
+#define SIOCGI2C	SIOCGIFGENERIC
+
+/* Offload bits in mbuf flag */
+#define	M_CSUM_OFFLOAD	\
+    (M_CSUM_IPv4|M_CSUM_UDPv4|M_CSUM_TCPv4|M_CSUM_UDPv6|M_CSUM_TCPv6)
+
+/* Backward compatibility items for very old versions */
+#ifndef pci_find_cap
+#define pci_find_cap pci_find_extcap
+#endif
+
+#ifndef DEVMETHOD_END
+#define DEVMETHOD_END { NULL, NULL }
+#endif
+
+/*
+ * Interrupt Moderation parameters
+ */
+#define IXGBE_LOW_LATENCY	128
+#define IXGBE_AVE_LATENCY	400
+#define IXGBE_BULK_LATENCY	1200
+
+/* Using 1FF (the max value), the interval is ~1.05ms */
+#define IXGBE_LINK_ITR_QUANTA  0x1FF
+#define IXGBE_LINK_ITR         ((IXGBE_LINK_ITR_QUANTA << 3) & \
+                                IXGBE_EITR_ITR_INT_MASK)
+
+
+/************************************************************************
+ * vendor_info_array
+ *
+ *   Contains the list of Subvendor/Subdevice IDs on
+ *   which the driver should load.
+ ************************************************************************/
+typedef struct _ixgbe_vendor_info_t {
+	unsigned int vendor_id;
+	unsigned int device_id;
+	unsigned int subvendor_id;
+	unsigned int subdevice_id;
+	unsigned int index;
+} ixgbe_vendor_info_t;
+
+/* This is used to get SFP+ module data */
+struct ixgbe_i2c_req {
+	u8 dev_addr;
+	u8 offset;
+	u8 len;
+	u8 data[8];
+};
+
+struct ixgbe_bp_data {
+	u32 low;
+	u32 high;
+	u32 log;
+};
+
+struct ixgbe_tx_buf {
+	union ixgbe_adv_tx_desc	*eop;
+	struct mbuf             *m_head;
+	bus_dmamap_t            map;
+};
+
+struct ixgbe_rx_buf {
+	struct mbuf    *buf;
+	struct mbuf    *fmp;
+	bus_dmamap_t   pmap;
+	u_int          flags;
+#define IXGBE_RX_COPY  0x01
+	uint64_t       addr;
+};
+
+/*
+ * Bus dma allocation structure used by ixgbe_dma_malloc and ixgbe_dma_free
+ */
+struct ixgbe_dma_alloc {
+	bus_addr_t        dma_paddr;
+	void              *dma_vaddr;
+	ixgbe_dma_tag_t   *dma_tag;
+	bus_dmamap_t      dma_map;
+	bus_dma_segment_t dma_seg;
+	bus_size_t        dma_size;
+};
+
+struct ixgbe_mc_addr {
+	u8  addr[IXGBE_ETH_LENGTH_OF_ADDRESS];
+	u32 vmdq;
+};
+
+/*
+ * Driver queue struct: this is the interrupt container
+ *                      for the associated tx and rx ring.
+ */
+struct ix_queue {
+	struct ixgbe_softc *sc;
+	u32              msix;           /* This queue's MSI-X vector */
+	u32              eitr_setting;
+	u8               me;
+	struct resource  *res;
+	int              busy;
+	struct tx_ring   *txr;
+	struct rx_ring   *rxr;
+	struct work      wq_cookie;
+	void             *que_si;
+	/* Per queue event counters */
+	struct evcnt     irqs;		/* Hardware interrupt */
+	struct evcnt     handleq;	/* software_interrupt */
+	struct evcnt     req;		/* deferred */
+	char             namebuf[32];	/* Name for sysctl */
+	char             evnamebuf[32];	/* Name for evcnt */
+
+	/* Lock for disabled_count and this queue's EIMS/EIMC bit */
+	kmutex_t         dc_mtx;
+	/*
+	 * disabled_count means:
+	 *     0   : this queue is enabled
+	 *     > 0 : this queue is disabled
+	 *           the value is ixgbe_disable_queue() called count
+	 */
+	int              disabled_count;
+	bool             txrx_use_workqueue;
+};
+
+/*
+ * The transmit ring, one per queue
+ */
+struct tx_ring {
+	struct ixgbe_softc	*sc;
+	kmutex_t		tx_mtx;
+	u8			me;
+	u32			tail;
+	int			busy;
+	union ixgbe_adv_tx_desc	*tx_base;
+	struct ixgbe_tx_buf	*tx_buffers;
+	struct ixgbe_dma_alloc	txdma;
+	volatile u16		tx_avail;
+	u16			next_avail_desc;
+	u16			next_to_clean;
+	u16			num_desc;
+	ixgbe_dma_tag_t		*txtag;
+#if 0
+	char			mtx_name[16]; /* NetBSD has no mutex name */
+#endif
+	pcq_t			*txr_interq;
+	struct work		wq_cookie;
+	void			*txr_si;
+	bool			txr_no_space; /* Like IFF_OACTIVE */
+
+#ifdef IXGBE_FDIR
+	/* Flow Director */
+	u16			atr_sample;
+	u16			atr_count;
+#endif
+
+	u64			bytes;  /* Used for AIM */
+	u64			packets;
+	/* Soft Stats */
+	struct evcnt		total_packets;
+	struct evcnt		pcq_drops;
+	struct evcnt		no_desc_avail;
+	struct evcnt		tso_tx;
+	/* Per queue counters.  The adapter total is in struct adapter */
+	u64              q_efbig_tx_dma_setup;
+	u64              q_mbuf_defrag_failed;
+	u64              q_efbig2_tx_dma_setup;
+	u64              q_einval_tx_dma_setup;
+	u64              q_other_tx_dma_setup;
+	u64              q_eagain_tx_dma_setup;
+	u64              q_enomem_tx_dma_setup;
+	u64              q_tso_err;
+};
+
+
+/*
+ * The Receive ring, one per rx queue
+ */
+struct rx_ring {
+	struct ixgbe_softc	*sc;
+	kmutex_t		rx_mtx;
+	u8			me;
+	u32			tail;
+	union ixgbe_adv_rx_desc	*rx_base;
+	struct ixgbe_dma_alloc	rxdma;
+#ifdef LRO
+	struct lro_ctrl		lro;
+	bool			lro_enabled;
+#endif /* LRO */
+#ifdef RSC
+	bool			hw_rsc;
+#endif
+	bool			vtag_strip;
+	bool			discard_multidesc;
+	u16			next_to_refresh;
+	u16			next_to_check;
+	u16			num_desc;
+	u16			mbuf_sz;
+#if 0
+	char			mtx_name[16]; /* NetBSD has no mutex name */
+#endif
+	struct ixgbe_rx_buf	*rx_buffers;
+	ixgbe_dma_tag_t		*ptag;
+
+	u64			bytes; /* Used for AIM calc */
+	u64			packets;
+
+	/* Soft stats */
+	struct evcnt		rx_copies;
+	struct evcnt		rx_packets;
+	struct evcnt		rx_bytes;
+	struct evcnt		rx_discarded;
+	struct evcnt		no_mbuf;
+#ifdef RSC
+	u64			rsc_num;
+#endif
+};
+
+struct ixgbe_vf {
+	u_int    pool;
+	u_int    rar_index;
+	u_int    max_frame_size;
+	uint32_t flags;
+	uint8_t  ether_addr[ETHER_ADDR_LEN];
+	uint16_t mc_hash[IXGBE_MAX_VF_MC];
+	uint16_t num_mc_hashes;
+	uint16_t default_vlan;
+	uint16_t vlan_tag;
+	uint16_t api_ver;
+};
+
+/*
+ * NetBSD: For traffic class
+ * Currently, the following structure is only for statistics.
+ */
+struct ixgbe_tc {
+	char             evnamebuf[32];
+};
+
+/* Our adapter structure */
+struct ixgbe_softc {
+	struct ixgbe_hw		hw;
+	struct ixgbe_osdep	osdep;
+
+	device_t		dev;
+	struct ifnet		*ifp;
+	struct if_percpuq	*ipq;	/* softint-based input queues */
+
+	struct resource		*pci_mem;
+
+	/* NetBSD: Interrupt resources are in osdep */
+
+	struct ifmedia		media;
+	callout_t		timer;
+	struct workqueue	*timer_wq;
+	struct work		timer_wc;
+	u_int			timer_pending;
+
+	u_short			if_flags;	/* saved ifp->if_flags */
+	int			ec_capenable;	/* saved ec->ec_capenable */
+
+	kmutex_t		core_mtx;
+
+	unsigned int		num_queues;
+
+	/*
+	 * Shadow VFTA table, this is needed because
+	 * the real vlan filter table gets cleared during
+	 * a soft reset and the driver needs to be able
+	 * to repopulate it.
+	 */
+	u32			shadow_vfta[IXGBE_VFTA_SIZE];
+
+	/* Info about the interface */
+	int			advertise;  /* link speeds */
+	bool			enable_aim; /* adaptive interrupt moderation */
+	int			max_interrupt_rate;
+	int			link_active; /* Use LINK_STATE_* value */
+	u16			max_frame_size;
+	u16			num_segs;
+	u32			link_speed;
+	bool			link_up;
+	bool                    link_enabled;
+	u32			vector;
+	u16			dmac;
+	u32			phy_layer;
+
+	/* Power management-related */
+	bool			wol_support;
+	u32			wufc;
+
+	/* Mbuf cluster size */
+	u32			rx_mbuf_sz;
+
+	bool			schedule_wqs_ok;
+
+	/* Flow Director */
+	int			fdir_reinit;
+
+	/* Admin task */
+	struct workqueue	*admin_wq; /* Link, SFP, PHY and FDIR */
+	struct work		admin_wc;
+	u_int			admin_pending;
+	volatile u32		task_requests;
+	kmutex_t		admin_mtx; /* lock for admin_pending, task_request */
+					   /*
+					    * Don't acquire this mutex while
+					    * holding rx_mtx or tx_mtx, and
+					    * vice versa.
+					    */
+
+	bool			txrx_use_workqueue;
+
+	/*
+	 * Workqueue for ixgbe_handle_que_work().
+	 *
+	 * que_wq's "enqueued flag" is not required, because twice
+	 * workqueue_enqueue() for ixgbe_handle_que_work() is avoided by
+	 * masking the queue's interrupt by EIMC. See also ixgbe_msix_que().
+	 */
+	struct workqueue	*que_wq;
+	/* Workqueue for ixgbe_deferred_mq_start_work() */
+	struct workqueue	*txr_wq;
+	percpu_t		*txr_wq_enqueued;
+
+	/*
+	 * Queues:
+	 *   This is the irq holder, it has
+	 *   and RX/TX pair or rings associated
+	 *   with it.
+	 */
+	struct ix_queue		*queues;
+
+	/*
+	 * Transmit rings
+	 *      Allocated at run time, an array of rings
+	 */
+	struct tx_ring		*tx_rings;
+	u32			num_tx_desc;
+	u32			tx_process_limit;
+
+	/*
+	 * Receive rings
+	 *      Allocated at run time, an array of rings
+	 */
+	struct rx_ring		*rx_rings;
+	u64			active_queues;
+	u32			num_rx_desc;
+	u32			rx_process_limit;
+	u32			rx_copy_len;
+
+	/* Multicast array memory */
+	struct ixgbe_mc_addr	*mta;
+
+	/* SR-IOV */
+	int                     iov_mode;
+	int			num_vfs;
+	int			pool;
+	struct ixgbe_vf		*vfs;
+
+	/* Bypass */
+	struct ixgbe_bp_data    bypass;
+
+	/* Netmap */
+	void			(*init_locked)(struct ixgbe_softc *);
+	void			(*stop_locked)(void *);
+
+	/* Firmware error check */
+	u_int                   recovery_mode;
+	callout_t               recovery_mode_timer;
+	struct workqueue        *recovery_mode_timer_wq;
+	struct work             recovery_mode_timer_wc;
+	u_int			recovery_mode_timer_pending;
+
+	/* Misc stats maintained by the driver */
+	struct evcnt		efbig_tx_dma_setup;
+	struct evcnt		mbuf_defrag_failed;
+	struct evcnt		efbig2_tx_dma_setup;
+	struct evcnt		einval_tx_dma_setup;
+	struct evcnt		other_tx_dma_setup;
+	struct evcnt		eagain_tx_dma_setup;
+	struct evcnt		enomem_tx_dma_setup;
+	struct evcnt		tso_err;
+	struct evcnt		watchdog_events;
+	struct evcnt		admin_irqev;
+	struct evcnt		link_workev;
+	struct evcnt		mod_workev;
+	struct evcnt		msf_workev;
+	struct evcnt		phy_workev;
+
+	union {
+		struct ixgbe_hw_stats pf;
+		struct ixgbevf_hw_stats	vf;
+	} stats;
+#if __FreeBSD_version >= 1100036
+	/* counter(9) stats */
+	u64			ipackets;
+	u64			ierrors;
+	u64			opackets;
+	u64			oerrors;
+	u64			ibytes;
+	u64			obytes;
+	u64			imcasts;
+	u64			omcasts;
+	u64			iqdrops;
+	u64			noproto;
+#endif
+	/* Feature capable/enabled flags.  See ixgbe_features.h */
+	u32                     feat_cap;
+	u32                     feat_en;
+
+	/* Traffic classes */
+	struct ixgbe_tc tcs[IXGBE_DCB_MAX_TRAFFIC_CLASS];
+
+	struct sysctllog	*sysctllog;
+	const struct sysctlnode *sysctltop;
+	struct timeval		lasterr_time;
+};
+
+/* Precision Time Sync (IEEE 1588) defines */
+#define ETHERTYPE_IEEE1588      0x88F7
+#define PICOSECS_PER_TICK       20833
+#define TSYNC_UDP_PORT          319 /* UDP port for the protocol */
+#define IXGBE_ADVTXD_TSTAMP     0x00080000
+
+
+#define IXGBE_CORE_LOCK_INIT(_sc, _name) \
+	mutex_init(&(_sc)->core_mtx, MUTEX_DEFAULT, IPL_SOFTNET)
+#define IXGBE_CORE_LOCK_DESTROY(_sc)      mutex_destroy(&(_sc)->core_mtx)
+#define IXGBE_TX_LOCK_DESTROY(_sc)        mutex_destroy(&(_sc)->tx_mtx)
+#define IXGBE_RX_LOCK_DESTROY(_sc)        mutex_destroy(&(_sc)->rx_mtx)
+#define IXGBE_CORE_LOCK(_sc)              mutex_enter(&(_sc)->core_mtx)
+#define IXGBE_TX_LOCK(_sc)                mutex_enter(&(_sc)->tx_mtx)
+#define IXGBE_TX_TRYLOCK(_sc)             mutex_tryenter(&(_sc)->tx_mtx)
+#define IXGBE_RX_LOCK(_sc)                mutex_enter(&(_sc)->rx_mtx)
+#define IXGBE_CORE_UNLOCK(_sc)            mutex_exit(&(_sc)->core_mtx)
+#define IXGBE_TX_UNLOCK(_sc)              mutex_exit(&(_sc)->tx_mtx)
+#define IXGBE_RX_UNLOCK(_sc)              mutex_exit(&(_sc)->rx_mtx)
+#define IXGBE_CORE_LOCK_ASSERT(_sc)       KASSERT(mutex_owned(&(_sc)->core_mtx))
+#define IXGBE_TX_LOCK_ASSERT(_sc)         KASSERT(mutex_owned(&(_sc)->tx_mtx))
+
+/* External PHY register addresses */
+#define IXGBE_PHY_CURRENT_TEMP		0xC820
+#define IXGBE_PHY_OVERTEMP_STATUS	0xC830
+
+/* Sysctl help messages; displayed with sysctl -d */
+#define IXGBE_SYSCTL_DESC_ADV_SPEED \
+	"\nControl advertised link speed using these flags:\n" \
+	"\t0x1  - advertise 100M\n" \
+	"\t0x2  - advertise 1G\n" \
+	"\t0x4  - advertise 10G\n" \
+	"\t0x8  - advertise 10M\n" \
+	"\t0x10 - advertise 2.5G\n" \
+	"\t0x20 - advertise 5G\n\n" \
+	"\t5G, 2.5G, 100M and 10M are only supported on certain adapters."
+
+#define IXGBE_SYSCTL_DESC_SET_FC \
+	"\nSet flow control mode using these values:\n" \
+	"\t0 - off\n" \
+	"\t1 - rx pause\n" \
+	"\t2 - tx pause\n" \
+	"\t3 - tx and rx pause"
+
+/*
+ * Find the number of unrefreshed RX descriptors
+ */
+static __inline u16
+ixgbe_rx_unrefreshed(struct rx_ring *rxr)
+{
+	if (rxr->next_to_check > rxr->next_to_refresh)
+		return (rxr->next_to_check - rxr->next_to_refresh - 1);
+	else
+		return ((rxr->num_desc + rxr->next_to_check) -
+		    rxr->next_to_refresh - 1);
+}
+
+static __inline int
+ixgbe_legacy_ring_empty(struct ifnet *ifp, pcq_t *dummy)
+{
+	UNREFERENCED_1PARAMETER(dummy);
+
+	return IFQ_IS_EMPTY(&ifp->if_snd);
+}
+
+static __inline int
+ixgbe_mq_ring_empty(struct ifnet *dummy, pcq_t *interq)
+{
+	UNREFERENCED_1PARAMETER(dummy);
+
+	return (pcq_peek(interq) == NULL);
+}
+
+/*
+ * This checks for a zero mac addr, something that will be likely
+ * unless the Admin on the Host has created one.
+ */
+static __inline bool
+ixv_check_ether_addr(u8 *addr)
+{
+	bool status = TRUE;
+
+	if ((addr[0] == 0 && addr[1]== 0 && addr[2] == 0 &&
+	    addr[3] == 0 && addr[4]== 0 && addr[5] == 0))
+		status = FALSE;
+
+	return (status);
+}
+
+/*
+ * This checks the sc->recovery_mode software flag which is
+ * set by ixgbe_fw_recovery_mode().
+ *
+ */
+static inline bool
+ixgbe_fw_recovery_mode_swflag(struct ixgbe_softc *sc)
+{
+	return (sc->feat_en & IXGBE_FEATURE_RECOVERY_MODE) &&
+	    atomic_load_acq_uint(&sc->recovery_mode);
+}
+
+/* Shared Prototypes */
+void ixgbe_legacy_start(struct ifnet *);
+int  ixgbe_legacy_start_locked(struct ifnet *, struct tx_ring *);
+int  ixgbe_mq_start(struct ifnet *, struct mbuf *);
+int  ixgbe_mq_start_locked(struct ifnet *, struct tx_ring *);
+void ixgbe_deferred_mq_start(void *);
+void ixgbe_deferred_mq_start_work(struct work *, void *);
+void ixgbe_drain_all(struct ixgbe_softc *);
+
+int  ixgbe_allocate_queues(struct ixgbe_softc *);
+void ixgbe_free_queues(struct ixgbe_softc *);
+int  ixgbe_setup_transmit_structures(struct ixgbe_softc *);
+void ixgbe_free_transmit_structures(struct ixgbe_softc *);
+int  ixgbe_setup_receive_structures(struct ixgbe_softc *);
+void ixgbe_free_receive_structures(struct ixgbe_softc *);
+bool ixgbe_txeof(struct tx_ring *);
+bool ixgbe_rxeof(struct ix_queue *);
+
+#define IXGBE_REQUEST_TASK_MOD		0x01
+#define IXGBE_REQUEST_TASK_MOD_WOI	0x02
+#define IXGBE_REQUEST_TASK_MSF		0x04
+#define IXGBE_REQUEST_TASK_MSF_WOI	0x08
+#define IXGBE_REQUEST_TASK_MBX		0x10
+#define IXGBE_REQUEST_TASK_FDIR		0x20
+#define IXGBE_REQUEST_TASK_PHY		0x40
+#define IXGBE_REQUEST_TASK_LSC		0x80
+
+/* For NetBSD */
+const struct sysctlnode *ixgbe_sysctl_instance(struct ixgbe_softc *);
+
+#include "ixgbe_bypass.h"
+#include "ixgbe_fdir.h"
+#include "ixgbe_rss.h"
+#include "ixgbe_netmap.h"
+
+#endif /* _IXGBE_H_ */
