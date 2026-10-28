@@ -196,7 +196,7 @@ virtio_mmio_cmdline_parse(void)
 	strlcpy(tmpcmdline, xen_start_info.cmd_line, sizeof(tmpcmdline));
 
 	for (char *p = strstr(tmpcmdline, VMMIOSTR);
-	    (p = strstr(p, VMMIOSTR)) != NULL && strlen(p) > keylen;) {
+	    p != NULL && strlen(p) > keylen; p = strstr(p, VMMIOSTR)) {
 		char *end = strchr(p, ' ');
 		p += keylen;
 

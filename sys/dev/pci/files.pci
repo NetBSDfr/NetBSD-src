@@ -872,6 +872,7 @@ attach  sisfb at pci
 file    dev/pci/sisfb.c		sisfb	needs-flag
 
 attach	virtio at pci with virtio_pci
+file	dev/pci/virtio_pci.c	virtio_pci
 
 # Silicon Motion SM712(LynxEM+) frame buffer
 device	lynxfb: wsemuldisplaydev, rasops16
