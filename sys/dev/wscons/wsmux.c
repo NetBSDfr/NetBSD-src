@@ -490,6 +490,11 @@ wsmux_do_ioctl(device_t dv, u_long cmd, void *data, int flag,
 		*(u_int *)data = 13;	/* WSM_TYPE_BAREPS2 */
 		return 0;
 
+	case WSKBDIO_GTYPE:
+		/* X kbd(4) "wskbd" protocol probe; see wsmouse.c */
+		*(u_int *)data = 3;	/* WSKBD_TYPE_PC_XT */
+		return 0;
+
 	case WSKBDIO_SETVERSION:
 	case WSMOUSEIO_SETVERSION:
 	case WSDISPLAYIO_SETVERSION:
