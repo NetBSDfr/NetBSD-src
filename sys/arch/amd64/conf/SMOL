@@ -7,6 +7,11 @@ include "arch/x86/conf/files.tslog"
 options		LOCKDEBUG
 options		KTRACE
 
+# SVR4 IPC: Xorg probes shmget(2) at startup even with MIT-SHM disabled, and
+# the stub implementation (option off) raises SIGSYS which X treats as fatal.
+options		SYSVSHM
+options		SYSVSEM
+
 # Paravirtual clock available on KVM
 pvclock* at pv?
 

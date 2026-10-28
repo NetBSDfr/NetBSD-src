@@ -163,6 +163,10 @@ file	kern/sys_sig.c			kern
 file	kern/sys_sched.c		kern
 file	kern/sys_socket.c		kern
 file	kern/sys_timerfd.c		kern
+file	kern/sysv_ipc.c			sysvshm | sysvsem | sysvmsg
+file	kern/sysv_msg.c			sysvmsg
+file	kern/sysv_sem.c			sysvsem
+file	kern/sysv_shm.c			sysvshm
 file	kern/tty.c			kern
 file	kern/tty_conf.c			kern
 file	kern/tty_pty.c			pty 			needs-flag
