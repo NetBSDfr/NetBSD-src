@@ -106,11 +106,16 @@ no vioscsi* at virtio?			# XXX ?
 ## no virtual screens by default (0), so /dev/ttyE* would all ENXIO and
 ## X's xf86OpenWScons() probe would fail even though wsdisplay0 attaches.
 options 	WSDISPLAY_DEFAULTSCREENS=4
-wsdisplay*	at viogpu?		# ttyE0; kernel console stays on com/xen
+wsdisplay*	at viogpu? kbdmux -1	# ttyE0; kernel console stays on com/xen
 ## DRM/KMS virtio-gpu (virgl path; claims only virgl-capable GPUs,
 ## see virtiodrm_match)
 virtiodrm*	at virtio?
 viogpu*		at virtio?		# plain GPU stays wscons console
+
+## virtio-input for interactive GUI runs (qemu virtio-keyboard/mouse-device)
+wskbd*		at vioinput?
+wsmouse*	at vioinput?
+pseudo-device	wsmux		# wsdisplay sc_input requires it once NWSKBD>0
 
 qemufwcfg* at pv?
 
