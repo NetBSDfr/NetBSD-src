@@ -5,6 +5,7 @@ include "arch/x86/conf/files.tslog"
 # (no options DDB: this fork's sys/ddb lacks db_output.h;
 #  no DIAGNOSTIC: boot_duration_timer() KASSERTs curcpu_stable() here)
 options		LOCKDEBUG
+options		KTRACE
 
 # Paravirtual clock available on KVM
 pvclock* at pv?
