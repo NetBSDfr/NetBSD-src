@@ -139,14 +139,21 @@ virtio_create_compat(device_t self, void *sc)
 {
 	struct virtio_compat_dev *cd;
 
-	mutex_enter(&virtio_compat_lock);
+	/*
+	 * One-time init before the first use of the lock: device attach
+	 * (and hence this function) runs serialized under kernel_lock at
+	 * boot.  The lock must be a spin mutex (IPL_VM or above): the
+	 * vq/config trampolines take it from hard-interrupt context
+	 * (viogpu children attach at IPL_VM), which is illegal for an
+	 * adaptive mutex and wedges the kernel without LOCKDEBUG.
+	 */
 	if (!virtio_compat_inited) {
-		mutex_exit(&virtio_compat_lock);
-		mutex_init(&virtio_compat_lock, MUTEX_DEFAULT, IPL_SOFTNET);
-		mutex_enter(&virtio_compat_lock);
+		mutex_init(&virtio_compat_lock, MUTEX_DEFAULT, IPL_VM);
 		virtio_compat_inited = true;
 	}
+
 	cd = kmem_zalloc(sizeof(*cd), KM_SLEEP);
+	mutex_enter(&virtio_compat_lock);
 	cd->cd_vdev.dev = self;
 	cd->cd_vdev.sc = sc;
 	cd->cd_vdev.config = &virtio_compat_config_ops;
