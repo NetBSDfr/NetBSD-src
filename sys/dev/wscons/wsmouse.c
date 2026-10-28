@@ -864,6 +864,18 @@ wsmouse_do_ioctl(struct wsmouse_softc *sc, u_long cmd, void *data,
 	 * Try the wsmouse specific ioctls.
 	 */
 	switch (cmd) {
+	case WSMOUSEIO_GTYPE:
+		/*
+		 * The legacy mouse-type concept was pruned from this
+		 * tree, but the X ws input driver queries this ioctl in
+		 * PreInit and refuses the device without it.  Every
+		 * wsmouse device here emits the standard relative-event
+		 * stream, so report a generic PS/2 mouse
+		 * (WSM_TYPE_BAREPS2).
+		 */
+		*(u_int *)data = 13;	/* WSM_TYPE_BAREPS2 */
+		return 0;
+
 	case WSMOUSEIO_GETREPEAT:
 		wr = (struct wsmouse_repeat *)data;
 		memcpy(wr, &sc->sc_repeat, sizeof(sc->sc_repeat));
