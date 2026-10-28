@@ -1,0 +1,3 @@
+$NetBSD: README,v 1.2 2021/03/24 05:00:24 simonb Exp $
+
+This code is deprecated. Use wscons instead.
