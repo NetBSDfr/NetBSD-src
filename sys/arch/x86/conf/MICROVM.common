@@ -100,7 +100,9 @@ virtio* at pv?
 include "dev/virtio/virtio.config"
 no viomb* at virtio?			# XXX ?
 no vioscsi* at virtio?			# XXX ?
-no viogpu* at virtio?			# unsupported
+
+## wscons text console on virtio-gpu
+wsdisplay*	at viogpu?		# ttyE0; kernel console stays on com/xen
 
 qemufwcfg* at pv?
 

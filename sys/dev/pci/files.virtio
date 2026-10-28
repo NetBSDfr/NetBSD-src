@@ -12,6 +12,7 @@ attach	viomb at virtio
 
 device	viogpu: wsemuldisplaydev, rasops32, vcons
 attach	viogpu at virtio
+file	dev/pci/viogpu.c	viogpu
 
 device	vioif: ether, ifnet, arp
 attach	vioif at virtio
