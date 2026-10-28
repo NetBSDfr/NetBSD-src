@@ -83,6 +83,8 @@ file	kern/kern_sysctl.c		kern
 file	kern/kern_tc.c			kern
 file	kern/kern_threadpool.c		kern
 file	kern/kern_time.c		kern
+file	kern/kern_ktrace.c		ktrace
+file	kern/kern_ktrace_vfs.c		ktrace
 file	kern/kern_timeout.c		kern
 file	kern/kern_turnstile.c		kern
 file	kern/kern_todr.c		kern
