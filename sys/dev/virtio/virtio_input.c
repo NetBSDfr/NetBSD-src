@@ -551,8 +551,9 @@ vioinput_handle_event(struct vioinput_softc *sc, struct vioinput_event *ev)
 		break;
 	case EV_KEY:
 		if (sc->sc_wskbddev != NULL) {
-			wskbd_input(sc->sc_wskbddev, ev->code,
-			    ev->value != 0);
+			wskbd_input(sc->sc_wskbddev,
+			    ev->value ? WSCONS_EVENT_KEY_DOWN :
+			    WSCONS_EVENT_KEY_UP, ev->code);
 			break;
 		}
 		switch (ev->code) {
@@ -584,7 +585,8 @@ vioinput_handle_event(struct vioinput_softc *sc, struct vioinput_event *ev)
 			sc->sc_dx += ev->value;
 			break;
 		case REL_Y:
-			sc->sc_dy += ev->value;
+			/* evdev: positive is down; wscons: positive is up */
+			sc->sc_dy -= ev->value;
 			break;
 		case REL_WHEEL:
 			/* evdev: positive is up; wscons: positive is down */

@@ -680,7 +680,8 @@ wskbd_input(device_t dev, u_int type, int value)
 	 * send upstream.
 	 */
 	if (sc->sc_translating) {
-		num = wskbd_translate(sc->id, type, value);
+		num = wskbd_translate(sc->id, value,
+		    type == WSCONS_EVENT_KEY_DOWN);
 		if (num > 0) {
 			if (sc->sc_base.me_dispdv != NULL) {
 #ifdef WSDISPLAY_SCROLLSUPPORT
@@ -1193,6 +1194,17 @@ getkeyrepeat:
 		error = copyout(sc->sc_map, umdp->map,
 				umdp->maplen*sizeof(struct wscons_keymap));
 		return(error);
+
+	case WSKBDIO_GTYPE:
+		/*
+		 * The X kbd(4) driver with Protocol "wskbd" requires
+		 * this ioctl in PreInit; this tree's wskbd lacks it
+		 * (mirrors the WSMOUSEIO_GTYPE gap fixed for wsmouse).
+		 * Report a generic XT-scancode keyboard; the scancode
+		 * stream itself is our driver's evcode mapping.
+		 */
+		*(u_int *)data = WSKBD_TYPE_PC_XT;
+		return (0);
 
 	case WSKBDIO_GETENCODING:
 		*((kbd_t *) data) = sc->sc_layout;
