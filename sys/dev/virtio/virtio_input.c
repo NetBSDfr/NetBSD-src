@@ -92,6 +92,12 @@
 #define ABS_X			0x00
 #define ABS_Y			0x01
 
+/*
+ * QEMU normalizes all virtio-input absolute axis values to
+ * 0..32767 regardless of the actual display size.
+ */
+#define VIOIN_ABS_MAX		32767
+
 #define BTN_LEFT		0x110
 #define BTN_RIGHT		0x111
 #define BTN_MIDDLE		0x112
@@ -142,9 +148,10 @@ struct vioinput_softc {
 	device_t		sc_wsmousedev;
 
 	int			sc_mouse;	/* report as wsmouse */
+	int			sc_abs;		/* absolute axes (tablet) */
 	int			sc_buttons;
 	int			sc_dx, sc_dy, sc_dz, sc_dw;
-	int			sc_ax, sc_ay;
+	int			sc_ax, sc_ay;	/* last ABS_X/ABS_Y, raw units */
 };
 
 /*
@@ -359,6 +366,42 @@ vioinput_ioctl_stub(void *cookie, u_long cmd, void *data, int flag,
 	return EPASSTHROUGH;
 }
 
+/*
+ * Advertise the absolute coordinate space of an absolute pointing device
+ * to wsmouse clients.  Returning WSMOUSE_CALIBCOORDS_RESET selects "raw"
+ * mode: the device sends positions in the advertised range and clients
+ * scale them to their own extent.  This mirrors what Linux does with the
+ * VIRTIO_INPUT_CFG_ABS_INFO / evdev ABS axis information, and is what
+ * the X ws input driver queries with WSMOUSEIO_GCALIBCOORDS to decide
+ * whether WSCONS_EVENT_MOUSE_ABSOLUTE_* values are screen pixels or raw
+ * device units that must be scaled.
+ */
+static int
+vioinput_msioctl(void *cookie, u_long cmd, void *data, int flag,
+    struct lwp *l)
+{
+	struct vioinput_softc *sc = cookie;
+	struct wsmouse_calibcoords *calib;
+
+	if (sc->sc_abs) {
+		switch (cmd) {
+		case WSMOUSEIO_GCALIBCOORDS:
+			calib = data;
+			memset(calib, 0, sizeof(*calib));
+			calib->minx = 0;
+			calib->miny = 0;
+			calib->maxx = VIOIN_ABS_MAX;
+			calib->maxy = VIOIN_ABS_MAX;
+			calib->samplelen = WSMOUSE_CALIBCOORDS_RESET;
+			return 0;
+		case WSMOUSEIO_SCALIBCOORDS:
+			return 0;
+		}
+	}
+
+	return EPASSTHROUGH;
+}
+
 static const struct wskbd_accessops vioinput_wskbdops = {
 	.enable		= vioinput_kbenable,
 	.set_leds	= vioinput_set_leds,
@@ -381,7 +424,7 @@ vioinput_msdisable(void *cookie)
 
 static const struct wsmouse_accessops vioinput_wsmouseops = {
 	.enable		= vioinput_msenable,
-	.ioctl		= vioinput_ioctl_stub,
+	.ioctl		= vioinput_msioctl,
 	.disable	= vioinput_msdisable,
 };
 
@@ -543,9 +586,17 @@ vioinput_handle_event(struct vioinput_softc *sc, struct vioinput_event *ev)
 	switch (ev->type) {
 	case EV_SYN:
 		if (ev->code == SYN_REPORT && sc->sc_wsmousedev != NULL) {
-			wsmouse_input(sc->sc_wsmousedev, sc->sc_buttons,
-			    sc->sc_dx, sc->sc_dy, sc->sc_dz, sc->sc_dw,
-			    WSMOUSE_INPUT_DELTA);
+			if (sc->sc_abs)
+				wsmouse_input(sc->sc_wsmousedev,
+				    sc->sc_buttons, sc->sc_ax, sc->sc_ay,
+				    sc->sc_dz, sc->sc_dw,
+				    WSMOUSE_INPUT_ABSOLUTE_X |
+				    WSMOUSE_INPUT_ABSOLUTE_Y);
+			else
+				wsmouse_input(sc->sc_wsmousedev,
+				    sc->sc_buttons, sc->sc_dx, sc->sc_dy,
+				    sc->sc_dz, sc->sc_dw,
+				    WSMOUSE_INPUT_DELTA);
 			sc->sc_dx = sc->sc_dy = sc->sc_dz = sc->sc_dw = 0;
 		}
 		break;
@@ -594,6 +645,23 @@ vioinput_handle_event(struct vioinput_softc *sc, struct vioinput_event *ev)
 			break;
 		case REL_HWHEEL:
 			sc->sc_dw += ev->value;
+			break;
+		}
+		break;
+	case EV_ABS:
+		/*
+		 * Absolute pointing device (QEMU virtio-tablet).  Stash the
+		 * raw position; it is delivered as absolute wsmouse
+		 * coordinates at SYN_REPORT time.  The coordinate space is
+		 * advertised by vioinput_msioctl() and scaled by the
+		 * client, so no conversion happens here.
+		 */
+		switch (ev->code) {
+		case ABS_X:
+			sc->sc_ax = (int)ev->value;
+			break;
+		case ABS_Y:
+			sc->sc_ay = (int)ev->value;
 			break;
 		}
 		break;
@@ -655,6 +723,8 @@ vioinput_attach(device_t parent, device_t self, void *aux)
 	 */
 	if (vioinput_has_evbit(sc, EV_REL) || vioinput_has_evbit(sc, EV_ABS))
 		sc->sc_mouse = 1;
+	if (vioinput_has_evbit(sc, EV_ABS))
+		sc->sc_abs = 1;
 
 	sc->sc_ev_si = softint_establish(SOFTINT_SERIAL, vioinput_event_soft,
 	    sc);
