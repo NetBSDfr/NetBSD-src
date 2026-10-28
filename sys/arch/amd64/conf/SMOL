@@ -1,8 +1,14 @@
 include "arch/amd64/conf/MICROVM"
 include "arch/x86/conf/files.tslog"
 
-# Paravirtual clock available in KVM
+# Paravirtual clock available on KVM
 pvclock* at pv?
 
+# PCI frontends for virtio(4): inert on the virtio-mmio-only microvm,
+# but let the same kernel boot under q35 with -device virtio-blk-pci,
+# virtio-gpu-pci and virtio-gpu-gl-pci.  A windowed QEMU display exists
+# only for the PCI variants (QEMU 8.x sysbus virtio-gpu-device has no
+# display console), so this is the config for visual/interactive runs.
+virtio*		at pci?	dev ? function ?
 # tslog(4) boot-time event tracing facility
 #options	TSLOG
