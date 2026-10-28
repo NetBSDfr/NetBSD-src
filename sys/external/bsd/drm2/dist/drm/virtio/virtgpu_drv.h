@@ -32,12 +32,19 @@
 #include <linux/virtio_ids.h>
 #include <linux/virtio_config.h>
 #include <linux/virtio_gpu.h>
+#include <linux/wait.h>
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_encoder.h>
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_gem.h>
 #include <drm/drm_gem_shmem_helper.h>
+
+/* NetBSD: bus-glue entry points, called from virtio_compat.c */
+struct virtio_device;
+int virtio_gpu_probe(struct virtio_device *vdev);
+void virtio_gpu_remove(struct virtio_device *vdev);
+void virtio_gpu_config_changed(struct virtio_device *vdev);
 #include <drm/drm_ioctl.h>
 #include <drm/drm_probe_helper.h>
 #include <drm/virtgpu_drm.h>
@@ -370,5 +377,9 @@ struct drm_gem_object *virtgpu_gem_prime_import_sg_table(
 
 /* virgl debugfs */
 int virtio_gpu_debugfs_init(struct drm_minor *minor);
+
+#ifdef __NetBSD__
+extern const struct uvm_pagerops virtio_gpu_gem_uvm_ops;
+#endif
 
 #endif

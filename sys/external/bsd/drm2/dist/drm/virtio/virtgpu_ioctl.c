@@ -32,6 +32,9 @@ __KERNEL_RCSID(0, "$NetBSD: virtgpu_ioctl.c,v 1.3 2021/12/18 23:45:45 riastradh 
 
 #include <linux/file.h>
 #include <linux/sync_file.h>
+#ifdef __NetBSD__
+#include <linux/uaccess.h>
+#endif
 
 #include <drm/drm_file.h>
 #include <drm/virtgpu_drm.h>
@@ -70,6 +73,9 @@ static int virtio_gpu_execbuffer_ioctl(struct drm_device *dev, void *data,
 	int in_fence_fd = exbuf->fence_fd;
 	int out_fence_fd = -1;
 	void *buf;
+#ifdef __NetBSD__
+	struct file *out_fence_fp = NULL;
+#endif
 
 	if (vgdev->has_virgl_3d == false)
 		return -ENOSYS;
@@ -101,9 +107,15 @@ static int virtio_gpu_execbuffer_ioctl(struct drm_device *dev, void *data,
 	}
 
 	if (exbuf->flags & VIRTGPU_EXECBUF_FENCE_FD_OUT) {
+#ifdef __NetBSD__
+		ret = -fd_allocfile(&out_fence_fp, &out_fence_fd);
+		if (ret)
+			return ret;
+#else
 		out_fence_fd = get_unused_fd_flags(O_CLOEXEC);
 		if (out_fence_fd < 0)
 			return out_fence_fd;
+#endif
 	}
 
 	if (exbuf->num_bo_handles) {
@@ -137,11 +149,25 @@ static int virtio_gpu_execbuffer_ioctl(struct drm_device *dev, void *data,
 			goto out_unused_fd;
 	}
 
+#ifdef __NetBSD__
+	buf = kvmalloc(exbuf->size, GFP_KERNEL);
+	if (!buf) {
+		ret = -ENOMEM;
+		goto out_unresv;
+	}
+	if (copy_from_user(buf, u64_to_user_ptr(exbuf->command),
+			   exbuf->size)) {
+		kvfree(buf);
+		ret = -EFAULT;
+		goto out_unresv;
+	}
+#else
 	buf = vmemdup_user(u64_to_user_ptr(exbuf->command), exbuf->size);
 	if (IS_ERR(buf)) {
 		ret = PTR_ERR(buf);
 		goto out_unresv;
 	}
+#endif
 
 	out_fence = virtio_gpu_fence_alloc(vgdev);
 	if(!out_fence) {
@@ -150,15 +176,27 @@ static int virtio_gpu_execbuffer_ioctl(struct drm_device *dev, void *data,
 	}
 
 	if (out_fence_fd >= 0) {
+#ifdef __NetBSD__
+		sync_file = sync_file_create(&out_fence->f, out_fence_fp);
+#else
 		sync_file = sync_file_create(&out_fence->f);
+#endif
 		if (!sync_file) {
 			dma_fence_put(&out_fence->f);
 			ret = -ENOMEM;
+#ifdef __NetBSD__
+			fd_abort(curproc, out_fence_fp, out_fence_fd);
+			out_fence_fp = NULL;
+#endif
 			goto out_memdup;
 		}
 
 		exbuf->fence_fd = out_fence_fd;
+#ifdef __NetBSD__
+		fd_affix(curproc, out_fence_fp, out_fence_fd);
+#else
 		fd_install(out_fence_fd, sync_file->file);
+#endif
 	}
 
 	virtio_gpu_cmd_submit(vgdev, buf, exbuf->size,
@@ -175,8 +213,13 @@ out_unused_fd:
 	if (buflist)
 		virtio_gpu_array_put_free(buflist);
 
+#ifdef __NetBSD__
+	if (out_fence_fp != NULL)
+		fd_abort(curproc, out_fence_fp, out_fence_fd);
+#else
 	if (out_fence_fd >= 0)
 		put_unused_fd(out_fence_fd);
+#endif
 
 	return ret;
 }

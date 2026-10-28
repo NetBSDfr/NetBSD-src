@@ -50,6 +50,7 @@ module_param_named(modeset, virtio_gpu_modeset, int, 0400);
 
 static int virtio_gpu_pci_quirk(struct drm_device *dev, struct virtio_device *vdev)
 {
+#if 0	/* NetBSD: virtio-mmio only for now */
 	struct pci_dev *pdev = to_pci_dev(vdev->dev.parent);
 	const char *pname = dev_name(&pdev->dev);
 	bool vga = (pdev->class >> 8) == PCI_CLASS_DISPLAY_VGA;
@@ -96,25 +97,32 @@ static int virtio_gpu_pci_quirk(struct drm_device *dev, struct virtio_device *vd
 	 */
 	snprintf(unique, sizeof(unique), "pci:%s", pname);
 	return drm_dev_set_unique(dev, unique);
+#else	/* NetBSD */
+	(void)dev;
+	(void)vdev;
+	return 0;
+#endif
 }
 
-static int virtio_gpu_probe(struct virtio_device *vdev)
+int virtio_gpu_probe(struct virtio_device *vdev)
 {
 	struct drm_device *dev;
 	int ret;
 
+#ifndef __NetBSD__
 	if (vgacon_text_force() && virtio_gpu_modeset == -1)
 		return -EINVAL;
+#endif
 
 	if (virtio_gpu_modeset == 0)
 		return -EINVAL;
 
-	dev = drm_dev_alloc(&driver, &vdev->dev);
+	dev = drm_dev_alloc(&driver, vdev->dev);
 	if (IS_ERR(dev))
 		return PTR_ERR(dev);
 	vdev->priv = dev;
 
-	if (!strcmp(vdev->dev.parent->bus->name, "pci")) {
+	if (virtio_device_is_pci(vdev)) {
 		ret = virtio_gpu_pci_quirk(dev, vdev);
 		if (ret)
 			goto err_free;
@@ -128,7 +136,9 @@ static int virtio_gpu_probe(struct virtio_device *vdev)
 	if (ret)
 		goto err_free;
 
+#ifndef __NetBSD__	/* generic fbdev leaves fb NULL on NetBSD; see virtio_compat */
 	drm_fbdev_generic_setup(vdev->priv, 32);
+#endif
 	return 0;
 
 err_free:
@@ -136,7 +146,7 @@ err_free:
 	return ret;
 }
 
-static void virtio_gpu_remove(struct virtio_device *vdev)
+void virtio_gpu_remove(struct virtio_device *vdev)
 {
 	struct drm_device *dev = vdev->priv;
 
@@ -145,7 +155,7 @@ static void virtio_gpu_remove(struct virtio_device *vdev)
 	drm_dev_put(dev);
 }
 
-static void virtio_gpu_config_changed(struct virtio_device *vdev)
+void virtio_gpu_config_changed(struct virtio_device *vdev)
 {
 	struct drm_device *dev = vdev->priv;
 	struct virtio_gpu_device *vgdev = dev->dev_private;
@@ -172,7 +182,11 @@ static unsigned int features[] = {
 static struct virtio_driver virtio_gpu_driver = {
 	.feature_table = features,
 	.feature_table_size = ARRAY_SIZE(features),
+#ifdef __NetBSD__
+	.driver.name = "virtio-gpu",
+#else
 	.driver.name = KBUILD_MODNAME,
+#endif
 	.driver.owner = THIS_MODULE,
 	.id_table = id_table,
 	.probe = virtio_gpu_probe,
@@ -199,6 +213,11 @@ static struct drm_driver driver = {
 	.dumb_create = virtio_gpu_mode_dumb_create,
 	.dumb_map_offset = virtio_gpu_mode_dumb_mmap,
 
+#ifdef __NetBSD__
+	.mmap_object = drm_gem_or_legacy_mmap_object,
+	.gem_uvm_ops = &virtio_gpu_gem_uvm_ops,
+#endif
+
 #if defined(CONFIG_DEBUG_FS)
 	.debugfs_init = virtio_gpu_debugfs_init,
 #endif
@@ -208,7 +227,10 @@ static struct drm_driver driver = {
 	.gem_prime_import_sg_table = virtgpu_gem_prime_import_sg_table,
 
 	.gem_create_object = virtio_gpu_create_object,
+#ifdef __NetBSD__	/* drm2 uses one cdev switch for all drivers */
+#else
 	.fops = &virtio_gpu_driver_fops,
+#endif
 
 	.ioctls = virtio_gpu_ioctls,
 	.num_ioctls = DRM_VIRTIO_NUM_IOCTLS,

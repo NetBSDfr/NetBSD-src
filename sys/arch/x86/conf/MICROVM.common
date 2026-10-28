@@ -79,7 +79,7 @@ options 	MPBIOS			# configure CPUs and APICs using MPBIOS
 # and parsing.  Firecracker relies on these bugs.
 options		MPTABLE_LINUX_BUG_COMPAT
 
-#pci*	at mainbus? bus ?
+pci*	at mainbus? bus ?
 #acpi0	at mainbus0
 
 # ISA bus support
@@ -102,7 +102,15 @@ no viomb* at virtio?			# XXX ?
 no vioscsi* at virtio?			# XXX ?
 
 ## wscons text console on virtio-gpu
+## WSDISPLAY_DEFAULTSCREENS=4 because a non-console wsdisplay unit creates
+## no virtual screens by default (0), so /dev/ttyE* would all ENXIO and
+## X's xf86OpenWScons() probe would fail even though wsdisplay0 attaches.
+options 	WSDISPLAY_DEFAULTSCREENS=4
 wsdisplay*	at viogpu?		# ttyE0; kernel console stays on com/xen
+## DRM/KMS virtio-gpu (virgl path; claims only virgl-capable GPUs,
+## see virtiodrm_match)
+virtiodrm*	at virtio?
+viogpu*		at virtio?		# plain GPU stays wscons console
 
 qemufwcfg* at pv?
 
@@ -121,6 +129,7 @@ pseudo-device	loop			# network loopback
 pseudo-device	pty			# pseudo-terminals
 # userland interface to drivers, including autoconf and properties retrieval
 pseudo-device	drvctl
+pseudo-device	ksyms			# kernel symbol table (for LinuxKPI)
 
 file-system	PUFFS
 pseudo-device	putter

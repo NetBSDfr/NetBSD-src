@@ -43,6 +43,7 @@ __KERNEL_RCSID(0, "$NetBSD: linux_sgt.c,v 1.4 2021/12/24 15:08:31 riastradh Exp 
 int
 sg_alloc_table(struct sg_table *sgt, unsigned npgs, gfp_t gfp)
 {
+	unsigned i;
 
 	sgt->sgl->sg_pgs = kcalloc(npgs, sizeof(sgt->sgl->sg_pgs[0]), gfp);
 	if (sgt->sgl->sg_pgs == NULL)
@@ -50,7 +51,58 @@ sg_alloc_table(struct sg_table *sgt, unsigned npgs, gfp_t gfp)
 	sgt->sgl->sg_npgs = sgt->nents = npgs;
 	sgt->sgl->sg_dmamap = NULL;
 
+	for (i = 0; i < npgs; i++) {
+		sgt->sgl[i].sg_pgs = sgt->sgl->sg_pgs;
+		sgt->sgl[i].sg_npgs = npgs;
+		sgt->sgl[i].sg_dmat = NULL;
+		sgt->sgl[i].sg_dmamap = NULL;
+		sgt->sgl[i].sg_pg = NULL;
+		sgt->sgl[i].sg_pgoff = 0;
+		sgt->sgl[i].sg_len = 0;
+		sgt->sgl[i].sg_slot = i;
+		sgt->sgl[i].sg_kva = NULL;
+	}
+
 	return 0;
+}
+
+void
+sg_init_table(struct scatterlist *sgl, unsigned nents)
+{
+	unsigned i;
+
+	for (i = 0; i < nents; i++) {
+		sgl[i].sg_pgs = NULL;
+		sgl[i].sg_npgs = 0;
+		sgl[i].sg_dmat = NULL;
+		sgl[i].sg_dmamap = NULL;
+		sgl[i].sg_pg = NULL;
+		sgl[i].sg_pgoff = 0;
+		sgl[i].sg_len = 0;
+		sgl[i].sg_slot = i;
+		sgl[i].sg_kva = NULL;
+	}
+}
+
+void
+sg_init_one(struct scatterlist *sg, const void *buf, unsigned len)
+{
+
+	sg_init_table(sg, 1);
+	sg->sg_kva = buf;
+	sg->sg_len = len;
+}
+
+void
+sg_set_page(struct scatterlist *sg, struct page *page, unsigned len,
+    unsigned off)
+{
+
+	sg->sg_pg = page;
+	sg->sg_pgoff = off;
+	sg->sg_len = len;
+	if (sg->sg_pgs != NULL && sg->sg_slot < sg->sg_npgs)
+		sg->sg_pgs[sg->sg_slot] = page;
 }
 
 int
@@ -219,6 +271,30 @@ dma_unmap_sg_attrs(bus_dma_tag_t dmat, struct scatterlist *sg, int nents,
 	bus_dmamap_unload(dmat, sg->sg_dmamap);
 	bus_dmamap_destroy(dmat, sg->sg_dmamap);
 	sg->sg_dmamap = NULL;
+}
+
+void
+dma_sync_sg_for_device(bus_dma_tag_t dmat, struct scatterlist *sg, int nents,
+    int dir)
+{
+
+	if (sg->sg_dmamap == NULL)
+		return;
+	bus_dmamap_sync(dmat, sg->sg_dmamap, 0, sg->sg_dmamap->dm_mapsize,
+	    (dir == DMA_FROM_DEVICE) ? BUS_DMASYNC_PREREAD :
+	    BUS_DMASYNC_PREWRITE);
+}
+
+void
+dma_sync_sg_for_cpu(bus_dma_tag_t dmat, struct scatterlist *sg, int nents,
+    int dir)
+{
+
+	if (sg->sg_dmamap == NULL)
+		return;
+	bus_dmamap_sync(dmat, sg->sg_dmamap, 0, sg->sg_dmamap->dm_mapsize,
+	    (dir == DMA_TO_DEVICE) ? BUS_DMASYNC_POSTWRITE :
+	    BUS_DMASYNC_POSTREAD);
 }
 
 bus_addr_t

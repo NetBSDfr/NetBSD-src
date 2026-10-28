@@ -62,11 +62,34 @@ struct sg_table {
 		unsigned	sg_npgs;
 		bus_dma_tag_t	sg_dmat;
 		bus_dmamap_t	sg_dmamap;
+		/*
+		 * LinuxKPI single-entry flavors.  sg_pgs/sg_npgs above
+		 * describe the table as a whole (entries share the
+		 * array; sg_slot is the entry index into it).  sg_pg
+		 * and sg_kva describe this single entry.
+		 */
+		struct page	*sg_pg;
+		unsigned	sg_pgoff;
+		union {
+			unsigned	sg_len;
+			unsigned	length;	/* Linux spelling */
+		};
+		unsigned	sg_slot;
+		const void	*sg_kva;
 	} sgl[1];
 	unsigned	nents;
 };
 
 int sg_alloc_table(struct sg_table *, unsigned, gfp_t);
+void	sg_init_one(struct scatterlist *, const void *, unsigned);
+void	sg_init_table(struct scatterlist *, unsigned);
+void	sg_set_page(struct scatterlist *, struct page *, unsigned, unsigned);
+#define	for_each_sg(sgl, sg, nents, i)					      \
+	for ((i) = 0, (sg) = (sgl); (i) < (int)(nents); (i)++, (sg)++)
+#define	sg_page(sg)		((sg)->sg_pg)
+#define	sg_phys(sg)		(uvm_vm_page_to_phys(				\
+			    (const struct vm_page *)(sg)->sg_pg) +			\
+			    (sg)->sg_pgoff)
 int __sg_alloc_table_from_pages(struct sg_table *, struct page **, unsigned,
     bus_size_t, bus_size_t, unsigned, gfp_t);
 int sg_alloc_table_from_pages(struct sg_table *, struct page **, unsigned,
@@ -82,5 +105,7 @@ int dma_map_sg(bus_dma_tag_t, struct scatterlist *, int, int);
 int dma_map_sg_attrs(bus_dma_tag_t, struct scatterlist *, int, int, int);
 void dma_unmap_sg(bus_dma_tag_t, struct scatterlist *, int, int);
 void dma_unmap_sg_attrs(bus_dma_tag_t, struct scatterlist *, int, int, int);
+void dma_sync_sg_for_device(bus_dma_tag_t, struct scatterlist *, int, int);
+void dma_sync_sg_for_cpu(bus_dma_tag_t, struct scatterlist *, int, int);
 
 #endif	/* _LINUX_SCATTERLIST_H_ */

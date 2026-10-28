@@ -66,6 +66,8 @@ SLIST_HEAD(mmio_cmdline_devs_head, mmio_cmdline_node);
 extern struct mmio_cmdline_devs_head virtio_mmio_cmdline_devs;
 
 uint32_t virtio_mmio_reg_read(struct virtio_mmio_softc *, bus_addr_t);
+void	virtio_mmio_reg_write(struct virtio_mmio_softc *, bus_addr_t,
+	    uint32_t);
 bool virtio_mmio_common_probe_present(struct virtio_mmio_softc *);
 void virtio_mmio_common_attach(struct virtio_mmio_softc *);
 int virtio_mmio_common_detach(struct virtio_mmio_softc *, int);
