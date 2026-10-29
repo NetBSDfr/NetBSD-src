@@ -15,12 +15,22 @@ options		SYSVSEM
 # Paravirtual clock available on KVM
 pvclock* at pv?
 
-# PCI frontends for virtio(4): inert on the virtio-mmio-only microvm,
-# but let the same kernel boot under q35 with -device virtio-blk-pci,
-# virtio-gpu-pci and virtio-gpu-gl-pci.  A windowed QEMU display exists
-# only for the PCI variants (QEMU 8.x sysbus virtio-gpu-device has no
-# display console), so this is the config for visual/interactive runs.
-virtio*		at pci?	dev ? function ?
+# QEMU firmware config interface
+qemufwcfg*	at pv?
+
+## wscons text console on the 2D virtio-gpu (virtio.config attaches
+## viogpu/vioinput unconditionally, and our driver sources need the
+## wscons symbols; kernel console stays on com/xen).
+## WSDISPLAY_DEFAULTSCREENS=4 because a non-console wsdisplay unit creates
+## no virtual screens by default (0), so /dev/ttyE* would all ENXIO and
+## X's xf86OpenWScons() probe would fail even though wsdisplay0 attaches.
+options		WSDISPLAY_DEFAULTSCREENS=4
+wsdisplay*	at viogpu? kbdmux -1
+
+## virtio-input (qemu virtio-keyboard/mouse-device)
+wskbd*		at vioinput?
+wsmouse*	at vioinput?
+pseudo-device	wsmux		# wsdisplay sc_input requires it once NWSKBD>0
 
 # tslog(4) boot-time event tracing facility
 #options	TSLOG

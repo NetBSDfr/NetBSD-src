@@ -1,0 +1,17 @@
+# SMOLX: SMOL plus the virtio-GPU DRM/KMS + GLX (virgl) stack for
+# microvm -device virtio-gpu-gl-device (Xorg glamor on a host GPU).
+
+include "arch/amd64/conf/SMOL"
+
+# LinuxKPI (pulled in by virtiodrm) has PCI glue (linux_pci.c) that
+# references the MI pci interface (pci_conf_read, pci_make_tag); those
+# are only built with NPCI > 0, so enable the pci bus even though the
+# microvm itself has no PCI devices.
+pci*		at mainbus? bus ?
+
+## DRM/KMS virtio-gpu (virgl path; claims only virgl-capable GPUs,
+## see virtiodrm_match; the plain GPU stays on viogpu from SMOL)
+virtiodrm*	at virtio?
+wsdisplay*	at virtiodrm? kbdmux -1	# ttyE0 for X on a single-GL-GPU microvm
+
+pseudo-device	ksyms			# kernel symbol table (for LinuxKPI)
