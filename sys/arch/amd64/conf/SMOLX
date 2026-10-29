@@ -15,3 +15,8 @@ virtiodrm*	at virtio?
 wsdisplay*	at virtiodrm? kbdmux -1	# ttyE0 for X on a single-GL-GPU microvm
 
 pseudo-device	ksyms			# kernel symbol table (for LinuxKPI)
+
+## audio(4) framework; enabled by viosnd (virtio-snd) below
+options		AUDIO			# /dev/audio compatibility interface
+viosnd*		at virtio?
+audio*		at audiobus?
