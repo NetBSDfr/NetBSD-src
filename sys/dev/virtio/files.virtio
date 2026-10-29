@@ -12,3 +12,7 @@ file	dev/virtio/viocon.c		viocon		needs-flag
 device	vioinput: wskbddev, wsmousedev
 attach	vioinput at virtio with vioinput
 file	dev/virtio/virtio_input.c	vioinput
+
+device	viosnd: audiobus
+attach	viosnd at virtio with viosnd
+file	dev/virtio/virtio_snd.c	viosnd
