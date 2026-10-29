@@ -5,8 +5,11 @@
 # Build the utilities we ship ourselves for our kernel, listed in
 # diverges/<machine-arch>.list, one per line:
 #
-#	<source-dir>	<install-path>
+#	<source-dir>	<install-path>	[extra make variables]
 #
+# Optional trailing make variables are appended to the build and
+# install command lines (they override the directory Makefile's own
+# assignments), e.g. to trim gallium's driver list.
 # Each source dir is built in the NetBSD tree with the cross make
 # wrapper found under obj/tooldir.<arch> or obj/tooldir (wrappers
 # are named after MACHINE, e.g. nbmake-evbarm for aarch64) and
@@ -17,7 +20,9 @@
 # obj/smolset.<arch>.tar.xz; smolBSD downloads and unpacks it as an
 # extra set (KDIST/<arch>/...), see its setfetch target.
 #
-# Env: TOOLDIR, DESTDIR, OUT, BUILD=no (package without building).
+# Env: TOOLDIR, DESTDIR, OUT, BUILD=no (package without building),
+#	CLEAN=yes (cleandir the built dirs afterwards; off by default so
+#	reruns are incremental and only rebuild what is out of date).
 
 set -e
 
@@ -67,12 +72,13 @@ tmp=$(mktemp -d)
 trap "rm -rf $tmp" EXIT
 
 n=0
-while read -r src dest; do
+built=
+while read -r src dest mkargs; do
 	case $src in ''|'#'*) continue ;; esac
 	if [ "$BUILD" != "no" ]; then
 		echo "building $src"
-		(cd "$root/$src" && $make && $sudo $make install \
-			&& $make cleandir)
+		(cd "$root/$src" && $make $mkargs && $sudo $make $mkargs install)
+		built="$built $src"
 	fi
 	if [ ! -f "$destdir/$dest" ]; then
 		echo "missing $destdir/$dest, populate DESTDIR first" >&2
@@ -84,6 +90,17 @@ while read -r src dest; do
 	echo "including $dest"
 	n=$((n+1))
 done < "$list"
+
+# obj trees are kept by default: reruns are then incremental (bmake
+# rebuilds only what changed).  Cleaning, if requested with CLEAN=yes,
+# happens only after everything built and installed, because the
+# directories link prebuilt objects from their siblings' obj trees
+# (gallium needs obj/.../libdrm/libdrm.a).
+if [ "$CLEAN" = yes ]; then
+	for src in $built; do
+		(cd "$root/$src" && $make cleandir) || true
+	done
+fi
 
 if [ "$n" -eq 0 ]; then
 	echo "$list is empty, nothing to do" >&2

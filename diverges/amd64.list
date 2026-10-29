@@ -1,4 +1,4 @@
 usr.sbin/puffs/mount_9p usr/sbin/mount_9p
 external/mit/xorg/lib/libdrm usr/X11R7/lib/libdrm.so.3.8
 external/mit/xorg/lib/libglapi usr/X11R7/lib/libglapi.so.1.0
-external/mit/xorg/lib/gallium usr/X11R7/lib/modules/dri/virtio_gpu_dri.so
+external/mit/xorg/lib/gallium usr/X11R7/lib/modules/dri/virtio_gpu_dri.so BUILD_RADEON=0 BUILD_NOUVEAU=0 BUILD_VDPAU=0 BUILD_I915=0 BUILD_LLVMPIPE=0
