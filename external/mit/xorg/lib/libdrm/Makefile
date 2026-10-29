@@ -3,6 +3,14 @@
 .include <bsd.own.mk>
 
 LIB=	drm
+
+# smolBSD: vendored copy of upstream libdrm 2.4.134 plus our small
+# patch, kept here instead of maintaining an xsrc fork:
+#   - xf86drm.c: virtio-mmio busid fallback (microvm has no PCI);
+#   - meson.build: cc.find_library('pci') on NetBSD (meson only).
+# Re-apply when bumping xsrc libdrm; shipped via diverges/amd64.list.
+X11SRCDIR.drm=		${NETBSDSRCDIR}/xsrc-smol/external/mit/libdrm/dist
+
 .PATH:	${X11SRCDIR.${LIB}}
 
 SRCS=	xf86drm.c xf86drmHash.c xf86drmMode.c xf86drmRandom.c xf86drmSL.c
