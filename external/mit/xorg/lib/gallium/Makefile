@@ -100,6 +100,12 @@ GALLIUM_SUBDIRS_CROCUS= \
 	drivers/crocus \
 	winsys/crocus/drm
 
+GALLIUM_SUBDIRS_VIRGL= \
+	drivers/virgl \
+	winsys/virgl/common \
+	winsys/virgl/drm \
+	winsys/virgl/vtest
+
 GALLIUM_SUBDIRS_NOUVEAU= \
 	drivers/nouveau \
 	drivers/nouveau/nv30 \
@@ -115,10 +121,12 @@ BUILD_LLVMPIPE=0
 BUILD_I915=0
 BUILD_IRIS=0
 BUILD_CROCUS=0
+BUILD_VIRGL=0
 .if ${MACHINE_ARCH} == "i386" || ${MACHINE_ARCH} == "x86_64"
 BUILD_I915=1
 #BUILD_IRIS=1
 #BUILD_CROCUS=1
+BUILD_VIRGL=1
 .endif
 .if ${MACHINE_ARCH} == "i386" || ${MACHINE_ARCH} == "x86_64" || ${MACHINE} == "evbarm"
 BUILD_NOUVEAU=1
@@ -161,6 +169,11 @@ GALLIUM_SUBDIRS+=	${GALLIUM_SUBDIRS_IRIS}
 .endif
 .if ${BUILD_CROCUS} == 1
 GALLIUM_SUBDIRS+=	${GALLIUM_SUBDIRS_CROCUS}
+.endif
+.if ${BUILD_VIRGL} == 1
+# the driver is called virgl, but the DRI driver name is virtio_gpu
+DRIVERS+=		virtio_gpu
+GALLIUM_SUBDIRS+=	${GALLIUM_SUBDIRS_VIRGL}
 .endif
 .if ${BUILD_LLVMPIPE} == 1
 GALLIUM_SUBDIRS+=	${GALLIUM_SUBDIRS_LLVMPIPE}
@@ -1142,11 +1155,34 @@ GALLIUM_SOURCES.winsys/sw/kms-dri = \
 GALLIUM_SOURCES.frontends/dri = \
         dri_context.c \
         dri_drawable.c \
-	dri_helpers.c \
+        dri_helpers.c \
         dri_query_renderer.c \
         dri_screen.c \
 	drisw.c \
 	dri2.c
+
+GALLIUM_SOURCES.drivers/virgl= \
+	virgl_buffer.c \
+	virgl_context.c \
+	virgl_encode.c \
+	virgl_query.c \
+	virgl_resource.c \
+	virgl_screen.c \
+	virgl_staging_mgr.c \
+	virgl_streamout.c \
+	virgl_texture.c \
+	virgl_tgsi.c \
+	virgl_transfer_queue.c
+
+GALLIUM_SOURCES.winsys/virgl/common= \
+	virgl_resource_cache.c
+
+GALLIUM_SOURCES.winsys/virgl/drm= \
+	virgl_drm_winsys.c
+
+GALLIUM_SOURCES.winsys/virgl/vtest= \
+	virgl_vtest_socket.c \
+	virgl_vtest_winsys.c
 
 # missing
 CPPFLAGS+=	\
@@ -1162,6 +1198,16 @@ CPPFLAGS.${_s}+= -I${X11SRCDIR.Mesa}/src/gallium/${_d}
 . endfor
 .endfor
 
+.if ${BUILD_VIRGL} == 1
+# the virgl driver and winsys include virtio-gpu/virgl_protocol.h and
+# vtest/vtest_protocol.h, and the drm/vtest winsys include
+# virgl_resource_cache.h from winsys/virgl/common
+.for _s in ${GALLIUM_SOURCES.drivers/virgl} ${GALLIUM_SOURCES.winsys/virgl/drm} ${GALLIUM_SOURCES.winsys/virgl/vtest}
+CPPFLAGS.${_s}+= -I${X11SRCDIR.Mesa}/src/virtio \
+	-I${X11SRCDIR.Mesa}/src/gallium/winsys/virgl/common
+.endfor
+.endif
+
 #. if defined(${GALLIUM_SOURCES.${_d}})
 #SRCS+=	${GALLIUM_SOURCES.${_d}}
 #. endif
@@ -1176,7 +1222,7 @@ LDFLAGS+=	-pthread
 LIBDPLIBS+=	X11-xcb         ${.CURDIR}/../libX11/libX11-xcb
 LIBDPLIBS+=	xcb-dri2        ${.CURDIR}/../libxcb/dri2
 LIBDPLIBS+=	xcb		${.CURDIR}/../libxcb/libxcb
-.if ${BUILD_RADEON} == 1 || ${BUILD_NOUVEAU} == 1
+.if ${BUILD_RADEON} == 1 || ${BUILD_NOUVEAU} == 1 || ${BUILD_VIRGL} == 1
 LIBDPLIBS+= 	drm		${.CURDIR}/../libdrm
 .if ${BUILD_I915} == 1
 LIBDPLIBS+= 	drm_intel	${.CURDIR}/../libdrm_intel
@@ -1194,7 +1240,7 @@ LIBDPLIBS+= 	drm_amdgpu	${.CURDIR}/../libdrm_amdgpu
 .if ${BUILD_NOUVEAU} == 1
 LIBDPLIBS+= 	drm_nouveau	${.CURDIR}/../libdrm_nouveau
 .endif	# ${BUILD_NOUVEAU} == 1
-.endif	# ${BUILD_RADEON} == 1 || ${BUILD_NOUVEAU} == 1
+.endif	# ${BUILD_RADEON} == 1 || ${BUILD_NOUVEAU} == 1 || ${BUILD_VIRGL} == 1
 LIBDPLIBS+= 	glapi		${.CURDIR}/../libglapi${OLD_SUFFIX}
 LIBDPLIBS+=	expat		${.CURDIR}/../../../../../external/mit/expat/lib/libexpat
 LIBDPLIBS+=	terminfo	${.CURDIR}/../../../../../lib/libterminfo
@@ -1394,6 +1440,11 @@ CPPFLAGS.target.c += \
 .if ${BUILD_CROCUS} == 1
 CPPFLAGS.target.c += \
 	-DGALLIUM_CROCUS
+.endif
+
+.if ${BUILD_VIRGL} == 1
+CPPFLAGS.target.c += \
+	-DGALLIUM_VIRGL
 .endif
 
 .if ${BUILD_RADEON} == 1
