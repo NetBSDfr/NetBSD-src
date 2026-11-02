@@ -1707,7 +1707,9 @@ TOOL_GZIP_N=		${TOOL_GZIP} ${GZIP_N_FLAG}
 # Where X11 sources are and where it is installed to.
 #
 .if !defined(X11SRCDIR)
-.if exists(${NETBSDSRCDIR}/../xsrc)
+.if exists(${NETBSDSRCDIR}/xsrc-smol)
+X11SRCDIR!=		cd "${NETBSDSRCDIR}/xsrc-smol" && pwd
+.elif exists(${NETBSDSRCDIR}/../xsrc)
 X11SRCDIR!=		cd "${NETBSDSRCDIR}/../xsrc" && pwd
 .else
 X11SRCDIR=		/usr/xsrc

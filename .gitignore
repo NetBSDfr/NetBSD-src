@@ -1,0 +1,8 @@
+# MesaLib dist is a local build prerequisite (230 MB, not in git);
+# only files needed to *build* are tracked.  To set up a new machine,
+# rsync xsrc/external/mit/MesaLib into xsrc-smol/external/mit/.
+xsrc-smol/external/mit/MesaLib/**
+!xsrc-smol/external/mit/MesaLib/dist/
+!xsrc-smol/external/mit/MesaLib/dist/src/
+!xsrc-smol/external/mit/MesaLib/dist/src/util/
+!xsrc-smol/external/mit/MesaLib/dist/src/util/u_qsort.h
