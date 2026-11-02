@@ -18,7 +18,7 @@ SRCS=	xf86drm.c xf86drmHash.c xf86drmMode.c xf86drmRandom.c xf86drmSL.c
 INCS=	xf86drm.h xf86drmMode.h libsync.h
 INCSDIR=${X11INCDIR}
 
-CPPFLAGS+=	-I${DESTDIR}${X11INCDIR}/libdrm -I${X11SRCDIR.${LIB}}/../include
+CPPFLAGS+=	-I${X11SRCDIR.drm}/include/drm -I${DESTDIR}${X11INCDIR}/libdrm -I${X11SRCDIR.${LIB}}/../include
 
 SUBDIR=	drm
 
