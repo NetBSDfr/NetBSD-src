@@ -155,10 +155,12 @@ struct vioinput_softc {
 };
 
 /*
- * Keyboard map: evdev evcodes to US keysyms, in the self-describing
- * stream format consumed by wskbd_get_mapentry() --
- * KS_KEYCODE(code) followed by one to four keysyms (plain, shifted[,
- * altgr, altgr-shifted]).
+ * Keyboard map: wskbd pseudo-XT scancodes (see vioinput_ev2xt()) to
+ * US keysyms, in the self-describing stream format consumed by
+ * wskbd_get_mapentry() -- KS_KEYCODE(code) followed by one to four
+ * keysyms (plain, shifted[, altgr, altgr-shifted]).  Keys whose AT
+ * make code is E0-prefixed are listed in pseudo form (0x80 | code),
+ * matching what the driver delivers to wskbd(4).
  */
 #define VIOIN_LAYOUT		((kbd_t)0x00000500)	/* private encoding */
 
@@ -233,8 +235,8 @@ static const keysym_t vioinput_keymap[] = {
 	KC(66),		KS_F8,
 	KC(67),		KS_F9,
 	KC(68),		KS_F10,
-	KC(69),		KS_voidSymbol,		/* ScrollLock */
-	KC(70),		KS_Pause,
+	KC(69),		KS_Num_Lock,
+	KC(70),		KS_voidSymbol,		/* ScrollLock */
 	KC(71),		KS_KP_7,
 	KC(72),		KS_KP_8,
 	KC(73),		KS_KP_9,
@@ -250,26 +252,27 @@ static const keysym_t vioinput_keymap[] = {
 	KC(83),		KS_KP_Decimal,
 	KC(87),		KS_F11,
 	KC(88),		KS_F12,
-	KC(96),		KS_KP_Enter,
-	KC(97),		KS_KP_Divide,
-	KC(98),		KS_Execute,		/* SysRq */
-	KC(99),		KS_Control_R,
-	KC(100),	KS_KP_Multiply,
-	KC(101),	KS_Alt_R,
-	KC(102),	KS_Home,
-	KC(103),	KS_Up,
-	KC(104),	KS_Prior,
-	KC(105),	KS_Left,
-	KC(106),	KS_Right,
-	KC(107),	KS_End,
-	KC(108),	KS_Down,
-	KC(109),	KS_Next,
-	KC(110),	KS_Insert,
-	KC(111),	KS_Delete,
-	KC(125),	KS_Meta_L,
-	KC(126),	KS_Meta_L,		/* right: same class */
-	KC(127),	KS_Multi_key,		/* Compose/Menu */
+	KC(127),	KS_Pause,		/* evdev 119 */
+	KC(156),	KS_KP_Enter,		/* evdev 96 */
+	KC(157),	KS_Control_R,		/* evdev 97 */
+	KC(181),	KS_KP_Divide,		/* evdev 98 */
+	KC(183),	KS_Execute,		/* evdev 99 (SysRq/PrtSc) */
+	KC(184),	KS_Alt_R,		/* evdev 100 */
+	KC(199),	KS_Home,		/* evdev 102 */
+	KC(200),	KS_Up,		/* evdev 103 */
+	KC(201),	KS_Prior,		/* evdev 104 */
+	KC(203),	KS_Left,		/* evdev 105 */
+	KC(205),	KS_Right,		/* evdev 106 */
+	KC(207),	KS_End,		/* evdev 107 */
+	KC(208),	KS_Down,		/* evdev 108 */
+	KC(209),	KS_Next,		/* evdev 109 */
+	KC(210),	KS_Insert,		/* evdev 110 */
+	KC(211),	KS_Delete,		/* evdev 111 */
+	KC(125),		KS_Meta_L,
+	KC(220),	KS_Meta_R,		/* evdev 126 */
+	KC(221),	KS_Multi_key,		/* evdev 139 (Menu) */
 };
+
 
 static void	vioinput_set_leds(void *, int);
 
@@ -579,6 +582,54 @@ vioinput_set_leds(void *cookie, int led)
 	vioinput_event_send(sc, EV_SYN, SYN_REPORT, 0);
 }
 
+/*
+ * The device delivers raw evdev codes.  wskbd(4) clients (the wscons
+ * console and X servers) interpret them as AT set-1 scancodes, a
+ * domain in which the evdev codes happen to agree for the ordinary
+ * range, but not for keys whose AT make code is E0-prefixed: those
+ * live in evdev 96-139 while the AT tables have their entries in
+ * 128-254.  Map them to the pseudo scancodes pckbd(4) uses
+ * (0x80 | AT code) so the console keymap and the X server key
+ * translation find them; every other code passes through unchanged
+ * (including evdev 125, KEY_LEFTMETA, which works as-is).
+ */
+static int
+vioinput_ev2xt(uint16_t code)
+{
+	static const struct {
+		uint16_t ev;
+		uint8_t xt;
+	} xt_map[] = {
+		{  96,	0x9c },		/* keypad enter */
+		{  97,	0x9d },		/* right control */
+		{  98,	0xb5 },		/* keypad divide */
+		{  99,	0xb7 },		/* print screen (sysrq) */
+		{ 100,	0xb8 },		/* right alt */
+		{ 102,	0xc7 },		/* home */
+		{ 103,	0xc8 },		/* up */
+		{ 104,	0xc9 },		/* page up */
+		{ 105,	0xcb },		/* left */
+		{ 106,	0xcd },		/* right */
+		{ 107,	0xcf },		/* end */
+		{ 108,	0xd0 },		/* down */
+		{ 109,	0xd1 },		/* page down */
+		{ 110,	0xd2 },		/* insert */
+		{ 111,	0xd3 },		/* delete */
+		{ 113,	0xa0 },		/* mute */
+		{ 114,	0xae },		/* volume down */
+		{ 115,	0xaf },		/* volume up */
+		{ 119,	0x7f },		/* pause/break */
+		{ 126,	0xdc },		/* right meta */
+		{ 139,	0xdd },		/* menu */
+	};
+	unsigned int i;
+
+	for (i = 0; i < __arraycount(xt_map); i++)
+		if (xt_map[i].ev == code)
+			return xt_map[i].xt;
+	return code;
+}
+
 static void
 vioinput_handle_event(struct vioinput_softc *sc, struct vioinput_event *ev)
 {
@@ -604,7 +655,7 @@ vioinput_handle_event(struct vioinput_softc *sc, struct vioinput_event *ev)
 		if (sc->sc_wskbddev != NULL) {
 			wskbd_input(sc->sc_wskbddev,
 			    ev->value ? WSCONS_EVENT_KEY_DOWN :
-			    WSCONS_EVENT_KEY_UP, ev->code);
+			    WSCONS_EVENT_KEY_UP, vioinput_ev2xt(ev->code));
 			break;
 		}
 		switch (ev->code) {
