@@ -34,3 +34,7 @@ pseudo-device	wsmux		# wsdisplay sc_input requires it once NWSKBD>0
 
 # tslog(4) boot-time event tracing facility
 #options	TSLOG
+
+# Go netpoll (and other NetBSD-10-era binaries) call __kevent50 = syscall 435,
+# which on 11.x lives behind COMPAT_100; without it kevent dies with ENOSYS.
+options		COMPAT_100		# NetBSD 10.0+ compat (legacy syscall shims)
