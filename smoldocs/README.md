@@ -21,3 +21,10 @@ state lives in the handoff documents instead.
 - `HANDOFF-viogpu-glx.md` — full session log of the GLX bring-up
   (checked out from the `viogpu-glx` branch root): the compat-shim
   bugs, vioinput, virgl, FPS/backend findings, hard-won gotchas.
+- `p9_improvement_smolBSD.md` — the NetBSD 9p story: vio9p +
+  mount_9p correctness work, test loop, shipping, and (§6) the
+  perf round — TTL attribute caching, msize 128K, edge-IRQ and
+  readlink opcode fixes, with before/after numbers.
+- `p9-handoff.md` — operational state after the 2026-11-11 perf
+  round (r25): what's committed, what remains for the aarch64
+  resume machine, and the machine gotchas that cost hours.
