@@ -63,8 +63,20 @@ usage(void)
 	    "[user@]server[:path] mountpoint\n", getprogname());
 	fprintf(stderr, "       %s -c [-su] [-o mntopts] device mountpoint\n",
 	    getprogname());
+	fprintf(stderr, "mntopts: ttl=N (cache TTL seconds, default %d), "
+	    "nocache, nonamecache\n", P9P_DEF_TTL);
 	exit(1);
 }
+
+/*
+ * Standard puffs options plus mount_9p's own "ttl", whose value is
+ * read back with getmntoptstr() after getmntopts().
+ */
+static const struct mntopt mopts[] = {
+	PUFFSMOPT_STD,
+	{ "ttl",		0, 0, 1 },
+	MOPT_NULL
+};
 
 /*
  * TCP connection to 9P file server.
@@ -149,7 +161,9 @@ main(int argc, char *argv[])
 	int detach;
 	int protover;
 	int server;
-	bool cachename = false;
+	const char *tv;
+	int ttl = P9P_DEF_TTL;
+	bool cachename = true;
 
 	setprogname(argv[0]);
 
@@ -188,9 +202,17 @@ main(int argc, char *argv[])
 			cachename = true;
 			break;
 		case 'o':
-			mp = getmntopts(optarg, puffsmopts, &mntflags, &pflags);
+			mp = getmntopts(optarg, mopts, &mntflags, &pflags);
 			if (mp == NULL)
 				err(1, "getmntopts");
+			tv = getmntoptstr(mp, "ttl");
+			if (tv != NULL) {
+				char *ep;
+				ttl = (int)strtol(tv, &ep, 10);
+				if (*ep != '\0' || ttl < 0)
+					errx(EXIT_FAILURE, "invalid ttl `%s'",
+					    tv);
+			}
 			freemntopts(mp);
 			break;
 		case 'p':
@@ -217,8 +239,22 @@ main(int argc, char *argv[])
 		detach = 0;
 	pflags |= PUFFS_KFLAG_WTCACHE | PUFFS_KFLAG_IAONDEMAND;
 
-	if (!cachename)
+	/*
+	 * Kernel name and attribute caching are on by default.  Opt
+	 * out entirely with -o nocache, or for names only with
+	 * -o nonamecache.  Attributes and cache entries are considered
+	 * valid for ttl seconds (-o ttl=N); ttl=0 turns the attribute
+	 * cache off while names stay cached.
+	 */
+	if (pflags & PUFFS_KFLAG_NOCACHE) {
 		pflags |= PUFFS_KFLAG_NOCACHE_NAME;
+		cachename = false;
+		ttl = 0;
+	} else if (!cachename)
+		pflags |= PUFFS_KFLAG_NOCACHE_NAME;
+
+	if (ttl > 0)
+		pflags |= PUFFS_KFLAG_CACHE_FS_TTL;
 
 	PUFFSOP_INIT(pops);
 
@@ -229,7 +265,9 @@ main(int argc, char *argv[])
 	PUFFSOP_SET(pops, puffs9p, node, lookup);
 	PUFFSOP_SET(pops, puffs9p, node, readdir);
 	PUFFSOP_SET(pops, puffs9p, node, getattr);
+	PUFFSOP_SET(pops, puffs9p, node, getattr_ttl);
 	PUFFSOP_SET(pops, puffs9p, node, setattr);
+	PUFFSOP_SET(pops, puffs9p, node, setattr_ttl);
 	PUFFSOP_SET(pops, puffs9p, node, create);
 	PUFFSOP_SET(pops, puffs9p, node, open);
 	PUFFSOP_SET(pops, puffs9p, node, mkdir);
@@ -256,6 +294,7 @@ main(int argc, char *argv[])
 	p9p.nextfid = 1;
 	p9p.protover = protover;
 	p9p.server = server;
+	p9p.ttl = ttl;
 
 	/* user@ */
 	if ((p = strchr(argv[0], '@')) != NULL) {
@@ -322,6 +361,9 @@ main(int argc, char *argv[])
 	if (detach)
 		if (puffs_daemon(pu, 1, 1) == -1)
 			err(1, "puffs_daemon");
+
+	/* now in the final process if daemonized: signals + pid file */
+	p9p_stats_start(pu);
 
 	if (puffs_mount(pu, argv[1], mntflags, pn_root) == -1)
 		err(1, "puffs_mount");
