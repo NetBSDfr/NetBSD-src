@@ -476,9 +476,8 @@ virtio_vq_intr(struct virtio_softc *sc)
 
 	for (i = 0; i < sc->sc_nvqs; i++) {
 		vq = &sc->sc_vqs[i];
-		if (virtio_vq_is_enqueued(sc, vq) == 1) {
+		if (virtio_vq_is_enqueued(sc, vq) == 1)
 			r |= (*vq->vq_intrhand)(vq->vq_intrhand_arg);
-		}
 	}
 
 	return r;
@@ -595,6 +594,19 @@ vq_sync_indirect(struct virtio_softc *sc, struct virtqueue *vq, int slot,
 
 	bus_dmamap_sync(sc->sc_dmat, vq->vq_dmamap,
 	    offset, sizeof(struct vring_desc) * vq->vq_maxnsegs, ops);
+}
+
+/*
+ * Re-ring the doorbell for a queue without posting a new request: a
+ * consumer that is about to block (or is re-polling) uses this to
+ * recover from a lost notification; the device simply pops nothing
+ * when the available ring is drained, making the re-kick idempotent.
+ */
+void
+virtio_kick_vq(struct virtio_softc *sc, struct virtqueue *vq)
+{
+
+	sc->sc_ops->kick(sc, vq->vq_index);
 }
 
 bool
