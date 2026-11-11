@@ -332,7 +332,30 @@ virtio_mmio_cmdline_alloc_interrupts(struct virtio_mmio_softc *msc)
 
 	mpsafe = (0 != (vsc->sc_flags & VIRTIO_F_INTR_MPSAFE));
 
-	msc->sc_ih = intr_establish_xname(irq, pic, pin, IST_LEVEL, vsc->sc_ipl,
+	/*
+	 * Program the ioapic pin as edge-triggered rather than level.
+	 *
+	 * QEMU (with KVM in the loop) drives this line as
+	 * line = (device isr != 0) through change-only qemu_irq
+	 * plumbing.  A completion racing with the guest's INTERRUPT_ACK
+	 * can drop the deassert on the floor (host-side change
+	 * detection and the in-kernel irqchip state disagree), leaving
+	 * the pin latched asserted while the device reports no
+	 * interrupt at all.  A level-triggered pin then re-arms after
+	 * every EOI and the CPU livelocks in the interrupt stub at
+	 * tens of thousands of entries per second, with the guest
+	 * powerless to clear a line it cannot re-synchronise.
+	 *
+	 * Edge delivery makes the stuck-high line inert, and is sound
+	 * for this protocol: the device holds the line asserted from
+	 * completion until the guest acknowledges it, the handler here
+	 * acknowledges before draining the used ring (so anything that
+	 * raced in is serviced in the same round), and an assert
+	 * arriving while the pin is masked is still high when the pin
+	 * is unmasked.  Lost-edge recovery is unnecessary, and the
+	 * vio9p consumer re-polls the ring on a timeout regardless.
+	 */
+	msc->sc_ih = intr_establish_xname(irq, pic, pin, IST_EDGE, vsc->sc_ipl,
 	    virtio_mmio_intr, msc, mpsafe, device_xname(vsc->sc_dev));
 	if (msc->sc_ih == NULL) {
 		aprint_error_dev(vsc->sc_dev,

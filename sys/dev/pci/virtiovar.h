@@ -235,6 +235,7 @@ int virtio_dequeue(struct virtio_softc*, struct virtqueue*, int *, int *);
 int virtio_dequeue_commit(struct virtio_softc*, struct virtqueue*, int);
 
 bool virtio_vq_is_enqueued(struct virtio_softc *, struct virtqueue *);
+void virtio_kick_vq(struct virtio_softc *, struct virtqueue *);
 int virtio_postpone_intr(struct virtio_softc *sc, struct virtqueue *vq,
 		uint16_t nslots);
 int virtio_postpone_intr_smart(struct virtio_softc *sc, struct virtqueue *vq);
