@@ -89,6 +89,77 @@ puffs9p_node_getattr(struct puffs_usermount *pu, void *opc, struct vattr *vap,
 	return rv;
 }
 
+/*
+ * Called by libpuffs instead of plain getattr/setattr when the mount
+ * has PUFFS_KFLAG_CACHE_FS_TTL: do the fresh T_STAT and hand the
+ * kernel a lifetime for which the attributes may be served from its
+ * own cache (see puffs_vnop_getattr fast path).
+ */
+int
+puffs9p_node_getattr_ttl(struct puffs_usermount *pu, void *opc,
+	struct vattr *vap, const struct puffs_cred *pcr,
+	struct timespec *va_ttl)
+{
+	struct puffs_node *pn = opc;
+	int rv;
+
+	rv = do_getattr(pu, pn, &pn->pn_va);
+	if (rv == 0) {
+		memcpy(vap, &pn->pn_va, sizeof(struct vattr));
+		va_ttl->tv_sec = ((struct puffs9p *)puffs_getspecific(pu))->ttl;
+		va_ttl->tv_nsec = 0;
+	}
+	return rv;
+}
+
+int
+puffs9p_node_setattr_ttl(struct puffs_usermount *pu, void *opc,
+	struct vattr *vap, const struct puffs_cred *pcr,
+	struct timespec *va_ttl, int flags)
+{
+	struct puffs_node *pn = opc;
+	int rv;
+
+	rv = puffs9p_node_setattr(pu, opc, vap, pcr);
+	if (rv == 0) {
+		/*
+		 * puffs9p_node_setattr() refreshed the mirror with a
+		 * fresh T_STAT; let the kernel cache the authoritative
+		 * result instead of the request it passed in.
+		 */
+		memcpy(vap, &pn->pn_va, sizeof(struct vattr));
+		va_ttl->tv_sec = ((struct puffs9p *)puffs_getspecific(pu))->ttl;
+		va_ttl->tv_nsec = 0;
+	}
+	return rv;
+}
+
+/*
+ * Hand the kernel the attributes of a freshly looked up or created
+ * node plus their lifetimes so that it can answer later stat() and
+ * namei() calls without a roundtrip.  cache_va == false means the
+ * attributes are provisional (e.g. size 0 for a file about to be
+ * written; the kernel never flushes its attribute mirror on write)
+ * and only the name cache entry gets a lifetime.
+ */
+static void
+p9p_newinfo_fillva(struct puffs_usermount *pu, struct puffs_newinfo *pni,
+	struct vattr *vap, bool cache_va)
+{
+	struct timespec ts;
+
+	ts.tv_sec = ((struct puffs9p *)puffs_getspecific(pu))->ttl;
+	ts.tv_nsec = 0;
+
+	puffs_newinfo_setva(pni, vap);
+	if (!cache_va)
+		ts.tv_sec = 0;
+	puffs_newinfo_setvattl(pni, &ts);
+	puffs_newinfo_setcnttl(pni, &ts);
+	/* NOTE: a zero timespec means "not cached" (TTL_VALID in
+	 * puffs_vnops.c), so this is a no-op when ttl=0 */
+}
+
 int
 puffs9p_node_lookup(struct puffs_usermount *pu, void *opc, struct puffs_newinfo *pni,
 	const struct puffs_cn *pcn)
@@ -153,6 +224,8 @@ puffs9p_node_lookup(struct puffs_usermount *pu, void *opc, struct puffs_newinfo 
 	puffs_newinfo_setvtype(pni, pn->pn_va.va_type);
 	puffs_newinfo_setsize(pni, pn->pn_va.va_size);
 	puffs_newinfo_setrdev(pni, pn->pn_va.va_rdev);
+	/* attributes are authoritative here: fresh off the wire */
+	p9p_newinfo_fillva(pu, pni, &pn->pn_va, true);
 
  out:
 	RETURN(rv);
@@ -497,6 +570,12 @@ nodecreate(struct puffs_usermount *pu, struct puffs_node *pn,
 	pn_new = newp9pnode_va(pu, vap, nfid);
 	qid2vattr(&pn_new->pn_va, &nqid);
 	puffs_newinfo_setcookie(pni, pn_new);
+	/*
+	 * Do not let the kernel cache these attributes: the file is
+	 * about to be opened for writing and the kernel does not
+	 * invalidate its attribute mirror on write.
+	 */
+	p9p_newinfo_fillva(pu, pni, &pn_new->pn_va, false);
 
  out:
 	RETURN(rv);
@@ -707,6 +786,7 @@ puffs9p_node_symlink(struct puffs_usermount *pu, void *opc,
 	 * and size 0 when creating the vnode anyway (puffs_vnop_symlink).
 	 */
 	puffs_newinfo_setcookie(pni, pn_new);
+	p9p_newinfo_fillva(pu, pni, &pn_new->pn_va, false);
 
  out:
 	RETURN(rv);
