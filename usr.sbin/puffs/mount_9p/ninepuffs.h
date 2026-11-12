@@ -51,9 +51,7 @@ typedef uint32_t p9pfid_t;
  */
 #define P9P_MINREQLEN	512
 
-/* negotiated msize; must match VIO9P_MAX_REQLEN in sys/dev/pci/vio9p.c */
-#define P9P_DEFREQLEN	(128*1024)
-#define P9P_DEF_TTL	1	/* default kernel cache TTL, seconds */
+#define P9P_DEFREQLEN	(16*1024)
 #define P9P_INVALFID	0
 #define P9P_ROOTFID	1
 
@@ -105,18 +103,11 @@ struct puffs9p {
 	p9pfid_t nextfid;
 
 	size_t maxreq;		/* negotiated with server */
-	int ttl;		/* kernel cache TTL seconds, 0 = caching off */
 
 	int protover;
 	int server;
 #define P9P_SERVER_TCP		0
 #define P9P_SERVER_CDEV		1
-
-	/* SIGINFO diagnostics: wire messages by 9P type */
-	uint64_t stats_tx[256];	/* msgs written to fd */
-	uint64_t stats_rx[256];	/* msgs read from fd */
-	uint64_t bytes_tx;
-	uint64_t bytes_rx;
 };
 
 struct dirfid {
@@ -159,10 +150,6 @@ int	p9pbuf_read_data(struct puffs_framebuf *, uint8_t *, uint32_t);
 
 uint8_t		p9pbuf_get_type(struct puffs_framebuf *);
 uint16_t	p9pbuf_get_tag(struct puffs_framebuf *);
-
-/* stats.c: SIGINFO wire-message counters */
-void	p9p_stats_start(struct puffs_usermount *);
-void	p9p_stats_count(struct puffs_usermount *, uint8_t, size_t, int);
 
 int	proto_getqid(struct puffs_framebuf *, struct qid9p *);
 int	proto_getstat(struct puffs_usermount *, struct puffs_framebuf *, struct vattr *,
