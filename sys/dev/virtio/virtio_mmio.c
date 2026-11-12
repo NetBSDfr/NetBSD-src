@@ -440,12 +440,10 @@ virtio_mmio_intr(void *arg)
 		r = (vsc->sc_config_change)(vsc);
 	if ((isr & VIRTIO_CONFIG_ISR_QUEUE_INTERRUPT) &&
 	    (vsc->sc_intrhand != NULL)) {
-		if (vsc->sc_soft_ih != NULL) {
+		if (vsc->sc_soft_ih != NULL)
 			softint_schedule(vsc->sc_soft_ih);
-			r = 1;
-		} else {
+		else
 			r |= (vsc->sc_intrhand)(vsc);
-		}
 	}
 
 	return r;

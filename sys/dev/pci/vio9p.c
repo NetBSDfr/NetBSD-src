@@ -73,7 +73,7 @@ __KERNEL_RCSID(0, "$NetBSD: vio9p.c,v 1.12 2025/04/22 05:56:25 ozaki-r Exp $");
 
 
 // Must be the same as P9P_DEFREQLEN of usr.sbin/puffs/mount_9p/ninepuffs.h
-#define VIO9P_MAX_REQLEN	(128 * 1024)
+#define VIO9P_MAX_REQLEN	(16 * 1024)
 #define VIO9P_SEGSIZE		PAGE_SIZE
 #define VIO9P_N_SEGMENTS	(VIO9P_MAX_REQLEN / VIO9P_SEGSIZE)
 
@@ -156,7 +156,6 @@ struct vio9p_softc {
 static int	vio9p_match(device_t, cfdata_t, void *);
 static void	vio9p_attach(device_t, device_t, void *);
 static void	vio9p_read_config(struct vio9p_softc *);
-
 static int	vio9p_request_done(struct virtqueue *);
 
 static int	vio9p_read(struct file *, off_t *, struct uio *, kauth_cred_t,
@@ -361,21 +360,6 @@ vio9p_read(struct file *fp, off_t *offp, struct uio *uio,
 			DLOG("interrupted %d", w);
 			error = EAGAIN;
 			goto out;
-		}
-		if (w == EWOULDBLOCK && sc->sc_ninflight > 0) {
-			/*
-			 * Re-arm a completion notification that the
-			 * device may never have observed: with an
-			 * ioeventfd doorbell and a host that coalesces
-			 * unchanged line levels, either the kick that
-			 * exposed an available element or the signal
-			 * that announced its completion can vanish
-			 * silently.  Re-kicking is cheap and idempotent:
-			 * the host pops nothing when the queue is
-			 * drained and never re-answers a processed
-			 * request.
-			 */
-			virtio_kick_vq(sc->sc_virtio, &sc->sc_vq[0]);
 		}
 		DLOG("repoll: no reply yet, inflight %d", sc->sc_ninflight);
 	}
