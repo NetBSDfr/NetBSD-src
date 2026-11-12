@@ -67,11 +67,9 @@
 #define P9PROTO_R_WSTAT		127
 /*
  * 9P2000.L readlink: served by many modern servers (e.g. qemu) even
- * when the negotiated version is 9P2000.u.  The Linux-flavoured
- * extension opcodes are their own enumeration: TREADLINK is 22 (with
- * RREADLINK 23).  Do NOT use 72/73 -- those are TMKDIR/VMKDIR in the
- * Linux enum, and servers such as qemu try to decode the payload as a
- * mkdir, fail and mark the device broken.
+ * when the negotiated version is 9P2000.u.  In the Linux extension
+ * enum these are 22/23 -- do NOT use 72/73, those are TMKDIR/VMKDIR
+ * and make qemu mark the device broken permanently.
  */
 #define P9PROTO_T_L_READLINK	22
 #define P9PROTO_R_L_READLINK	23

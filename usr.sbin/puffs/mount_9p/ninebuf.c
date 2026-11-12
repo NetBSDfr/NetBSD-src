@@ -112,7 +112,6 @@ p9pbuf_read(struct puffs_usermount *pu, struct puffs_framebuf *pb,
 
 	if (!lenstate) {
 		puffs_framebuf_seekset(pb, 7);
-		p9p_stats_count(pu, p9pbuf_get_type(pb), p9pbuf_get_len(pb), 0);
 		*done = 1;
 		return 0;
 	} else
@@ -132,8 +131,6 @@ p9pbuf_write(struct puffs_usermount *pu, struct puffs_framebuf *pb,
 
 		len = htole32(puffs_framebuf_tellsize(pb));
 		puffs_framebuf_putdata_atoff(pb, 0, &len, 4);
-		p9p_stats_count(pu, p9pbuf_get_type(pb),
-		    puffs_framebuf_tellsize(pb), 1);
 	}
 
 	howmuch = puffs_framebuf_tellsize(pb) - CUROFF(pb);
