@@ -234,24 +234,75 @@ puffs9p_node_readdir(struct puffs_usermount *pu, void *opc, struct dirent *dent,
 	RETURN(rv);
 }
 
-int
-puffs9p_node_setattr(struct puffs_usermount *pu, void *opc,
-	const struct vattr *va, const struct puffs_cred *pcr)
+/*
+ * One WSTAT round trip for the given vattr subset.
+ */
+static int
+wstat_vattr(struct puffs_usermount *pu, struct p9pnode *p9n,
+	const struct vattr *va, enum vtype vt)
 {
 	AUTOVAR(pu);
-	struct puffs_node *pn = opc;
-	struct p9pnode *p9n = pn->pn_data;
 
 	tag = NEXTTAG(p9p);
 	p9pbuf_put_1(pb, P9PROTO_T_WSTAT);
 	p9pbuf_put_2(pb, tag);
 	p9pbuf_put_4(pb, p9n->fid_base);
-	proto_make_stat(pu, pb, va, NULL, pn->pn_va.va_type);
+	proto_make_stat(pu, pb, va, NULL, vt);
 	GETRESPONSE(pb);
 
-	if (p9pbuf_get_type(pb) != P9PROTO_R_WSTAT) {
+	if (p9pbuf_get_type(pb) != P9PROTO_R_WSTAT)
 		rv = proto_handle_rerror(pu, pb);
-	} else {
+
+ out:
+	RETURN(rv);
+}
+
+int
+puffs9p_node_setattr(struct puffs_usermount *pu, void *opc,
+	const struct vattr *va, const struct puffs_cred *pcr)
+{
+	struct puffs_node *pn = opc;
+	struct p9pnode *p9n = pn->pn_data;
+	struct vattr vsize, vrest;
+	const struct vattr *post;
+	int rv;
+
+	/*
+	 * Never mix length with mode (or times) in one WSTAT: servers
+	 * such as qemu apply the stat fields in a fixed order and
+	 * chmod runs before truncate.  Once the mode drops the write
+	 * bits, the following path-based truncate fails with EACCES,
+	 * e.g. install -m 444 or git locking down a freshly written
+	 * pack file.  The merged-in size usually just mirrors buffered
+	 * writes anyway, not a request to truncate.  Send length as
+	 * its own WSTAT while the file is still writable, and the
+	 * remainder afterwards.
+	 */
+	post = va;
+	if (va->va_size != (u_quad_t) PUFFS_VNOVAL &&
+	    (va->va_mode != (mode_t) PUFFS_VNOVAL ||
+	     va->va_uid != (uid_t) PUFFS_VNOVAL ||
+	     va->va_gid != (gid_t) PUFFS_VNOVAL ||
+	     va->va_atime.tv_sec != (time_t) PUFFS_VNOVAL ||
+	     va->va_mtime.tv_sec != (time_t) PUFFS_VNOVAL)) {
+
+		vsize = *va;
+		vsize.va_mode = (mode_t) PUFFS_VNOVAL;
+		vsize.va_uid = (uid_t) PUFFS_VNOVAL;
+		vsize.va_gid = (gid_t) PUFFS_VNOVAL;
+		vsize.va_atime.tv_sec = (time_t) PUFFS_VNOVAL;
+		vsize.va_mtime.tv_sec = (time_t) PUFFS_VNOVAL;
+		rv = wstat_vattr(pu, p9n, &vsize, pn->pn_va.va_type);
+		if (rv != 0)
+			return rv;
+
+		vrest = *va;
+		vrest.va_size = (u_quad_t) PUFFS_VNOVAL;
+		post = &vrest;
+	}
+
+	rv = wstat_vattr(pu, p9n, post, pn->pn_va.va_type);
+	if (rv == 0) {
 		/*
 		 * Refresh the attribute mirror from the server so that
 		 * e.g. a truncate is visible to subsequent reads (which
@@ -261,8 +312,7 @@ puffs9p_node_setattr(struct puffs_usermount *pu, void *opc,
 		do_getattr(pu, pn, &pn->pn_va);
 	}
 
- out:
-	RETURN(rv);
+	return rv;
 }
 
 /*
