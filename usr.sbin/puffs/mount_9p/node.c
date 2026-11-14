@@ -257,6 +257,45 @@ wstat_vattr(struct puffs_usermount *pu, struct p9pnode *p9n,
 	RETURN(rv);
 }
 
+/*
+ * Send a size-carrying WSTAT.  QEMU-flavoured servers truncate via a
+ * path-based reopen, which fails with EACCES on files that lack
+ * owner-write even for the owner - the kernel mirror size then goes
+ * out of sync with pn_serversize and every later puffs_vnop_getpages()
+ * fault in [serversize, v_size) re-runs the failing SETATTR, sticking
+ * EACCES onto plain write()s (git tmp_pack).  Same workaround as for
+ * the create/open case: grant S_IWUSR around the size update.
+ */
+static int
+wstat_size(struct puffs_usermount *pu, struct puffs_node *pn,
+	const struct vattr *vsize)
+{
+	struct p9pnode *p9n = pn->pn_data;
+	const mode_t old = pn->pn_va.va_mode;
+	struct vattr relax;
+	int rv;
+
+	if (pn->pn_va.va_type != VREG || old == (mode_t) PUFFS_VNOVAL ||
+	    (old & S_IWUSR) != 0)
+		return wstat_vattr(pu, p9n, vsize, pn->pn_va.va_type);
+
+	memset(&relax, 0xff, sizeof(relax));
+	relax.va_mode = old | S_IWUSR;
+	if (wstat_vattr(pu, p9n, &relax, VREG) != 0)
+		return wstat_vattr(pu, p9n, vsize, pn->pn_va.va_type);
+
+	rv = wstat_vattr(pu, p9n, vsize, pn->pn_va.va_type);
+
+	memset(&relax, 0xff, sizeof(relax));
+	relax.va_mode = old;
+	if (wstat_vattr(pu, p9n, &relax, VREG) == 0)
+		pn->pn_va.va_mode = old;
+	else
+		do_getattr(pu, pn, &pn->pn_va);
+
+	return rv;
+}
+
 int
 puffs9p_node_setattr(struct puffs_usermount *pu, void *opc,
 	const struct vattr *va, const struct puffs_cred *pcr)
@@ -292,7 +331,7 @@ puffs9p_node_setattr(struct puffs_usermount *pu, void *opc,
 		vsize.va_gid = (gid_t) PUFFS_VNOVAL;
 		vsize.va_atime.tv_sec = (time_t) PUFFS_VNOVAL;
 		vsize.va_mtime.tv_sec = (time_t) PUFFS_VNOVAL;
-		rv = wstat_vattr(pu, p9n, &vsize, pn->pn_va.va_type);
+		rv = wstat_size(pu, pn, &vsize);
 		if (rv != 0)
 			return rv;
 
@@ -301,7 +340,10 @@ puffs9p_node_setattr(struct puffs_usermount *pu, void *opc,
 		post = &vrest;
 	}
 
-	rv = wstat_vattr(pu, p9n, post, pn->pn_va.va_type);
+	if (post->va_size != (u_quad_t) PUFFS_VNOVAL)
+		rv = wstat_size(pu, pn, post);
+	else
+		rv = wstat_vattr(pu, p9n, post, pn->pn_va.va_type);
 	if (rv == 0) {
 		/*
 		 * Refresh the attribute mirror from the server so that
@@ -354,6 +396,47 @@ puffs9p_node_open(struct puffs_usermount *pu, void *opc, int mode,
 			nfid = NEXTFID(p9p);
 			error = proto_cc_open(pu, p9n->fid_base, nfid,
 			    P9PROTO_OMODE_WRITE);
+			if (error == EACCES &&
+			    pn->pn_va.va_mode != (mode_t) PUFFS_VNOVAL &&
+			    !(pn->pn_va.va_mode & S_IWUSR)) {
+				/*
+				 * 9P2000.u servers open the fid handed
+				 * back by Tcreate with the request's open
+				 * mode and enforce the file's mode bits on
+				 * any later TOPEN: a file created without
+				 * owner-write (e.g. git's 0444 tmp_pack)
+				 * cannot be reopened for writing even by
+				 * its owner, though the creating open
+				 * itself succeeded.  Emulate create/open
+				 * semantics: grant S_IWUSR, retry the
+				 * open on a fresh fid, then restore the
+				 * mode - the open fd survives it.
+				 */
+				struct vattr va;
+				mode_t want = pn->pn_va.va_mode;
+
+				proto_cc_clunkfid(pu, nfid, 0);
+
+				memset(&va, 0xff, sizeof(va));
+				va.va_mode = want | S_IWUSR;
+				if (wstat_vattr(pu, p9n, &va, VREG) == 0) {
+					nfid = NEXTFID(p9p);
+					error = proto_cc_open(pu,
+					    p9n->fid_base, nfid,
+					    P9PROTO_OMODE_WRITE);
+					memset(&va, 0xff, sizeof(va));
+					va.va_mode = want;
+					if (wstat_vattr(pu, p9n, &va,
+					    VREG) == 0)
+						pn->pn_va.va_mode = want;
+					else
+						do_getattr(pu, pn,
+						    &pn->pn_va);
+					if (error)
+						proto_cc_clunkfid(pu,
+						    nfid, 0);
+				}
+			}
 			if (error)
 				return error;
 			p9n->fid_write = nfid;
