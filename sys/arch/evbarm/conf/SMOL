@@ -31,6 +31,11 @@ options 	PIPE_SOCKETPAIR	# smaller, but slower pipe(2)
 
 options 	BOOT_DURATION	# print kernel boot time in ms
 
+# ktrace(1)/kdump(2) support: the Mac field units need syscall traces and
+# SMOL cannot be rebuilt ad hoc there (2026-11-13: diagnosing the 9p
+# tmp_pack failure was blind without it; amd64 SMOL already has KTRACE)
+options 	KTRACE
+
 makeoptions	COPTS="-O2 -fno-omit-frame-pointer"
 
 # File systems
