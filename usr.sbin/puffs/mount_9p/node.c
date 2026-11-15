@@ -48,7 +48,18 @@ nodecmp(struct puffs_usermount *pu, struct puffs_node *pn, void *arg)
 	struct vattr *vap = &pn->pn_va;
 	struct qid9p *qid = arg;
 
-	if (vap->va_fileid == qid->qidpath && vap->va_gen == qid->qidvers)
+	/*
+	 * Match on the qid path alone.  The qid version is a change
+	 * counter derived from the mtime: it moves whenever a file's
+	 * data or a directory's contents change.  Matching on it makes
+	 * lookups miss the existing node after any modification, which
+	 * spawns duplicate pnodes and kernel vnodes for the same file.
+	 * A duplicate of the export root is fatal in particular: it
+	 * carries no VROOT, so getcwd() walking up through it keeps
+	 * asking for ".." and fails (EPROTO/EOPNOTSUPP) after ordinary
+	 * churn in the mounted directory.
+	 */
+	if (vap->va_fileid == qid->qidpath)
 		return pn;
 
 	return NULL;
