@@ -563,12 +563,20 @@ next:	pop	%edi
 	movl	%eax,%edi
 1:
 #endif
-	/* Skip over any modules/blobs; brings us on (3). */
+	/*
+	 * Skip over any modules/blobs; brings us on (3).  GENPVH is
+	 * special: start_pvh placed its blob above a reservation for
+	 * the BOOTSTRAP TABLES, so the tables stay inside the fixed
+	 * low-memory bootstrap map regardless of the blob's size.
+	 */
+	cmpl	$VM_GUEST_GENPVH, RELOC(vm_guest)
+	je	.Lskip_blob_done
 	movl	RELOC(eblob),%eax
 	testl	%eax,%eax
 	jz	1f
 	subl	$KERNBASE_LO,%eax	/* XXX */
 	movl	%eax,%edi
+.Lskip_blob_done:
 1:
 
 	/* We are on (3). Align up for BOOTSTRAP TABLES. */
@@ -643,6 +651,22 @@ next:	pop	%edi
 	shrl	$PGSHIFT,%ecx
 	orl	$(PTE_P|PTE_W),%eax
 	fillkpt_nox
+
+	/*
+	 * GENPVH: map the blob's first megabyte.  start_pvh placed the
+	 * blob directly above the BOOTSTRAP TABLES, so %eax already holds
+	 * its physical start and %ebx its first L1 slot: extend the
+	 * contiguous identity map by 1MB to cover just the blob headers
+	 * (hvm_start_info, module list, cmdline).  The module payload is
+	 * not read until pmap has mapped all of memory, and mapping the
+	 * whole blob would overflow the fixed bootstrap map.
+	 */
+	cmpl	$VM_GUEST_GENPVH, RELOC(vm_guest)
+	jne	.Lgenpvh_blobmap_done
+	movl	$256, %ecx		/* map the blob's first megabyte */
+	orl	$(PTE_P|PTE_W), %eax
+	fillkpt_nox
+.Lgenpvh_blobmap_done:
 
 	/* We are on (4). Map ISA I/O MEM RW. */
 	movl	$IOM_BEGIN,%eax
@@ -953,6 +977,7 @@ ENTRY(start_pvh)
 
 	/* we need a valid stack */
 	movl	$RELOC(tmpstk),%esp
+	cld				/* do not rely on the loader for DF */
 
 	/* clear BSS */
         xorl    %eax,%eax
@@ -1010,6 +1035,16 @@ ENTRY(start_pvh)
 	movl $RELOC(esym),%ebp
 	movl %ecx,(%ebp)
 	movl $KERNBASE_HI,4(%ebp)
+
+	/*
+	 * Place the blob directly above the BOOTSTRAP TABLES, which the
+	 * table builder puts right above __kernel_end.  Keeping the blob
+	 * above the tables (instead of below them, as the non-PVH path
+	 * does) keeps the tables inside the fixed low bootstrap map no
+	 * matter how big the blob is.  The blob's first megabyte is
+	 * identity-mapped right after the tables; see the table code.
+	 */
+	addl $TABLESIZE, %eax
 
 	jmp .copy_hvm_info
 
@@ -1088,7 +1123,37 @@ ENTRY(start_pvh)
 	rep movsl
 	popl %eax
 
-	/* Copy the modules after the hvm_modlist_entry[] */
+	/*
+	 * Copy the boot cmdline and memmap into the HEAD now, before the
+	 * (possibly huge) module payloads below.  start_pvh runs in 32-bit
+	 * flat mode and the bootstrap page tables identity-map only a small
+	 * window above the blob's start, so hvm_start_info->cmdline and
+	 * ->memmap must point into that head, not past the payload tail.
+	 * imull keeps %ebx (source hvm_start_info) live for the loop below.
+	 */
+	movl CMDLINE_PADDR(%ebx), %esi
+	movl %edi, CMDLINE_PADDR(%eax)	/* new cmdline_paddr in hvm_start_info */
+.cmdline_copy:
+	movb (%esi), %cl
+	movsb
+	cmp $0, %cl
+	jne .cmdline_copy
+
+	movl START_INFO_VERSION(%ebx), %ecx	/* memmap only if version != 0 */
+	testl %ecx, %ecx
+	je .modules_start
+	pushl %eax
+	movl MMAP_PADDR(%ebx), %esi
+	movl %edi, MMAP_PADDR(%eax)	/* new memmap_paddr in hvm_start_info */
+	movl MMAP_ENTRIES(%ebx), %eax
+	imull $MMAP_ENTRY_SIZE, %eax	/* entries * size */
+	movl %eax, %ecx
+	shrl $2, %ecx
+	rep movsl
+	popl %eax
+.modules_start:
+
+	/* Copy the module payloads last (kept out of the head window). */
 	xorl %ecx, %ecx				/* ecx = i = 0 */
 .module_copy:
 	/* eax points to our hvm_start_info */
@@ -1133,30 +1198,6 @@ ENTRY(start_pvh)
 	popl %eax
 	jne .module_copy			/*   goto module_copy */
 .modlist_copy_done:
-
-	/* Copy cmdline_paddr after the modules */
-	movl CMDLINE_PADDR(%ebx), %esi
-	movl %edi, CMDLINE_PADDR(%eax)	/* Set new cmdline_paddr in hvm_start_info */
-.cmdline_copy:
-	movb (%esi), %cl
-	movsb
-	cmp $0, %cl
-	jne .cmdline_copy
-
-	/* Copy memmap_paddr after cmdline (only if hvm_start_info->version != 0) */
-	xorl %ecx, %ecx
-	cmpl START_INFO_VERSION(%ebx), %ecx
-	je .save_hvm_info
-	pushl %eax
-	movl MMAP_PADDR(%ebx), %esi
-	movl %edi, MMAP_PADDR(%eax)	/* Set new memmap_paddr in hvm_start_info */
-	movl MMAP_ENTRIES(%ebx), %eax	/* Get memmap_entries */
-	movl $MMAP_ENTRY_SIZE, %ebx
-	mull %ebx			/* eax * ebx => edx:eax */
-	movl %eax, %ecx
-	shrl $2, %ecx
-	rep movsl
-	popl %eax
 
 .save_hvm_info:
 	/*
