@@ -1112,7 +1112,7 @@ ENTRY(start_pvh)
 	mov %ecx, START_INFO_MODLIST_PADDR(%eax)
 	movl START_INFO_NR_MODULES(%eax), %ecx	/* Get nr_modules */
 	testl %ecx, %ecx			/* if(nr_modules == 0) */
-	jz .modlist_copy_done			/*   goto modlist_copy_done */
+	jz .head_copies				/* no modules: still copy cmdline+memmap, skip the loop */
 	movl %edi, START_INFO_MODLIST_PADDR(%eax) /* Set new modlist_paddr in hvm_start_info */
 	movl START_INFO_MODLIST_PADDR(%ebx), %esi
 	pushl %eax
@@ -1123,6 +1123,7 @@ ENTRY(start_pvh)
 	rep movsl
 	popl %eax
 
+.head_copies:
 	/*
 	 * Copy the boot cmdline and memmap into the HEAD now, before the
 	 * (possibly huge) module payloads below.  start_pvh runs in 32-bit
@@ -1141,7 +1142,7 @@ ENTRY(start_pvh)
 
 	movl START_INFO_VERSION(%ebx), %ecx	/* memmap only if version != 0 */
 	testl %ecx, %ecx
-	je .modules_start
+	je .mod_count
 	pushl %eax
 	movl MMAP_PADDR(%ebx), %esi
 	movl %edi, MMAP_PADDR(%eax)	/* new memmap_paddr in hvm_start_info */
@@ -1151,9 +1152,17 @@ ENTRY(start_pvh)
 	shrl $2, %ecx
 	rep movsl
 	popl %eax
-.modules_start:
+.mod_count:
 
-	/* Copy the module payloads last (kept out of the head window). */
+	/*
+	 * Copy the module payloads last (kept out of the head window).
+	 * The loop below is a do/while, so skip it entirely when there are
+	 * no modules (a plain disk boot), or it runs once and dereferences
+	 * a NULL module list.
+	 */
+	movl START_INFO_NR_MODULES(%ebx), %ecx
+	testl %ecx, %ecx
+	je .modlist_copy_done
 	xorl %ecx, %ecx				/* ecx = i = 0 */
 .module_copy:
 	/* eax points to our hvm_start_info */
