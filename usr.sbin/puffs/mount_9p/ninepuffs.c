@@ -224,7 +224,7 @@ main(int argc, char *argv[])
 
 	PUFFSOP_SET(pops, puffs9p, fs, unmount);
 	PUFFSOP_SETFSNOP(pops, sync);
-	PUFFSOP_SETFSNOP(pops, statvfs);
+	PUFFSOP_SET(pops, puffs9p, fs, statvfs);
 
 	PUFFSOP_SET(pops, puffs9p, node, lookup);
 	PUFFSOP_SET(pops, puffs9p, node, readdir);
