@@ -101,6 +101,7 @@ struct puffs9p {
 
 	p9ptag_t nexttag;
 	p9pfid_t nextfid;
+	p9pfid_t root_fid;	/* server fid of the mount root */
 
 	size_t maxreq;		/* negotiated with server */
 

@@ -222,6 +222,7 @@ p9p_handshake(struct puffs_usermount *pu,
 
 	rootva.va_nlink = 0156; /* guess, will be fixed with first readdir */
 	pn = newp9pnode_va(pu, &rootva, curfid);
+	p9p->root_fid = curfid;
 
 	if (ioctl(p9p->servsock, FIONBIO, &x) == -1)
 		err(1, "cannot set socket in nonblocking mode");
@@ -236,4 +237,81 @@ puffs9p_fs_unmount(struct puffs_usermount *pu, int flags)
 
 	close(p9p->servsock);
 	return 0;
+}
+
+/*
+ * df(1) and friends need filesystem stats.  9P2000(.u) has no such
+ * request, so we use the 9P2000.L Tstatfs on the mount root's fid,
+ * exactly like the TREADLINK trick in node.c: servers that dispatch
+ * by opcode (qemu) serve it even under a 9P2000.u negotiation.  A
+ * server without .L answers Rerror; we then report plausible zeros
+ * rather than failing statvfs(2) outright, since the statvfs-noop
+ * behavior before this meant the same zeros anyway.
+ */
+int
+puffs9p_fs_statvfs(struct puffs_usermount *pu, struct puffs_statvfs *svfsb)
+{
+	AUTOVAR(pu);
+	uint32_t fstype, bsize, namelen;
+	uint64_t blocks, bfree, bavail, files, ffree, fsid;
+
+	tag = NEXTTAG(p9p);
+	p9pbuf_put_1(pb, P9PROTO_T_L_STATFS);
+	p9pbuf_put_2(pb, tag);
+	p9pbuf_put_4(pb, p9p->root_fid);
+	GETRESPONSE(pb);
+
+	if (p9pbuf_get_type(pb) == P9PROTO_R_ERROR) {
+		(void) proto_handle_rerror(pu, pb);	/* prints string */
+		goto unsupported;
+	}
+
+	if (p9pbuf_get_type(pb) != P9PROTO_R_L_STATFS ||
+	    p9pbuf_get_tag(pb) != tag ||
+	    p9pbuf_get_4(pb, &fstype) == -1 ||
+	    p9pbuf_get_4(pb, &bsize) == -1 ||
+	    p9pbuf_get_8(pb, &blocks) == -1 ||
+	    p9pbuf_get_8(pb, &bfree) == -1 ||
+	    p9pbuf_get_8(pb, &bavail) == -1 ||
+	    p9pbuf_get_8(pb, &files) == -1 ||
+	    p9pbuf_get_8(pb, &ffree) == -1 ||
+	    p9pbuf_get_8(pb, &fsid) == -1 ||
+	    p9pbuf_get_4(pb, &namelen) == -1) {
+		goto unsupported;
+	}
+
+	/* some servers send 0 for bsize; df divides by f_frsize */
+	if (bsize == 0)
+		bsize = DEV_BSIZE;
+
+	/* leave f_flag, f_owner and the names as the kernel sent them */
+	svfsb->f_bsize = bsize;
+	svfsb->f_frsize = bsize;
+	svfsb->f_iosize = bsize;
+	svfsb->f_blocks = blocks;
+	svfsb->f_bfree = bfree;
+	svfsb->f_bavail = bavail;
+	svfsb->f_bresvd = bfree > bavail ? bfree - bavail : 0;
+	svfsb->f_files = files;
+	svfsb->f_ffree = ffree;
+	svfsb->f_favail = ffree;
+	svfsb->f_fresvd = files > ffree ? files - ffree : 0;
+	if (namelen > 0)
+		svfsb->f_namemax = namelen;
+	svfsb->f_fsidx.__fsid_val[0] = (int32_t)fsid;
+	svfsb->f_fsidx.__fsid_val[1] = (int32_t)(fsid >> 32);
+	svfsb->f_fsid = (unsigned long)fsid;
+	goto out;
+
+ unsupported:
+	/* pre-.L behavior: zeros, but with a non-zero frsize for df */
+	svfsb->f_bsize = svfsb->f_frsize = svfsb->f_iosize = DEV_BSIZE;
+	svfsb->f_blocks = svfsb->f_bfree = svfsb->f_bavail = 0;
+	svfsb->f_bresvd = 0;
+	svfsb->f_files = svfsb->f_ffree = svfsb->f_favail = 0;
+	svfsb->f_fresvd = 0;
+	rv = 0;
+
+ out:
+	RETURN(rv);
 }

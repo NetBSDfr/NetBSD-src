@@ -73,6 +73,16 @@
  */
 #define P9PROTO_T_L_READLINK	22
 #define P9PROTO_R_L_READLINK	23
+/*
+ * 9P2000.L statfs: 9P2000 has no filesystem stats at all (Tstat is
+ * per-file), so df et al. need the Linux flavour.  Same opcode-keyed
+ * server assumption as TREADLINK above (qemu dispatches on the opcode
+ * regardless of the negotiated version string).  Rstatfs payload:
+ * type[4] bsize[4] blocks[8] bfree[8] bavail[8] files[8] ffree[8]
+ * fsid[8] name_len[4], counts in units of bsize.
+ */
+#define P9PROTO_T_L_STATFS	8
+#define P9PROTO_R_L_STATFS	9
 #define P9PROTO_MIN		9PROTO_T_VERSION
 #define P9PROTO_MAX		9PROTO_R_MAX
 
