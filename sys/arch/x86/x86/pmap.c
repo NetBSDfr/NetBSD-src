@@ -1707,6 +1707,22 @@ pmap_init_directmap(struct pmap *kpm)
 	const pd_entry_t pteflags = PTE_P | PTE_W | pmap_pg_nx;
 	const pd_entry_t holepteflags = PTE_P | pmap_pg_nx;
 
+#ifdef XEN
+	/*
+	 * On Xen PVH the boot module blob (e.g. a RAM-disk image used by
+	 * md(4)) lives between the kernel and eblob, i.e. inside the
+	 * bootstrap hole.  md(4) must be able to write its image, so keep
+	 * the blob's direct-map mappings read-write.
+	 */
+	paddr_t blob_lo = 0, blob_hi = 0;
+	extern char *eblob;
+	if (eblob != NULL) {
+		extern struct hvm_start_info *hvm_start_info;
+		blob_lo = trunc_page((vaddr_t)hvm_start_info - KERNBASE);
+		blob_hi = round_page((vaddr_t)eblob - KERNBASE);
+	}
+#endif
+
 	CTASSERT(NL4_SLOT_DIRECT * NBPD_L4 == MAXPHYSMEM);
 
 	spahole = roundup(bootspace.head.pa, NBPD_L2);
@@ -1772,7 +1788,8 @@ pmap_init_directmap(struct pmap *kpm)
 
 		pa = (paddr_t)(i * NBPD_L2);
 
-		if (spahole <= pa && pa < epahole) {
+		if (spahole <= pa && pa < epahole &&
+		    !(blob_hi > pa && blob_lo < pa + NBPD_L2)) {
 			L2_BASE[L2e_idx+i] = pa | holepteflags | PTE_A |
 			    PTE_PS | pmap_pg_g;
 		} else {

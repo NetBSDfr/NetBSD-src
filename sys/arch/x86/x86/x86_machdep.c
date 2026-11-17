@@ -89,6 +89,17 @@ __KERNEL_RCSID(0, "$NetBSD: x86_machdep.c,v 1.159.2.1 2026/02/02 17:46:18 martin
 #endif
 
 #include "opt_md.h"
+
+/*
+ * Even without MODULAR, a PVH boot must consume the modules provided by
+ * the hypervisor: a filesystem or partitioned disk image passed as a
+ * module (QEMU -initrd) becomes the memory-disk root.  Only the
+ * module_prime() bits below require MODULAR.
+ */
+#if defined(XEN) && (defined(XENPVHVM) || defined(XENPVH)) && \
+    defined(MEMORY_DISK_HOOKS) && defined(MEMORY_DISK_DYNAMIC)
+#define PVH_MODULE_HANDLING	1
+#endif
 #if defined(MEMORY_DISK_HOOKS) && defined(MEMORY_DISK_DYNAMIC)
 #include <dev/md.h>
 #endif
@@ -214,9 +225,17 @@ mm_md_physacc(paddr_t pa, vm_prot_t prot)
 	    KAUTH_MACHDEP_UNMANAGEDMEM, NULL, NULL, NULL, NULL);
 }
 
-#ifdef MODULAR
+#if defined(MODULAR) || defined(PVH_MODULE_HANDLING)
 #ifdef XEN
 void x86_add_xen_modules(void);
+
+/*
+ * Module payloads sit far above the boot-time KVA window; they must be
+ * addressed through the kernel direct map, not the KERNBASE alias.
+ * Requires pmap_bootstrap() to have run (pmap_direct_base valid).
+ */
+#define MOD_VA(pa)	(void *)(uintptr_t)PMAP_DIRECT_MAP((uintptr_t)(pa))
+
 void
 x86_add_xen_modules(void)
 {
@@ -224,59 +243,72 @@ x86_add_xen_modules(void)
 	uint32_t i;
 	struct hvm_modlist_entry *modlist;
 
+	/*
+	 * hvm_start_info points into the boot-time KVA window, which
+	 * pmap_bootstrap() tore down; rebase it onto the direct map.
+	 */
+	hvm_start_info = (void *)PMAP_DIRECT_MAP(
+	    (uintptr_t)hvm_start_info - KERNBASE);
+
 	if (hvm_start_info->nr_modules == 0) {
 		aprint_verbose("No Xen module info at boot\n");
 		return;
 	}
 	aprint_debug("%d Xen module(s) at boot\n", hvm_start_info->nr_modules);
-	modlist = (void *)((uintptr_t)hvm_start_info->modlist_paddr + KERNBASE);
+	modlist = (void *)PMAP_DIRECT_MAP((uintptr_t)hvm_start_info->modlist_paddr);
 	for (i = 0; i < hvm_start_info->nr_modules; i++) {
-		if (memcmp(
-			    (char *)((uintptr_t)modlist[i].paddr + KERNBASE),
+		if (memcmp(MOD_VA(modlist[i].paddr),
 			    "\177ELF", 4) == 0) {
+#ifdef MODULAR
 			aprint_debug("Prep module path=%s len=%"PRIu64" pa=%p\n",
 			    "pvh-module",
 			    modlist[i].size,
-			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE));
+			    MOD_VA(modlist[i].paddr));
 			module_prime(
 			    "pvh-module",
-			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE),
+			    MOD_VA(modlist[i].paddr),
 			    modlist[i].size);
+#endif
 #ifdef SPLASHSCREEN
-		} else if (memcmp(
-			    (char *)((uintptr_t)modlist[i].paddr + KERNBASE),
+		} else if (memcmp(MOD_VA(modlist[i].paddr),
 			    "\211PNG\r\n\032\n", 8) == 0 ||
-			   memcmp(
-			    (char *)((uintptr_t)modlist[i].paddr + KERNBASE),
+			   memcmp(MOD_VA(modlist[i].paddr),
 			    "\377\330\377", 3) == 0) {
 			aprint_debug("Splash image path=%s len=%"PRIu64" pa=%p\n",
 			    "pvh-image", modlist[i].size,
-			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE));
+			    MOD_VA(modlist[i].paddr));
 			splash_setimage(
-			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE),
+			    MOD_VA(modlist[i].paddr),
 			    modlist[i].size);
 #endif
 #if defined(MEMORY_DISK_HOOKS) && defined(MEMORY_DISK_DYNAMIC)
 #define IMGBLKSIZE 512
-		} else if (memcmp((char *)((uintptr_t)modlist[i].paddr + KERNBASE + IMGBLKSIZE),
+		} else if (memcmp((char *)PMAP_DIRECT_MAP((uintptr_t)modlist[i].paddr + IMGBLKSIZE),
 			    "EFI PART", 8) == 0) {
-			const uintptr_t base = (uintptr_t)modlist[i].paddr + KERNBASE;
+			const uintptr_t base = PMAP_DIRECT_MAP((uintptr_t)modlist[i].paddr);
 			/*
 			 * https://en.wikipedia.org/wiki/GUID_Partition_Table
-			 * +512 bytes - LBA 0 -> EFI magic
-			 * +512 bytes - LBA 1 informations & address at offset 0x20
-			 * base + offset from 0x20 - first usable LBA (2-*)
+			 * +512 bytes  - LBA 1 -> GPT header
+			 * +1024 bytes - LBA 2 -> partition entry array;
+			 * entry[0].starting_lba at entry offset 0x20.
+			 * Strip to the partition start so md(4) finds the
+			 * NetBSD disklabel (LABELSECTOR) in its sector 1.
 			 */
-			uintptr_t offset = *(const uint32_t *)(base + 2 * IMGBLKSIZE + 0x20);
-			md_root_setconf(
-			    (void *)(base + offset * IMGBLKSIZE), modlist[i].size - offset);
+			uint64_t offset = *(const uint64_t *)(base + 2 * IMGBLKSIZE + 0x20);
+			if (offset * IMGBLKSIZE < modlist[i].size) {
+				md_root_setconf(
+				    (void *)(base + offset * IMGBLKSIZE),
+				    modlist[i].size - offset * IMGBLKSIZE);
+			} else {
+				md_root_setconf((void *)base, modlist[i].size);
+			}
 		} else {
 			aprint_debug("File-system image path=%s len=%"PRIu64" pa=%p\n",
 			    "pvh-filesystem",
 			    modlist[i].size,
-			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE));
+			    MOD_VA(modlist[i].paddr));
 			md_root_setconf(
-			    (void *)((uintptr_t)modlist[i].paddr + KERNBASE),
+			    MOD_VA(modlist[i].paddr),
 			    modlist[i].size);
 #endif
 		}
@@ -284,6 +316,7 @@ x86_add_xen_modules(void)
 #endif
 }
 #endif	/* XEN */
+#ifdef MODULAR
 /*
  * Push any modules loaded by the boot loader.
  */
@@ -353,6 +386,7 @@ module_init_md(void)
 	}
 }
 #endif	/* MODULAR */
+#endif	/* MODULAR || PVH_MODULE_HANDLING */
 
 void
 x86_rndseed(void)
@@ -934,20 +968,47 @@ x86_load_region(uint64_t seg_start, uint64_t seg_end)
 }
 
 #ifdef XEN
+/*
+ * Add a RAM cluster, subtracting the in-use boot blob that start_pvh
+ * left above the kernel: the copied module payloads (e.g. the PVH
+ * initrd), the hvm_start_info head and the bootstrap tables run from
+ * __kernel_end up to eblob.  Nothing else consumes eblob on amd64, so
+ * without this carve-out the VM system internalizes those pages as
+ * free and the payload gets overwritten before md(4) reads it.
+ */
+static void
+x86_add_xen_ram_cluster(uint64_t start, uint64_t end)
+{
+	extern char *eblob;	/* VA, set by start_pvh on PVH boot */
+	extern char __kernel_end;
+	const uint64_t ms = round_page((paddr_t)&__kernel_end - KERNBASE);
+	const uint64_t me = (uint64_t)(uintptr_t)eblob - KERNBASE;
+	uint64_t emit = start;
+
+	if (me > ms && me > start && ms < end) {
+		if (ms > emit)
+			x86_add_cluster(emit, MIN(ms, end), BIM_Memory);
+		if (me > emit)
+			emit = MIN(me, end);
+	}
+	if (emit < end)
+		x86_add_cluster(emit, end, BIM_Memory);
+}
+
 static void
 x86_add_xen_clusters(void)
 {
 	if (hvm_start_info->memmap_entries > 0) {
 		struct hvm_memmap_table_entry *map_entry;
+
 		map_entry = (void *)((uintptr_t)hvm_start_info->memmap_paddr + KERNBASE);
 		for (int i = 0; i < hvm_start_info->memmap_entries; i++) {
 			if (map_entry[i].size < PAGE_SIZE)
 				continue;
 			switch (map_entry[i].type) {
 			case XEN_HVM_MEMMAP_TYPE_RAM:
-				x86_add_cluster(map_entry[i].addr,
-				    map_entry[i].addr + map_entry[i].size,
-				    BIM_Memory);
+				x86_add_xen_ram_cluster(map_entry[i].addr,
+				    map_entry[i].addr + map_entry[i].size);
 				break;
 			case XEN_HVM_MEMMAP_TYPE_ACPI:
 				x86_add_cluster(map_entry[i].addr,
@@ -991,9 +1052,6 @@ init_x86_clusters(void)
 #ifdef XEN
 	if (pvh_boot) {
 		x86_add_xen_clusters();
-#ifdef MODULAR
-		x86_add_xen_modules();
-#endif
 	}
 #endif /* XEN */
 
