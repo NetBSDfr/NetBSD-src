@@ -124,6 +124,7 @@ __KERNEL_RCSID(0, "$NetBSD: machdep.c,v 1.376.2.3 2026/10/24 09:51:50 martin Exp
 #include "opt_kaslr.h"
 #ifndef XENPV
 #include "opt_physmem.h"
+#include "opt_md.h"
 #endif
 #include "isa.h"
 #include "pci.h"
@@ -1999,6 +2000,20 @@ init_x86_64(paddr_t first_avail)
 	 * We must do this before loading pages into the VM system.
 	 */
 	pmap_bootstrap(VM_MIN_KERNEL_ADDRESS);
+
+#if defined(XEN) && (defined(MODULAR) || \
+    (defined(XENPVHVM) || defined(XENPVH)) && \
+    defined(MEMORY_DISK_HOOKS) && defined(MEMORY_DISK_DYNAMIC))
+	/*
+	 * Register PVH boot modules (RAM-disk image, loadable modules)
+	 * only now: x86_add_xen_modules() addresses the payloads through
+	 * the kernel direct map, which pmap_bootstrap() just established.
+	 */
+	if (pvh_boot) {
+		extern void x86_add_xen_modules(void);
+		x86_add_xen_modules();
+	}
+#endif
 
 	/*
 	 * Initialize RNG to get entropy ASAP either from CPU
