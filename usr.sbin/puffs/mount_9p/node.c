@@ -991,7 +991,11 @@ puffs9p_node_reclaim(struct puffs_usermount *pu, void *opc)
 	struct puffs_node *pn = opc;
 	struct p9pnode *p9n = pn->pn_data;
 
-	assert(LIST_EMPTY(&p9n->dir_openlist));
+	/* A dirfid can legitimately survive here: there is no closedir
+	 * callback in puffs9p and a process killed mid-readdir (SIGKILL
+	 * during getdents) leaves the walk offset on the node.  Clunk
+	 * any open dirfids instead of asserting. */
+	nukealldf(pu, p9n);
 	assert(p9n->fid_read == P9P_INVALFID && p9n->fid_write == P9P_INVALFID);
 
 	proto_cc_clunkfid(pu, p9n->fid_base, 0);
