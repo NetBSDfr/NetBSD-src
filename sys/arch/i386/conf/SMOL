@@ -10,3 +10,10 @@ pvclock* at pv?
 # Go netpoll (and other NetBSD-10-era binaries) call __kevent50 = syscall 435,
 # which on 11.x lives behind COMPAT_100; without it kevent dies with ENOSYS.
 options	COMPAT_100		# NetBSD 10.0+ compat (legacy syscall shims)
+
+## virtio-input: console input; our driver sources need the wscons
+## symbols, so wskbd/wsmouse must be enabled here too (see amd64 SMOL).
+vioinput*	at virtio?
+wskbd*		at vioinput?
+wsmouse*	at vioinput?
+pseudo-device	wsmux

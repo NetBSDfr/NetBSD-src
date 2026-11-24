@@ -18,19 +18,14 @@ pvclock* at pv?
 # QEMU firmware config interface
 qemufwcfg*	at pv?
 
-## wscons text console on the 2D virtio-gpu (virtio.config attaches
-## viogpu/vioinput unconditionally, and our driver sources need the
-## wscons symbols; kernel console stays on com/xen).
-## WSDISPLAY_DEFAULTSCREENS=4 because a non-console wsdisplay unit creates
-## no virtual screens by default (0), so /dev/ttyE* would all ENXIO and
-## X's xf86OpenWScons() probe would fail even though wsdisplay0 attaches.
-options		WSDISPLAY_DEFAULTSCREENS=4
-wsdisplay*	at viogpu? kbdmux -1
-
-## virtio-input (qemu virtio-keyboard/mouse-device)
+## virtio-input (qemu virtio-keyboard/mouse-device): console input and
+## X keyboard/mouse.  Our driver sources need the wscons symbols, so
+## every config attaching vioinput must enable wskbd/wsmouse; the kernel
+## console stays on com/xen.  viogpu is SMOLX-only (see there).
+vioinput*	at virtio?
 wskbd*		at vioinput?
 wsmouse*	at vioinput?
-pseudo-device	wsmux		# wsdisplay sc_input requires it once NWSKBD>0
+pseudo-device	wsmux		# wsdisplay sc_input requires it once NWSKBD>0 (SMOLX inherits this)
 
 # tslog(4) boot-time event tracing facility
 #options	TSLOG

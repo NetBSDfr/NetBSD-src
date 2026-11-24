@@ -114,5 +114,6 @@ pseudo-device	putter
 # Go netpoll calls __kevent50 = syscall 435; on 11.x it lives behind COMPAT_100.
 options	COMPAT_100		# NetBSD 10.0+ compat (legacy syscall shims)
 # wscons attach for vioinput (provides wskbd_input/wsmouse_input/*devprint, needed now MODULAR is off)
+vioinput*	at virtio?
 wskbd*	at vioinput?
 wsmouse*	at vioinput?

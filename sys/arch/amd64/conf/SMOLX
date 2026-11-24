@@ -10,9 +10,21 @@ include "arch/amd64/conf/SMOL"
 pci*		at mainbus? bus ?
 
 ## DRM/KMS virtio-gpu (virgl path; claims only virgl-capable GPUs,
-## see virtiodrm_match; the plain GPU stays on viogpu from SMOL)
+## see virtiodrm_match; the plain GPU stays on viogpu below)
 virtiodrm*	at virtio?
 wsdisplay*	at virtiodrm? kbdmux -1	# ttyE0 for X on a single-GL-GPU microvm
+
+## plain (non-virgl) virtio-gpu fallback: 2D scanout console for manual
+## boots with -device virtio-gpu-device (the platform itself always
+## attaches virtio-gpu-gl-device, claimed by virtiodrm above).  Re-
+## enables viogpu after the 'no viogpu*' in MICROVM.common (config(8)
+## is last-match-wins).
+## WSDISPLAY_DEFAULTSCREENS=4 because a non-console wsdisplay unit creates
+## no virtual screens by default (0), so /dev/ttyE* would all ENXIO and
+## X's xf86OpenWScons() probe would fail even though wsdisplay0 attaches.
+options		WSDISPLAY_DEFAULTSCREENS=4
+viogpu*		at virtio?
+wsdisplay*	at viogpu? kbdmux -1
 
 pseudo-device	ksyms			# kernel symbol table (for LinuxKPI)
 
