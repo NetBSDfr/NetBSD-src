@@ -378,17 +378,15 @@ attach fusbtc at iic
 # EMC-210x and EMC-230x fan controllers
 device emcfan: gpiobus, sysmon_envsys
 attach emcfan at iic
+
 # Texas Instruments LM95221 temperature sensor
 device	lm95221ts: sysmon_envsys
 attach	lm95221ts at iic
-file	dev/i2c/lm95221.c			lm95221ts
 
 # NXP LM75A temperature sensor
 device	nxp75a: sysmon_envsys
 attach	nxp75a at iic
-file	dev/i2c/nxp75a.c			nxp75a
 
 # ADM7462 system monitor
 device	adt7462sm: sysmon_envsys
 attach	adt7462sm at iic
-file	dev/i2c/adt7462.c			adt7462sm
