@@ -39,6 +39,11 @@ WASM=		$S/arch/wasm
 # ~/tmp/maki/wasm-probe/battery.sh
 CC=		clang
 DEFCOPTS=	-O2
+# engine_unwind.c is C++ (it is the only place wasm-eh try/catch can be
+# spelled); -x c++ switches the front end for that one file.  The C
+# -std=gnu11 that follows is ignored by the driver in C++ mode; clang
+# 19's default (gnu++17) applies.
+COPTS.engine_unwind.c+= -x c++ -fwasm-exceptions
 # The wasm clang backend defines no vendor/OS macros at all (neither
 # __ELF__ nor __NetBSD__); this is the NetBSD kernel, so say so.
 CPPFLAGS+=	-Dwasm -Dwasm32 -D__WASM=32 -D__NetBSD__
@@ -138,6 +143,18 @@ CWARNFLAGS.uvm_pglist.c= ${${ACTIVE_CC} == "clang":? -Wno-error=unused-but-set-v
 %LOAD
 
 %RULES
+
+#
+# engine_unwind.o: compiled with the C++ front end (the only place
+# wasm-eh try/catch can be spelled; see the source).  The suffix rule
+# cannot be used: the kernel CFLAGS carry -std=gnu11, which the driver
+# rejects for C++, so filter it out for this one object.
+#
+engine_unwind.o: $S/arch/wasm/wasm/engine_unwind.c
+	@${_MKSHMSG} "compile  ${.CURDIR:T}/${.TARGET}"
+	@${_MKSHECHO} ${KCOMPILE.cpp}
+	@${KCOMPILE.cpp}
+KCOMPILE.cpp=	${CC} ${COPTS.engine_unwind.c} ${CFLAGS:N-std=*} ${CPPFLAGS:N-std=*} -c ${.IMPSRC} -o ${.TARGET}
 
 ##
 ## (9) port independent kernel machinery

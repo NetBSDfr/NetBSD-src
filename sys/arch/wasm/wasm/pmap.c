@@ -355,15 +355,23 @@ pmap_growkernel(vaddr_t maxkvaddr)
 }
 
 /*
- * pmap_virtual_space: report the user address space bounds.
- * TODO: coordinate with the host-provided memory map so that user
- * allocations cannot overlap the kernel image and static data, which
- * live at the low end of the same linear memory.
+ * pmap_virtual_space: report the region of kernel virtual memory that
+ * uvm may use for boot-time allocations and as the source of the kmem
+ * arena bounds.
+ *
+ * With the flat pmap every virtual address is also the physical
+ * address it touches, so this region must lie inside the linear memory
+ * and cannot alias the kernel image, data, or bss: report exactly the
+ * region that pmap_bootstrap() registered as free memory, which
+ * starts at the page boundary above __heap_base.
  */
 void
 pmap_virtual_space(vaddr_t *start, vaddr_t *end)
 {
 
-	*start = round_page((vaddr_t)VM_MIN_ADDRESS);
-	*end = trunc_page((vaddr_t)VM_MAXUSER_ADDRESS);
+	*start = round_page((vaddr_t)(uintptr_t)__heap_base);
+	*end = trunc_page((vaddr_t)__builtin_wasm_memory_size(0) *
+	    WASM_MEM_PAGE_BYTES);
+	if (*end > WASM_KERNEL_ARENA_END)
+		*end = WASM_KERNEL_ARENA_END;
 }

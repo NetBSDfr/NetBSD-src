@@ -143,8 +143,28 @@ static bool pool_cache_put_nocache(pool_cache_t, void *);
 #define pool_cache_put_nocache(a, b)		false
 #endif
 
-#define NO_CTOR	__FPTRCAST(int (*)(void *, void *, int), nullop)
-#define NO_DTOR	__FPTRCAST(void (*)(void *, void *), nullop)
+/*
+ * The no-op constructor and destructor below are called through the
+ * pool cache's function pointer types.  Casting nullop() to those
+ * types and calling it that way is not valid C, and traps at runtime
+ * on platforms such as WebAssembly whose indirect calls check the
+ * exact signature, so give them the real prototypes instead.
+ */
+static int
+pool_ctor_nop(void *arg, void *v, int flags)
+{
+
+	return 0;
+}
+
+static void
+pool_dtor_nop(void *arg, void *v)
+{
+
+}
+
+#define NO_CTOR	pool_ctor_nop
+#define NO_DTOR	pool_dtor_nop
 
 #define pc_has_pser(pc) (((pc)->pc_roflags & PR_PSERIALIZE) != 0)
 #define pc_has_ctor(pc) ((pc)->pc_ctor != NO_CTOR)

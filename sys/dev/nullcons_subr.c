@@ -145,7 +145,12 @@ nullcngetc(dev_t dev)
 void
 nullcnputc(dev_t dev, int c)
 {
+#ifdef __WASM
+	extern void wasm_console_write(int)
+	    __attribute__((import_module("host"), import_name("console_write")));
 
+	wasm_console_write(c);
+#endif
 }
 
 /*

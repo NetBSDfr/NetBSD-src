@@ -159,6 +159,18 @@
 #define VM_MIN_KERNEL_ADDRESS 0x00000000
 
 /*
+ * Flat pmap (no MMU): the user address space must live inside the
+ * linear memory, above the kernel's dynamic arena and below the
+ * host-staged root image -- see the map in machine/rootimg.h.
+ * USRSTACK (line above) tracks VM_MAXUSER_ADDRESS automatically.
+ */
+#include <machine/rootimg.h>
+#undef VM_MAXUSER_ADDRESS
+#undef VM_MAX_ADDRESS
+#define	VM_MAXUSER_ADDRESS	((vaddr_t)WASM_USER_STACK_MAX - PAGE_SIZE)
+#define	VM_MAX_ADDRESS		((vaddr_t)WASM_ROOTIMG_ADDR - PAGE_SIZE)
+
+/*
  * The address to which unspecified mapping requests default
  */
 #ifdef _KERNEL_OPT

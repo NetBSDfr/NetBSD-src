@@ -69,6 +69,7 @@ typedef __register_t	register_t;
 #define	__HAVE_MINIMAL_EMUL
 #define	__HAVE_OLD_DISKLABEL
 #define	__HAVE_CPU_LWP_SETPRIVATE
+#define	__HAVE_BOOT_DURATION
 #define	__HAVE_ATOMIC64_OPS
 #define	__HAVE_UCAS_FULL
 #define	__HAVE___LWP_GETPRIVATE_FAST

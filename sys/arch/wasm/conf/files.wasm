@@ -19,11 +19,19 @@ file	dev/cons.c			machdep
 file	arch/wasm/wasm/atomic.c
 file	arch/wasm/wasm/consinit.c
 file	arch/wasm/wasm/cpu.c
+file	arch/wasm/wasm/locore.c
 file	arch/wasm/wasm/pmap.c
 file	arch/wasm/wasm/subr_user.c
 file	arch/wasm/wasm/clock.c
 file	arch/wasm/wasm/stubs.c
 file	arch/wasm/wasm/machdep.c
 file	arch/wasm/wasm/lwp_csw.c
+file	arch/wasm/wasm/engine_unwind.c
 file	arch/wasm/wasm/ptrace.c
 file	arch/wasm/wasm/syscall.c
+
+#
+# Root filesystem support: dev/md.c is declared by dev/files.dev;
+# dev/md_root.c is the MEMORY_DISK_HOOKS glue that points md0 at it.
+#
+file	dev/md_root.c			memory_disk_hooks

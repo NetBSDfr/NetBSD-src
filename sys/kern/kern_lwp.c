@@ -1238,7 +1238,20 @@ lwp_exit(struct lwp *l)
 		lwp_lock(l);
 		spc_lock(l->l_cpu);
 		mi_switch(l);
+#ifdef __WASM
+		/*
+		 * With real context switches the line below is
+		 * unreachable.  The WebAssembly port's run-to-
+		 * completion cpu_switchto() (sys/arch/wasm/wasm/
+		 * lwp_csw.c) unwinds this LWP's frames instead:
+		 * returning here is that model's "oblivion", the
+		 * entry chain above simply finishes and the runner's
+		 * identity was already restored to its predecessor.
+		 */
+		return;
+#else
 		panic("lwp_exit");
+#endif
 	}
 }
 
@@ -1273,6 +1286,19 @@ lwp_free(struct lwp *l, bool recycle, bool last)
 	 * atomic_load_acquire matches atomic_store_release in
 	 * lwp_startup and mi_switch.
 	 */
+#ifdef __WASM
+	/*
+	 * Single-engine model: if l is still the running LWP then no
+	 * other LWP exists that could ever clear its LP_RUNNING mark
+	 * (the normal clearer is the handover in lwp_startup() or
+	 * mi_switch() to another LWP, which this path by definition
+	 * has not performed: there was nothing else to run).  Clear
+	 * it ourselves.
+	 */
+	if (l == curlwp) {
+		atomic_store_release(&l->l_pflag, l->l_pflag & ~LP_RUNNING);
+	}
+#endif
 	while (__predict_false((atomic_load_acquire(&l->l_pflag) & LP_RUNNING)
 		!= 0)) {
 		SPINLOCK_BACKOFF_HOOK;

@@ -32,7 +32,14 @@
 #ifndef _X86_INTR_H_
 #define _X86_INTR_H_
 
-#define	__HAVE_FAST_SOFTINTS
+/*
+ * No __HAVE_FAST_SOFTINTS here: this port has no interrupt delivery, so
+ * soft interrupts run through the MI cooperative slow path.  Pending
+ * levels are recorded in ci_data.cpu_softints and the scheduler picks
+ * the corresponding softint LWP (see wasm_epoch_pick() in
+ * arch/wasm/wasm/lwp_csw.c and the !__HAVE_FAST_SOFTINTS branches in
+ * kern_synch.c).
+ */
 #if !defined(NO_PREEMPTION)
 
 #endif /* !defined(NO_PREEMPTION) */

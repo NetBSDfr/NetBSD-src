@@ -34,6 +34,7 @@ __KERNEL_RCSID(0, "$NetBSD$");
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/conf.h>
 #include <sys/cpu.h>
 #include <sys/device.h>
 #include <sys/lwp.h>
@@ -148,7 +149,13 @@ void
 cpu_rootconf(void)
 {
 
-	/* the root file system is provided by the host */
+	/*
+	 * Resolve the root and dump devices: the generated config data
+	 * carries "root on md0a", and setroot() forces the boot device
+	 * to md0 when the host-staged image registered itself through
+	 * md_root_setconf() (see wasm/locore.c).
+	 */
+	setroot(NULL, 0);
 }
 
 void
@@ -168,11 +175,18 @@ cpu_reboot(int howto, char *cf)
 		printf("\nstopping\n");
 	else
 		printf("\nrebooting\n");
+
+	/*
+	 * Hand control back to the host: drop out of the module (the
+	 * host tears the instance down).  The spin below is unreachable
+	 * for any host that honours the exit.
+	 */
+	{
+		extern void wasm_host_exit(void)
+		    __attribute__((import_module("host"), import_name("exit")));
+		wasm_host_exit();
+	}
 	for (;;) {
-		/*
-		 * TODO: return to / exit the host instance once the
-		 * embedding interface is defined.
-		 */
 	}
 }
 

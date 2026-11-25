@@ -83,18 +83,22 @@ cpu_coredump(struct lwp *l, struct coredump_iostate *iocookie,
 }
 
 /*
- * Soft interrupts: with no virtual interrupt controller yet,
- * softint_trigger() records nothing; softint lwp work runs when the
- * scheduler dispatches them (see the lwp_csw.c design note).
+ * Soft interrupts: this port uses the MI cooperative slow path
+ * (no __HAVE_FAST_SOFTINTS, see arch/wasm/include/intr.h), which
+ * provides softint_init_md() and softint_trigger() itself and
+ * records pending levels in ci_data.cpu_softints.  The epoch
+ * scheduler picks those LWPs up via softint_picklwp() (lwp_csw.c).
+ */
+
+/*
+ * machdep_init(): called late in main(), where real ports do their
+ * platform-specific late setup.  Without a definition here, the
+ * symbol resolves to the MI weak alias kern_stub.c puts on nullop,
+ * which is (int)(void): a function-pointer table signature mismatch
+ * once wasm dispatches it indirectly.  Provide the correctly typed,
+ * empty version instead (no platform work pending).
  */
 void
-softint_init_md(struct lwp *l, u_int level, uintptr_t *machdep)
-{
-
-	*machdep = level;
-}
-
-void
-softint_trigger(uintptr_t machdep)
+machdep_init(void)
 {
 }

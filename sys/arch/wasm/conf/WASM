@@ -7,10 +7,26 @@
 
 include "arch/wasm/conf/std.wasm"
 
-config		netbsd	root on ? type ?
+config	netbsd	root on md0a type ffs
 
 # Pull the console off nullcons; real output is a host import.
 pseudo-device	nullcons
 options		CONSDEVNAME="nullcons"
+
+#
+# Root filesystem: a raw FFS image staged into linear memory by the
+# host loader (see arch/wasm/include/rootimg.h); md(4) with the
+# MEMORY_DISK_DYNAMIC hook serves it as md0.  This mirrors how the
+# SMOL/MICROVM kernels get their root, with the host in place of a
+# bootloader-provided miniroot.
+#
+options		MEMORY_DISK_HOOKS
+options		MEMORY_DISK_DYNAMIC
+pseudo-device	md
+
+file-system	FFS
+
+# Print kernel boot time (ms) before entering uvm_scheduler().
+options		BOOT_DURATION
 
 makeoptions	COPTS="-O2 -g"

@@ -71,6 +71,17 @@
 #include <wasm/pmap_pv.h>
 #include <uvm/pmap/pmap_pvt.h>
 
+#ifdef __WASM
+/*
+ * The wasm linear memory is the physical memory, mapped one to one.
+ * pmap_bootstrap() and pmap_virtual_space() describe the same region
+ * to uvm, so the wasm page size and the linker symbol bounding the
+ * statically laid-out image are defined here.
+ */
+#define	WASM_MEM_PAGE_BYTES	(64U * 1024U)	/* one wasm page */
+extern const char __heap_base[];	/* first address after the image */
+#endif
+
 /*
  * MD flags that we use for pmap_enter and pmap_kenter_pa:
  */
