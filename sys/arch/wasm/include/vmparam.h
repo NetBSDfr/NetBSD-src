@@ -163,7 +163,6 @@
  */
 #ifdef _KERNEL_OPT
 #include "opt_uvm.h"
-#include "opt_xen.h"
 #endif
 #define __USE_TOPDOWN_VM
 #define VM_DEFAULT_ADDRESS_BOTTOMUP(da, sz) \

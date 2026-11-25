@@ -62,9 +62,6 @@
 
 #ifndef _I386_PTE_H_
 #define _I386_PTE_H_
-#ifdef _KERNEL_OPT
-#include "opt_xen.h"
-#endif
 
 /*
  * The PAE extension extends the size of the PTE to 64 bits (52bits physical

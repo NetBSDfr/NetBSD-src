@@ -1,0 +1,16 @@
+#	$NetBSD$
+#
+# smolBSD WASM: minimal NetBSD/wasm32 kernel for the first link test
+#
+# Acceptance test for this config is that wasm-ld links netbsd.wasm;
+# features come after.  Everything hardware-shaped is a host import.
+
+include "arch/wasm/conf/std.wasm"
+
+config		netbsd	root on ? type ?
+
+# Pull the console off nullcons; real output is a host import.
+pseudo-device	nullcons
+options		CONSDEVNAME="nullcons"
+
+makeoptions	COPTS="-O2 -g"

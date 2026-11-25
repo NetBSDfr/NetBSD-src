@@ -51,7 +51,24 @@
 
 #define	__indr_reference(sym,alias)	/* nada, since we do weak refs */
 
-#if __STDC__
+#if defined(__WASM)
+/*
+ * WebAssembly cannot define a symbol by assigning an absolute
+ * expression to it in inline asm (and the wasm target provides no
+ * OS/arch macros, so the kernel passes -D__WASM to identify it).
+ * Express aliases with the alias attribute instead, attached to a
+ * declaration whose asm label is the alias symbol: this avoids any
+ * clash with the prototype of the alias already present in the
+ * kernel's headers, and does not require the target to be declared
+ * before the alias (only its name string).
+ */
+#define	__strong_alias(__a,__s)							\
+	extern void __kernalias_##__a(void) __asm(#__a)				\
+	    __attribute__((__used__, __alias__(#__s)));
+#define	__weak_alias(__a,__s)							\
+	extern void __kernalias_##__a(void) __asm(#__a)				\
+	    __attribute__((__used__, __weak__, __alias__(#__s)));
+#else
 #define	__strong_alias(alias,sym)	       				\
     __asm(".global " _C_LABEL_STRING(#alias) "\n"			\
 	    _C_LABEL_STRING(#alias) " = " _C_LABEL_STRING(#sym));
@@ -59,6 +76,7 @@
 #define	__weak_alias(alias,sym)						\
     __asm(".weak " _C_LABEL_STRING(#alias) "\n"				\
 	    _C_LABEL_STRING(#alias) " = " _C_LABEL_STRING(#sym));
+#endif
 
 /* Do not use __weak_extern, use __weak_reference instead */
 #define	__weak_extern(sym)						\
@@ -87,7 +105,7 @@
 	  ".ascii \"" msg "\"\n"					\
 	  ".popsection");
 
-#else /* !__STDC__ */
+#if !defined(__STDC__) /* non-ANSI: */
 
 #ifdef __LEADING_UNDERSCORE
 #define __weak_alias(alias,sym) ___weak_alias(_/**/alias,_/**/sym)

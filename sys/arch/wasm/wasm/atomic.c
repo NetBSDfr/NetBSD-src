@@ -1,11 +1,11 @@
 /*	$NetBSD: atomic.c,v 1.1 2026/11/25 00:00:00 imil Exp $	*/
 
 /*-
- * Copyright (c) 2026 The NetBSD Foundation, Inc.
+ * Copyright (c) 2026 The smolBSD Project
  * All rights reserved.
  *
- * This code is derived from software contributed to The NetBSD Foundation
- * by the WebAssembly port maintainers.
+ * This code is derived from software contributed to The smolBSD Project
+ * by the smolBSD project.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -16,10 +16,10 @@
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
  *
- * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
+ * THIS SOFTWARE IS PROVIDED BY THE smolBSD PROJECT AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
  * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE PROJECT OR CONTRIBUTORS
  * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
  * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
  * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
@@ -55,6 +55,80 @@ __KERNEL_RCSID(0, "$NetBSD$");
  * sign-extending i32.atomic.rmw8/rmw16.cmpxchg instructions.
  */
 
+/*
+ * Prototypes for the underscored implementations: machine headers may
+ * reference them directly (cf. x86/include/mutex.h declaring
+ * _atomic_cas_ulong).  These mirror the definition macros below.
+ */
+uint32_t _atomic_cas_32(volatile uint32_t *p, uint32_t o, uint32_t n);
+uint32_t _atomic_cas_32_ni(volatile uint32_t *p, uint32_t o, uint32_t n);
+uint64_t _atomic_cas_64(volatile uint64_t *p, uint64_t o, uint64_t n);
+uint64_t _atomic_cas_64_ni(volatile uint64_t *p, uint64_t o, uint64_t n);
+uint32_t _atomic_swap_32(volatile uint32_t *p, uint32_t v);
+uint64_t _atomic_swap_64(volatile uint64_t *p, uint64_t v);
+void _atomic_and_32(volatile uint32_t *p, uint32_t v);
+uint32_t _atomic_and_32_nv(volatile uint32_t *p, uint32_t v);
+void _atomic_or_32(volatile uint32_t *p, uint32_t v);
+uint32_t _atomic_or_32_nv(volatile uint32_t *p, uint32_t v);
+void _atomic_and_64(volatile uint64_t *p, uint64_t v);
+uint64_t _atomic_and_64_nv(volatile uint64_t *p, uint64_t v);
+void _atomic_or_64(volatile uint64_t *p, uint64_t v);
+uint64_t _atomic_or_64_nv(volatile uint64_t *p, uint64_t v);
+void _atomic_add_32(volatile uint32_t *p, int32_t v);
+uint32_t _atomic_add_32_nv(volatile uint32_t *p, int32_t v);
+void _atomic_dec_32(volatile uint32_t *p);
+uint32_t _atomic_dec_32_nv(volatile uint32_t *p);
+void _atomic_inc_32(volatile uint32_t *p);
+uint32_t _atomic_inc_32_nv(volatile uint32_t *p);
+void _atomic_add_64(volatile uint64_t *p, int64_t v);
+uint64_t _atomic_add_64_nv(volatile uint64_t *p, int64_t v);
+void _atomic_dec_64(volatile uint64_t *p);
+uint64_t _atomic_dec_64_nv(volatile uint64_t *p);
+void _atomic_inc_64(volatile uint64_t *p);
+uint64_t _atomic_inc_64_nv(volatile uint64_t *p);
+unsigned int _atomic_cas_uint(volatile unsigned int *p, unsigned int o, unsigned int n);
+unsigned int _atomic_cas_uint_ni(volatile unsigned int *p, unsigned int o, unsigned int n);
+unsigned long _atomic_cas_ulong(volatile unsigned long *p, unsigned long o, unsigned long n);
+unsigned long _atomic_cas_ulong_ni(volatile unsigned long *p, unsigned long o, unsigned long n);
+unsigned int _atomic_swap_uint(volatile unsigned int *p, unsigned int v);
+unsigned long _atomic_swap_ulong(volatile unsigned long *p, unsigned long v);
+void _atomic_and_uint(volatile unsigned int *p, unsigned int v);
+unsigned int _atomic_and_uint_nv(volatile unsigned int *p, unsigned int v);
+void _atomic_or_uint(volatile unsigned int *p, unsigned int v);
+unsigned int _atomic_or_uint_nv(volatile unsigned int *p, unsigned int v);
+void _atomic_and_ulong(volatile unsigned long *p, unsigned long v);
+unsigned long _atomic_and_ulong_nv(volatile unsigned long *p, unsigned long v);
+void _atomic_or_ulong(volatile unsigned long *p, unsigned long v);
+unsigned long _atomic_or_ulong_nv(volatile unsigned long *p, unsigned long v);
+void _atomic_add_int(volatile unsigned int *p, int v);
+unsigned int _atomic_add_int_nv(volatile unsigned int *p, int v);
+void _atomic_dec_int(volatile unsigned int *p);
+unsigned int _atomic_dec_int_nv(volatile unsigned int *p);
+void _atomic_inc_int(volatile unsigned int *p);
+unsigned int _atomic_inc_int_nv(volatile unsigned int *p);
+void _atomic_add_long(volatile unsigned long *p, long v);
+unsigned long _atomic_add_long_nv(volatile unsigned long *p, long v);
+void _atomic_dec_long(volatile unsigned long *p);
+unsigned long _atomic_dec_long_nv(volatile unsigned long *p);
+void _atomic_inc_long(volatile unsigned long *p);
+unsigned long _atomic_inc_long_nv(volatile unsigned long *p);
+void *_atomic_cas_ptr(volatile void *p, void *o, void *n);
+void *_atomic_cas_ptr_ni(volatile void *p, void *o, void *n);
+void *_atomic_swap_ptr(volatile void *p, void *v);
+void
+_atomic_add_ptr(volatile void *p, ssize_t v);
+void *
+_atomic_add_ptr_nv(volatile void *p, ssize_t v);
+void
+_atomic_dec_ptr(volatile void *p);
+void *
+_atomic_dec_ptr_nv(volatile void *p);
+void
+_atomic_inc_ptr(volatile void *p);
+void *
+_atomic_inc_ptr_nv(volatile void *p);
+uint8_t _atomic_cas_8(volatile uint8_t *p, uint8_t o, uint8_t n);
+uint16_t _atomic_cas_16(volatile uint16_t *p, uint16_t o, uint16_t n);
 #define	_MEMSEQ	__ATOMIC_SEQ_CST
 
 /*
@@ -62,38 +136,38 @@ __KERNEL_RCSID(0, "$NetBSD$");
  * They remain external function calls, so they still keep the
  * compiler from moving accesses across them.
  */
-void
+static void
 _membar_acquire(void)
 {
 }
 
-void
+static void
 _membar_release(void)
 {
 }
 
-void
+static void
 _membar_sync(void)
 {
 	__atomic_thread_fence(_MEMSEQ);
 }
 
-void
+static void
 _membar_producer(void)
 {
 }
 
-void
+static void
 _membar_consumer(void)
 {
 }
 
-void
+static void
 _membar_enter(void)
 {
 }
 
-void
+static void
 _membar_exit(void)
 {
 }
@@ -233,46 +307,53 @@ _atomic_swap_ptr(volatile void *p, void *v)
 	return __atomic_exchange_n(pp, v, _MEMSEQ);
 }
 
+/*
+ * Pointer arithmetic on these follows the hardware spelling of the
+ * operation (cf. x86 atomic.S lock xadd): the value is added to the
+ * raw pointer representation, not scaled by a (here unknown) element
+ * size.  Operate through uintptr_t to express exactly that.
+ */
 void
 _atomic_add_ptr(volatile void *p, ssize_t v)
 {
-	void *volatile *pp = (void *volatile *)p;
-	(void)__atomic_fetch_add(pp, v, _MEMSEQ);
+	uintptr_t volatile *pp = (uintptr_t volatile *)p;
+	(void)__atomic_fetch_add(pp, (uintptr_t)v, _MEMSEQ);
 }
 
 void *
 _atomic_add_ptr_nv(volatile void *p, ssize_t v)
 {
-	void *volatile *pp = (void *volatile *)p;
-	return __atomic_fetch_add(pp, v, _MEMSEQ) + v;
+	uintptr_t volatile *pp = (uintptr_t volatile *)p;
+	return (void *)(__atomic_fetch_add(pp, (uintptr_t)v, _MEMSEQ) +
+	    (uintptr_t)v);
 }
 
 void
 _atomic_dec_ptr(volatile void *p)
 {
-	void *volatile *pp = (void *volatile *)p;
+	uintptr_t volatile *pp = (uintptr_t volatile *)p;
 	(void)__atomic_fetch_sub(pp, 1, _MEMSEQ);
 }
 
 void *
 _atomic_dec_ptr_nv(volatile void *p)
 {
-	void *volatile *pp = (void *volatile *)p;
-	return __atomic_fetch_sub(pp, 1, _MEMSEQ) - 1;
+	uintptr_t volatile *pp = (uintptr_t volatile *)p;
+	return (void *)(__atomic_fetch_sub(pp, 1, _MEMSEQ) - 1);
 }
 
 void
 _atomic_inc_ptr(volatile void *p)
 {
-	void *volatile *pp = (void *volatile *)p;
+	uintptr_t volatile *pp = (uintptr_t volatile *)p;
 	(void)__atomic_fetch_add(pp, 1, _MEMSEQ);
 }
 
 void *
 _atomic_inc_ptr_nv(volatile void *p)
 {
-	void *volatile *pp = (void *volatile *)p;
-	return __atomic_fetch_add(pp, 1, _MEMSEQ) + 1;
+	uintptr_t volatile *pp = (uintptr_t volatile *)p;
+	return (void *)(__atomic_fetch_add(pp, 1, _MEMSEQ) + 1);
 }
 
 /*
@@ -344,36 +425,45 @@ atomic_or_##name##_nv(volatile type *p, type v)				\
 	return _atomic_or_##name##_nv(p, v);				\
 }
 
-#define	_PUB_ADDSUB(name, vtype, atype)				\
+#define	_PUB_ADD(name, vtype, atype)					\
 void									\
 atomic_add_##name(volatile vtype *p, atype v)				\
 {									\
-	_atomic_add_##name(p, v);						\
+	_atomic_add_##name(p, v);									\
 }									\
 vtype									\
 atomic_add_##name##_nv(volatile vtype *p, atype v)			\
 {									\
 	return _atomic_add_##name##_nv(p, v);				\
+}
+
+/*
+ * The DEC/INC families are declared by <sys/atomic.h> under the
+ * "uint"/"ulong" spellings; the underscored implementations exist
+ * under the natural-width "int"/"long" spellings, whose signatures
+ * are identical in the kernel type lattice (ILP32: unsigned int is
+ * uint, unsigned long is ulong).
+ */
+#define	_PUB_DECINC(name, iname, type)					\
+void									\
+atomic_dec_##name(volatile type *p)					\
+{									\
+	_atomic_dec_##iname(p);									\
+}									\
+type									\
+atomic_dec_##name##_nv(volatile type *p)					\
+{									\
+	return _atomic_dec_##iname##_nv(p);				\
 }									\
 void									\
-atomic_dec_##name(volatile vtype *p)					\
+atomic_inc_##name(volatile type *p)					\
 {									\
-	_atomic_dec_##name(p);						\
+	_atomic_inc_##iname(p);									\
 }									\
-vtype									\
-atomic_dec_##name##_nv(volatile vtype *p)				\
+type									\
+atomic_inc_##name##_nv(volatile type *p)					\
 {									\
-	return _atomic_dec_##name##_nv(p);				\
-}									\
-void									\
-atomic_inc_##name(volatile vtype *p)					\
-{									\
-	_atomic_inc_##name(p);						\
-}									\
-vtype									\
-atomic_inc_##name##_nv(volatile vtype *p)				\
-{									\
-	return _atomic_inc_##name##_nv(p);				\
+	return _atomic_inc_##iname##_nv(p);				\
 }
 
 _PUB_CAS(32, uint32_t)
@@ -388,10 +478,14 @@ _PUB_BITOP(32, uint32_t)
 _PUB_BITOP(64, uint64_t)
 _PUB_BITOP(uint, unsigned int)
 _PUB_BITOP(ulong, unsigned long)
-_PUB_ADDSUB(32, uint32_t, int32_t)
-_PUB_ADDSUB(64, uint64_t, int64_t)
-_PUB_ADDSUB(int, unsigned int, int)
-_PUB_ADDSUB(long, unsigned long, long)
+_PUB_ADD(32, uint32_t, int32_t)
+_PUB_ADD(64, uint64_t, int64_t)
+_PUB_ADD(int, unsigned int, int)
+_PUB_ADD(long, unsigned long, long)
+_PUB_DECINC(32, 32, uint32_t)
+_PUB_DECINC(64, 64, uint64_t)
+_PUB_DECINC(uint, int, unsigned int)
+_PUB_DECINC(ulong, long, unsigned long)
 
 void
 atomic_add_ptr(volatile void *p, ssize_t v)

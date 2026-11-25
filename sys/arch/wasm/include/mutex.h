@@ -59,8 +59,13 @@ struct kmutex {
 #define	mtx_ipl 			u.s.mtxs_ipl
 #define	mtx_lock			u.s.mtxs_lock
 
-#define __HAVE_MUTEX_STUBS		1
-#define __HAVE_SPIN_MUTEX_STUBS		1
+/*
+ * No out-of-line mutex stubs here (no lock_stubs.S on wasm): leave
+ * __HAVE_MUTEX_STUBS / __HAVE_SPIN_MUTEX_STUBS undefined so that
+ * kern_mutex.c provides mutex_enter/exit via strong aliases, which
+ * the wasm cdefs_elf.h supports.  The fast paths stay inlined via
+ * __HAVE_SIMPLE_MUTEXES + MUTEX_CAS below.
+ */
 #define	__HAVE_SIMPLE_MUTEXES		1
 
 #define	MUTEX_CAS(p, o, n)		\

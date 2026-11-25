@@ -32,6 +32,10 @@
 #ifndef _X86_RWLOCK_H_
 #define	_X86_RWLOCK_H_
 
-#define	__HAVE_RW_STUBS			1
+/*
+ * No out-of-line rw stubs on wasm (no lock_stubs.S equivalent);
+ * kern_rwlock.c supplies rw_enter/rw_exit/rw_tryenter via strong
+ * aliases, which the wasm cdefs_elf.h handles.
+ */
 
 #endif /* _X86_RWLOCK_H_ */

@@ -99,7 +99,6 @@ struct cpufeature_attach_args {
 #include <sys/kcpuset.h>
 #if defined(_KERNEL_OPT)
 #include "opt_multiprocessor.h"
-#include "opt_xen.h"
 #endif /* defined(_KERNEL_OPT) */
 
 extern int (*x86_ipi)(int, int, int);

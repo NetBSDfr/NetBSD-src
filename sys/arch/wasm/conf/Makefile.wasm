@@ -1,0 +1,150 @@
+#	$NetBSD$
+
+# Makefile for the smolBSD NetBSD/wasm32 kernel
+#
+# This makefile is constructed from a machine description:
+#	config machineid
+# Most changes should be made in the machine description
+#	/sys/arch/wasm/conf/``machineid''
+# after which you should do
+#	config machineid
+# Machine generic makefile changes should be made in
+#	/sys/arch/wasm/conf/Makefile.wasm
+# after which config should be rerun for all machines of that type.
+#
+# smolBSD project
+#
+# Toolchain notes: the wasm32 target is not served by the in-tree
+# tooldir compilers; CC/LD must point at a clang + wasm-ld with
+# atomics support.  The kernel expects an imported linear memory
+# (the host, e.g. a browser, allocates and owns it).
+
+MACHINE_ARCH=wasm
+USETOOLS?=	no
+NEED_OWN_INSTALL_TARGET?=no
+NOSANITIZER=
+.include <bsd.init.mk>
+
+USE_SSP_DEFAULT=no
+
+##
+## (1) port identification
+##
+WASM=		$S/arch/wasm
+
+##
+## (2) compile settings
+##
+# Proven by the step-1/2/3 compile batteries; see
+# ~/tmp/maki/wasm-probe/battery.sh
+CC=		clang
+DEFCOPTS=	-O2
+# The wasm clang backend defines no vendor/OS macros at all (neither
+# __ELF__ nor __NetBSD__); this is the NetBSD kernel, so say so.
+CPPFLAGS+=	-Dwasm -Dwasm32 -D__WASM=32 -D__NetBSD__
+# For <wasm/...> machine sub-headers (scaffolding; see include/wasm/).
+CPPFLAGS+=	-I$S/arch/wasm/include
+# The wasm target does not define __ELF__ and has no frame unwinding;
+# machine/cdefs.h compensates, NO_KERNEL_RCSIDS drops the unrepresentable
+# RCSID asm entirely (upstream knob).
+CPPFLAGS+=	-DNO_KERNEL_RCSIDS
+CFLAGS+=	--target=wasm32-unknown-unknown
+CFLAGS+=	-ffreestanding -fno-builtin -fno-stack-protector
+CFLAGS+=	-matomics
+# No libcompiler_rt in the first link; keep clang from inventing calls.
+CFLAGS+=	-fno-builtin-memset -fno-builtin-memcpy -fno-builtin-bzero
+
+##
+## (3) libkern and compat
+##
+OPT_MODULAR=	%MODULAR%
+
+# The libkern sub-make does not inherit our -m path, and the host's
+# share/mk knows nothing of this arch.  Point it at the tree's copy
+# (absolute: the sub-make runs with a different cwd).
+KERNMISCMAKEFLAGS+=	-m${.CURDIR}/../../../../../share/mk
+
+# MI libc sources compiled as part of libkern trip clang warnings that
+# GCC (the usual kernel compiler) does not diagnose; keep kernel objects
+# strict but relax just this sub-make.
+KERNMISCMAKEFLAGS+=	CFLAGS+=-Wno-error=unused-but-set-variable
+
+# The host tsort/lorder (GNU coreutils has no lorder, and its tsort
+# lacks -q); echo|cat passes the member list through unchanged (order
+# is irrelevant to wasm-ld's symbol resolution).
+KERNMISCMAKEFLAGS+=	TSORT=cat LORDER=echo
+
+##
+## (4) local objects, compile rules, and dependencies
+##
+
+##
+## (5) link settings
+##
+# The wasm objects can only be indexed by LLVM's binutils: GNU ar
+# cannot parse the wasm object format.  (llvm-ar must be on PATH.)
+AR=		llvm-ar
+
+# The kernel image is a wasm module: memory is imported, everything
+# is exported for the loader/host bindings; first byte of usable data
+# at 64KiB so that near-null pointer bugs trap.
+LD=		wasm-ld
+# No _start: the host loader drives the kernel through exported
+# functions (kernel_boot etc.), not an entry point.
+LINKFLAGS=	--import-memory --global-base=131072 --export-all --no-entry \
+		--error-limit=0
+# GNU size(1) cannot read wasm objects; use the LLVM one.
+SIZE=		llvm-size
+
+# wasm-ld has no --cref; keep the two-pass shape of the MI rule.
+SYSTEM_LD=	${_MKSHMSG} "   link  ${.CURDIR:T}/${.TARGET}"; \
+		${_MKSHECHO}\
+		${LD} -Map ${.TARGET}.map ${LINKFLAGS} -o ${.TARGET} \
+		'$${SYSTEM_OBJ:${REMOVE_SWAP}}' '$${EXTRA_OBJ}' vers.o \
+		${OBJS:M*swap${.TARGET}.o}; \
+		${LD} -Map ${.TARGET}.map ${LINKFLAGS} -o ${.TARGET} \
+		${SYSTEM_OBJ:${REMOVE_SWAP}} ${EXTRA_OBJ} vers.o \
+		${OBJS:M*swap${.TARGET}.o}
+
+KLINK.o=	${LD} -r ${LINKFORMAT} -o ${.TARGET} ${.ALLSRC}
+
+# ksyms/debug post-processing (nm/objcopy on ELF consumers) comes
+# once the image actually boots.
+SYSTEM_LD_TAIL_STAGE2=	# not yet for wasm
+
+##
+## (6) port specific target dependencies
+##
+
+# uvm_pglistalloc_simple() has a write-only 'count' (dead code upstream;
+# only clang's analyzer flags it).  Keep MI untouched.
+CWARNFLAGS.uvm_pglist.c= ${${ACTIVE_CC} == "clang":? -Wno-error=unused-but-set-variable :}
+
+##
+## (7) misc settings
+##
+
+##
+## (8) config(8) generated machinery
+##
+%INCLUDES
+
+%OBJS
+
+%CFILES
+
+%SFILES
+
+%LOAD
+
+%RULES
+
+##
+## (9) port independent kernel machinery
+##
+.include "$S/conf/Makefile.kern.inc"
+
+##
+## (10) Appending make options.
+##
+%MAKEOPTIONSAPPEND

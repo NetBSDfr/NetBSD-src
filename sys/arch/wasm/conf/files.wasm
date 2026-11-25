@@ -1,0 +1,29 @@
+#	$NetBSD$
+#
+# new style config file for the WebAssembly (wasm32) architecture
+# smolBSD project
+#
+
+# maxpartitions must be first item in files.${ARCH}.newconf
+maxpartitions 16
+
+maxusers 1 2 8
+
+# Device majors (mem/cons/ctty are mandatory; keep complete).
+include		"arch/wasm/conf/majors.wasm"
+
+#
+# Core machine support.
+#
+file	dev/cons.c			machdep
+file	arch/wasm/wasm/atomic.c
+file	arch/wasm/wasm/consinit.c
+file	arch/wasm/wasm/cpu.c
+file	arch/wasm/wasm/pmap.c
+file	arch/wasm/wasm/subr_user.c
+file	arch/wasm/wasm/clock.c
+file	arch/wasm/wasm/stubs.c
+file	arch/wasm/wasm/machdep.c
+file	arch/wasm/wasm/lwp_csw.c
+file	arch/wasm/wasm/ptrace.c
+file	arch/wasm/wasm/syscall.c

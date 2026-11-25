@@ -267,8 +267,12 @@ ${nflag} && exit 0
 
 cat << _EOF >> vers.c
 
+#if !defined(__WASM)
 /*
  * NetBSD identity note.
+ *
+ * The wasm32 assembler has no ELF .section/@note support; the host
+ * loader reads version information from the module exports instead.
  */
 #ifdef __arm__
 #define _SHT_NOTE	%note
@@ -287,5 +291,6 @@ __asm(
 	"\t.long\t" _S(__NetBSD_Version__) "\n"
 	"\t.p2align\t2\n"
 );
+#endif /* !__WASM */
 
 _EOF

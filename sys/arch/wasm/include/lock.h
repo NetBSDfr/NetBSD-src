@@ -1,11 +1,11 @@
-/*	$NetBSD: lock.h,v 1.29 2022/02/12 17:17:54 riastradh Exp $	*/
+/*	$NetBSD: lock.h,v 1.1 2026-11-25 00:00:00 imil Exp $	*/
 
 /*-
- * Copyright (c) 2000, 2006 The NetBSD Foundation, Inc.
+ * Copyright (c) 2026 The smolBSD Project
  * All rights reserved.
  *
- * This code is derived from software contributed to The NetBSD Foundation
- * by Jason R. Thorpe and Andrew Doran.
+ * This code is derived from software contributed to The smolBSD Project
+ * by the smolBSD project.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -16,10 +16,10 @@
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
  *
- * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
+ * THIS SOFTWARE IS PROVIDED BY THE smolBSD PROJECT AND CONTRIBUTORS
  * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
  * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE PROJECT OR CONTRIBUTORS
  * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
  * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
  * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
@@ -30,79 +30,87 @@
  */
 
 /*
- * Machine-dependent spin lock operations.
+ * Machine-dependent spin lock operations for wasm32.
+ *
+ * WebAssembly is sequentially consistent: every atomic operation is a
+ * coherence point for all threads, so acquire/release semantics are
+ * obtained directly from the ordering arguments and no additional
+ * fences or spin hints are available or needed.
  */
 
-#ifndef _X86_LOCK_H_
-#define	_X86_LOCK_H_
+#ifndef	_WASM_LOCK_H_
+#define	_WASM_LOCK_H_
 
-#include <sys/param.h>
+/*
+ * Drop the volatile qualifier from lock pointers.  sys/cdefs.h (hence
+ * __DECONST) is not yet visible at this point in the include chain; the
+ * cast through an integer type also keeps -Wcast-qual quiet.
+ */
+#define	__SIMPLELOCK_NV(p) \
+    ((__cpu_simple_lock_nv_t *)(uintptr_t)(p))
+
+/*
+ * Unlike the asm stubs architectures (amd64 et al.), wasm provides no
+ * out-of-line definitions of these functions, so the bodies are always
+ * emitted in the header as static inlines, for every consumer, kernel
+ * and libkern alike.
+ */
+#define	SPINLOCK_SPIN_HOOK	/* nothing */
+#define	SPINLOCK_BACKOFF_HOOK	/* wasm has no spin hint */
+#define	SPINLOCK_BODY
+#define	SPINLOCK_INLINE	static __inline __unused
 
 static __inline int
 __SIMPLELOCK_LOCKED_P(const __cpu_simple_lock_t *__ptr)
 {
-	return *__ptr == __SIMPLELOCK_LOCKED;
+
+	return __atomic_load_n(__SIMPLELOCK_NV(__ptr), __ATOMIC_RELAXED) ==
+	    __SIMPLELOCK_LOCKED;
 }
 
 static __inline int
 __SIMPLELOCK_UNLOCKED_P(const __cpu_simple_lock_t *__ptr)
 {
-	return *__ptr == __SIMPLELOCK_UNLOCKED;
+
+	return !__SIMPLELOCK_LOCKED_P(__ptr);
 }
 
 static __inline void
 __cpu_simple_lock_set(__cpu_simple_lock_t *__ptr)
 {
 
-	*__ptr = __SIMPLELOCK_LOCKED;
+	__atomic_store_n(__SIMPLELOCK_NV(__ptr), __SIMPLELOCK_LOCKED,
+	    __ATOMIC_RELAXED);
 }
 
 static __inline void
 __cpu_simple_lock_clear(__cpu_simple_lock_t *__ptr)
 {
 
-	*__ptr = __SIMPLELOCK_UNLOCKED;
+	__atomic_store_n(__SIMPLELOCK_NV(__ptr), __SIMPLELOCK_UNLOCKED,
+	    __ATOMIC_RELAXED);
 }
-
-#ifdef _HARDKERNEL
-# include <machine/cpufunc.h>
-# define SPINLOCK_SPIN_HOOK	/* nothing */
-# ifdef SPINLOCK_BACKOFF_HOOK
-#  undef SPINLOCK_BACKOFF_HOOK
-# endif
-# define SPINLOCK_BACKOFF_HOOK	x86_pause()
-# define SPINLOCK_INLINE
-#else /* !_HARDKERNEL */
-# define SPINLOCK_BODY
-# define SPINLOCK_INLINE static __inline __unused
-#endif /* _HARDKERNEL */
 
 SPINLOCK_INLINE void	__cpu_simple_lock_init(__cpu_simple_lock_t *);
 SPINLOCK_INLINE void	__cpu_simple_lock(__cpu_simple_lock_t *);
 SPINLOCK_INLINE int	__cpu_simple_lock_try(__cpu_simple_lock_t *);
 SPINLOCK_INLINE void	__cpu_simple_unlock(__cpu_simple_lock_t *);
 
-#ifdef SPINLOCK_BODY
+#ifdef	SPINLOCK_BODY
 SPINLOCK_INLINE void
 __cpu_simple_lock_init(__cpu_simple_lock_t *lockp)
 {
 
-	*lockp = __SIMPLELOCK_UNLOCKED;
+	__cpu_simple_lock_clear(lockp);
 }
 
 SPINLOCK_INLINE int
 __cpu_simple_lock_try(__cpu_simple_lock_t *lockp)
 {
-	uint8_t val;
-#ifndef __WASM
-	// TODO: FIXME
-	val = __SIMPLELOCK_LOCKED;
-	__asm volatile ("xchgb %0,(%2)" : 
-	    "=qQ" (val)
-	    :"0" (val), "r" (lockp));
-	__insn_barrier();
-#endif
-	return val == __SIMPLELOCK_UNLOCKED;
+	__cpu_simple_lock_nv_t expected = __SIMPLELOCK_UNLOCKED;
+
+	return __atomic_compare_exchange_n(__SIMPLELOCK_NV(lockp), &expected,
+	    __SIMPLELOCK_LOCKED, false, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED);
 }
 
 SPINLOCK_INLINE void
@@ -110,70 +118,16 @@ __cpu_simple_lock(__cpu_simple_lock_t *lockp)
 {
 
 	while (!__cpu_simple_lock_try(lockp))
-		/* nothing */;
-	__insn_barrier();
+		/* spin */;
 }
 
-/*
- * Note on x86 memory ordering
- *
- * When releasing a lock we must ensure that no stores or loads from within
- * the critical section are re-ordered by the CPU to occur outside of it:
- * they must have completed and be visible to other processors once the lock
- * has been released.
- *
- * NetBSD usually runs with the kernel mapped (via MTRR) in a WB (write
- * back) memory region.  In that case, memory ordering on x86 platforms
- * looks like this:
- *
- * i386		All loads/stores occur in instruction sequence.
- *
- * i486		All loads/stores occur in instruction sequence.  In
- * Pentium	exceptional circumstances, loads can be re-ordered around
- *		stores, but for the purposes of releasing a lock it does
- *		not matter.  Stores may not be immediately visible to other
- *		processors as they can be buffered.  However, since the
- *		stores are buffered in order the lock release will always be
- *		the last operation in the critical section that becomes
- *		visible to other CPUs.
- *
- * Pentium Pro	The "Intel 64 and IA-32 Architectures Software Developer's
- * onwards	Manual" volume 3A (order number 248966) says that (1) "Reads
- *		can be carried out speculatively and in any order" and (2)
- *		"Reads can pass buffered stores, but the processor is
- *		self-consistent.".  This would be a problem for the below,
- *		and would mandate a locked instruction cycle or load fence
- *		before releasing the simple lock.
- *
- *		The "Intel Pentium 4 Processor Optimization" guide (order
- *		number 253668-022US) says: "Loads can be moved before stores
- *		that occurred earlier in the program if they are not
- *		predicted to load from the same linear address.".  This is
- *		not a problem since the only loads that can be re-ordered
- *		take place once the lock has been released via a store.
- *
- *		The above two documents seem to contradict each other,
- *		however with the exception of early steppings of the Pentium
- *		Pro, the second document is closer to the truth: a store
- *		will always act as a load fence for all loads that precede
- *		the store in instruction order.
- *
- *		Again, note that stores can be buffered and will not always
- *		become immediately visible to other CPUs: they are however
- *		buffered in order.
- *
- * AMD64	Stores occur in order and are buffered.  Loads can be
- *		reordered, however stores act as load fences, meaning that
- *		loads can not be reordered around stores.
- */
 SPINLOCK_INLINE void
 __cpu_simple_unlock(__cpu_simple_lock_t *lockp)
 {
 
-	__insn_barrier();
-	*lockp = __SIMPLELOCK_UNLOCKED;
+	__atomic_store_n(__SIMPLELOCK_NV(lockp), __SIMPLELOCK_UNLOCKED,
+	    __ATOMIC_RELEASE);
 }
-
 #endif	/* SPINLOCK_BODY */
 
-#endif /* _X86_LOCK_H_ */
+#endif /* !_WASM_LOCK_H_ */

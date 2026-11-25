@@ -45,21 +45,16 @@
 #endif /* _KERNEL || _STANDALONE */
 
 #if defined(_KERNEL) || defined(_KMEMUSER)
-#if defined(_KERNEL_OPT)
-#include "opt_xen.h"
-#include "opt_svs.h"
-#endif
 
 /*
- * Definitions unique to x86 cpu support.
+ * Definitions unique to wasm cpu support.
  */
+#include <machine/frame.h>
 #include <machine/frame.h>
 #include <machine/pte.h>
 #include <machine/segments.h>
 #include <machine/tss.h>
 #include <machine/intrdefs.h>
-
-#include <wasm/cacheinfo.h>
 
 #include <sys/cpu_data.h>
 #include <sys/evcnt.h>
@@ -178,7 +173,6 @@ struct cpu_info {
 	struct trapframe *ci_ddb_regs;
 
 	u_int ci_cflush_lsize;	/* CLFLUSH insn line size */
-	struct x86_cache_info ci_cinfo[CAI_COUNT];
 
 	device_t	ci_frequency;	/* Frequency scaling technology */
 	device_t	ci_padlock;	/* VIA PadLock private storage */
@@ -428,7 +422,12 @@ void cpu_speculation_init(struct cpu_info *);
 #define	curlwp			x86_curlwp()
 #define	curpcb			((struct pcb *)lwp_getpcb(curlwp))
 #else
-extern volatile struct lwp *wasm_curlwp;
+/*
+ * Not volatile on purpose: <sys/lwp.h> assumes a plain lwp_t *, and
+ * in wasm every operation that could change the current LWP crosses
+ * a function call, which is a compiler barrier anyway.
+ */
+extern struct lwp *wasm_curlwp;
 #define	curlwp		wasm_curlwp
 #define	curcpu()	lwp_getcpu(wasm_curlwp)
 #define	curpcb		((struct pcb *)lwp_getpcb(wasm_curlwp))

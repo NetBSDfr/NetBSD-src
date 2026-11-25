@@ -320,7 +320,13 @@ tolower(int ch)
 void	*memcpy(void *, const void *, size_t);
 int	 memcmp(const void *, const void *, size_t);
 void	*memset(void *, int, size_t);
-#if __GNUC_PREREQ__(2, 95) && !defined(_STANDALONE)
+#if __GNUC_PREREQ__(2, 95) && !defined(_STANDALONE) && !defined(__WASM)
+/*
+ * The macro form breaks the definition of these very functions in
+ * libkern's own sources under clang ("definition of builtin
+ * function"), and under -fno-builtin it buys clang nothing.  wasm32
+ * kernels are clang-only.
+ */
 #if defined(_KERNEL) && defined(KASAN)
 void	*kasan_memcpy(void *, const void *, size_t);
 int	 kasan_memcmp(const void *, const void *, size_t);
@@ -353,7 +359,7 @@ void	*memmem(const void *, size_t, const void *, size_t);
 char	*strcpy(char *, const char *);
 int	 strcmp(const char *, const char *);
 size_t	 strlen(const char *);
-#if __GNUC_PREREQ__(2, 95) && !defined(_STANDALONE)
+#if __GNUC_PREREQ__(2, 95) && !defined(_STANDALONE) && !defined(__WASM)
 #if defined(_KERNEL) && defined(KASAN)
 char	*kasan_strcpy(char *, const char *);
 int	 kasan_strcmp(const char *, const char *);
@@ -420,7 +426,7 @@ size_t	 strspn(const char *, const char *);
  * ffs is an instruction on vax.
  */
 int	 ffs(int);
-#if __GNUC_PREREQ__(2, 95) && (!defined(__vax__) || __GNUC_PREREQ__(4,1))
+#if __GNUC_PREREQ__(2, 95) && (!defined(__vax__) || __GNUC_PREREQ__(4,1)) && !defined(__WASM)
 #define	ffs(x)		__builtin_ffs(x)
 #endif
 

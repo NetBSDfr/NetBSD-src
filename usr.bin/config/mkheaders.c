@@ -113,6 +113,15 @@ static void
 fprint_global(FILE *fp, const char *name, long long value)
 {
 	/*
+	 * WebAssembly objects cannot represent absolute symbols at all
+	 * (clang fails with "absolute addressing not supported"), so
+	 * this link-time option-consistency check is unavailable for
+	 * that target.
+	 */
+	if (machine != NULL && strcmp(machine, "wasm") == 0)
+		return;
+
+	/*
 	 * We have to doubt the founding fathers here.
 	 * The gas syntax for hppa is 'var .equ value', for all? other
 	 * instruction sets it is ' .equ var,value'.  both have been used in

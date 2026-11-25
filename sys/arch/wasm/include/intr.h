@@ -34,7 +34,7 @@
 
 #define	__HAVE_FAST_SOFTINTS
 #if !defined(NO_PREEMPTION)
-#define	__HAVE_PREEMPTION
+
 #endif /* !defined(NO_PREEMPTION) */
 
 #ifdef _KERNEL

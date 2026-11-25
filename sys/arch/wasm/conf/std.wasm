@@ -1,0 +1,18 @@
+#	$NetBSD$
+#
+# standard, required NetBSD/wasm 'options'
+# smolBSD project
+#
+# The wasm32 "machine": a WebAssembly module with an imported linear
+# memory, executing on a JS engine.  There is no firmware, no MMU and
+# no interrupt delivery; everything hardware-shaped is a host import.
+
+machine		wasm
+
+include 	"conf/std"	# MI standard options
+
+# No execution-format support yet: the browser userland story is
+# exec_wasm32 (raweden ABI, not yet imported), ELF exec is not it.
+#
+# Zero devices: no bus of any kind attaches; the console story is
+# host imports (see subr_host.c in step 4c) and nullcons.

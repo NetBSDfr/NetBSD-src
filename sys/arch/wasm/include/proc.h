@@ -64,6 +64,8 @@ struct mdlwp {
 	int	md_flags;		/* machine-dependent flags */
 	volatile int md_astpending;	/* AST pending for this process */
 	volatile int md_wakesig; 	/* 	: address used with the memory.atomic.wait32 and memory.atomic.notify instruction used for sleep & awake of thread. */
+	void	(*md_entryfunc)(void *); /* first-run entry (cpu_lwp_fork) */
+	void	*md_entryarg;
 	struct vm_space_wasm *md_kmem;
 	struct vm_space_wasm *md_umem;
 	struct runtime_abi *md_abi;
