@@ -80,7 +80,9 @@
 #define	DFLSSIZ		(2*1024*1024)		/* initial stack size limit */
 #endif
 #ifndef	MAXSSIZ
-#define	MAXSSIZ		(64*1024*1024)		/* max stack size */
+#define	MAXSSIZ		(32*1024*1024)	/* max stack size: must fit the
+				 * user window between the kernel arena
+				 * and the root image (rootimg.h) */
 #endif
 
 /*

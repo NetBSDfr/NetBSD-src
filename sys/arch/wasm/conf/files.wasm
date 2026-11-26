@@ -31,6 +31,13 @@ file	arch/wasm/wasm/ptrace.c
 file	arch/wasm/wasm/syscall.c
 
 #
+# wasm32 userland: binfmt handler plus the programs linked into the
+# module (the filesystem holds 32-byte stubs naming them).
+#
+file	arch/wasm/wasm/exec_wasm32.c
+file	arch/wasm/user/init.c
+
+#
 # Root filesystem support: dev/md.c is declared by dev/files.dev;
 # dev/md_root.c is the MEMORY_DISK_HOOKS glue that points md0 at it.
 #

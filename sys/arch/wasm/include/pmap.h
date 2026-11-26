@@ -252,6 +252,23 @@ extern vaddr_t pmap_direct_end;
 
 #endif /* __HAVE_DIRECT_MAP */
 
+/*
+ * The whole address space is one flat identity map, so every page is
+ * directly accessible at its physical address.  This enables UVM's
+ * direct (fault-free) UBC data path, which this platform requires:
+ * kernel page faults do not exist here, so ubc windows can never be
+ * populated lazily by ubc_fault() -- a read through a window would
+ * silently see stale memory instead of the object's pages.
+ */
+#define	PMAP_DIRECT
+static __inline int
+pmap_direct_process(paddr_t pa, voff_t pgoff, size_t len,
+    int (*process)(void *, size_t, void *), void *arg)
+{
+
+	return process((void *)(uintptr_t)(pa + (paddr_t)pgoff), len, arg);
+}
+
 #define	__HAVE_VM_PAGE_MD
 #define	VM_MDPAGE_INIT(pg) \
 	memset(&(pg)->mdpage, 0, sizeof((pg)->mdpage)); \

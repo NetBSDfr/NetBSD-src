@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>NetBSD/wasm</title>
+<!--
+  NetBSD/wasm browser host.  No build, no source tree dependencies.
+
+  Usage, from this directory:
+
+    ln -sf ../compile/WASM/netbsd netbsd.wasm      # or copy it here
+    cp /path/to/rootimg.bin .                      # raw FFS image
+    python3 -m http.server 8080                    # Workers need http://
+    # open http://127.0.0.1:8080/
+
+  index.html -> boot.js (UI thread) -> kernel_worker.js (the kernel).
+-->
+<style>
+  body { background:#101010; color:#d8d8d8; font:14px/1.35 ui-monospace, monospace; margin:0 }
+  header { padding:8px 12px; border-bottom:1px solid #333; display:flex; gap:14px; align-items:center }
+  button { font:inherit; background:#1d1d1d; color:#d8d8d8; border:1px solid #555; padding:4px 14px; cursor:pointer }
+  #status { color:#7a7 }
+  #console { padding:12px; white-space:pre-wrap; word-break:break-all; margin:0; height:calc(100vh - 46px); overflow-y:auto }
+</style>
+</head>
+<body>
+<header>
+  <button id="boot">Boot kernel</button>
+  <span id="status">not running</span>
+</header>
+<pre id="console"></pre>
+<script src="boot.js"></script>
+</body>
+</html>

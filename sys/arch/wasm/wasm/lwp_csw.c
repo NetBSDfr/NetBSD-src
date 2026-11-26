@@ -104,6 +104,8 @@ __KERNEL_RCSID(0, "$NetBSD$");
 extern int wasm_engine_guarded(void (*)(void *), void *);
 extern void wasm_engine_throw(void);
 
+void	wasm_user_entry(void *);		/* exec_wasm32.c */
+
 static int wasm_engine_depth;
 
 struct wasm_epoch {
@@ -368,6 +370,18 @@ setregs(struct lwp *l, struct exec_package *epp, vaddr_t stack)
 	tf->tf_eax = 0;
 	tf->tf_eflags = 0x00000202;	/* IF | reserved-1, informational */
 	l->l_md.md_astpending = 0;
+
+	/*
+	 * The epoch scheduler starts an LWP by calling its
+	 * md_entryfunc (wasm_epoch_run()); start_init() returns right
+	 * after a successful execve, so re-arm this LWP to enter the
+	 * user program wrapper and put it back on the run queue for
+	 * the epoch to pick up.  ep_entry carries the entry function
+	 * pointer installed by exec_wasm32_makecmds().
+	 */
+	l->l_md.md_entryfunc = wasm_user_entry;
+	l->l_md.md_entryarg = (void *)epp->ep_entry;
+	sched_enqueue(l);
 }
 
 /*

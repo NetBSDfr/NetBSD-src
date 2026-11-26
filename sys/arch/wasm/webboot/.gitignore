@@ -1,0 +1,4 @@
+# Local staging artifacts, not part of the tree:
+# netbsd.wasm -> build output, rootimg.bin -> host-staged root image.
+netbsd.wasm
+rootimg.bin

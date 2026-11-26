@@ -86,6 +86,14 @@ pmap_init(void)
 
 	mutex_init(&kernel_pmap_store.pm_lock, MUTEX_DEFAULT, IPL_NONE);
 	kernel_pmap_store.pm_refcount = 1;
+
+	/*
+	 * Kernel page faults do not exist on this platform, so UBC's
+	 * lazy window faulting can never populate a window with object
+	 * data.  Always copy through the object's pages via the direct
+	 * (identity) map instead.
+	 */
+	ubc_direct = true;
 }
 
 void
