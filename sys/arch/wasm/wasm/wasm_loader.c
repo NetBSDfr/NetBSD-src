@@ -67,12 +67,23 @@
 __KERNEL_RCSID(0, "$NetBSD$");
 
 #include <sys/param.h>
+#include <sys/atomic.h>
+#include <sys/fcntl.h>
+#include <sys/kauth.h>
 #include <sys/kmem.h>
+#include <sys/namei.h>
 #include <sys/proc.h>
+#include <sys/resourcevar.h>
+#include <sys/signalvar.h>
 #include <sys/systm.h>
 #include <sys/syscall.h>
 #include <sys/syscallargs.h>
 #include <sys/vnode.h>
+#include <sys/wait.h>
+
+#include <sys/filedesc.h>
+
+#include <uvm/uvm_extern.h>
 
 #include <lib/libkern/libkern.h>
 
@@ -202,6 +213,315 @@ wasm_loader_run(void)
 }
 
 /*
+ * Multi-process support (M1): host-instantiated child processes.
+ *
+ * init spawns children with the WASM_SYS_spawn svc call: the kernel
+ * reads the module from the root FFS, has the host instantiate it
+ * (shared memory, shared svc import, _start in our function table),
+ * and wraps it in a real struct proc with its own fd table (the
+ * fork1 recipe minus lwp/signal machinery: children run on init's
+ * lwp with l_proc and l_fd swapped for the duration of a slice).
+ *
+ * Scheduling is host-driven and cooperative: a child runs only when
+ * the epoch is already suspended -- wait6 suspends via JSPI, and the
+ * host then calls wasm_run_child (promising), so a child that blocks
+ * on input suspends in turn and resumes when input arrives.  A child
+ * runs to completion: return from _start or SYS_exit (the latter
+ * unwinds through wasm_engine_guarded, the same mechanism reboot
+ * uses).  No preemption.
+ *
+ * The child's frames live on the kernel's own wasm stack below the
+ * suspended init frames: safe while at most one child runs at a
+ * time, which the host scheduler guarantees.  Per-process stacks
+ * (sp_run) come with multi-suspend scheduling.
+ */
+#define	WASM_CHILD_MAX	8
+#define	WASM_SYS_spawn	512	/* svc extension: { const char *path } */
+
+struct wasm_spawn_args {
+	uint32_t	path;
+};
+
+struct wasm_child {
+	struct proc	*c_proc;	/* NULL: slot free */
+	int32_t		c_slot;		/* host function-table slot */
+	int		c_started;
+	int		c_running;
+	int		c_exited;
+	int		c_exitcode;
+	int		c_rv;		/* _start return value */
+	struct wasm_start_info c_si;
+	char		c_arg0[128];
+	char		*c_argv[2];
+};
+
+static struct wasm_child wasm_children[WASM_CHILD_MAX];
+static int wasm_current_child = -1;	/* running child index, -1 = init */
+
+extern int wasm_engine_guarded(void (*)(void *), void *);
+extern void wasm_engine_throw(void);
+int	sys_getpid_with_ppid(struct lwp *, const void *, register_t *);
+
+/*
+ * wasm_child_spawn: read a wasm module by path and instantiate it as
+ * a new process.  Returns the child's pid or a negative errno.
+ */
+static int
+wasm_child_spawn(const char *path)
+{
+	struct wasm_child *c;
+	struct proc *p1 = curlwp->l_proc, *p2;
+	struct nameidata nd;
+	struct pathbuf *pb;
+	struct vattr va;
+	struct vnode *vp;
+	uint8_t *buf;
+	int32_t slot;
+	size_t size;
+	int i, error;
+
+	c = NULL;
+	for (i = 0; i < WASM_CHILD_MAX; i++)
+		if (wasm_children[i].c_proc == NULL) {
+			c = &wasm_children[i];
+			break;
+		}
+	if (c == NULL)
+		return -EAGAIN;
+
+	/*
+	 * Read the whole module into kernel memory (same bound as
+	 * exec); the host copies it out of linear memory itself.
+	 */
+	pb = pathbuf_create(path);
+	if (pb == NULL)
+		return -ENOMEM;
+	NDINIT(&nd, LOOKUP, FOLLOW | LOCKLEAF, pb);
+	error = namei(&nd);
+	pathbuf_destroy(pb);
+	if (error != 0)
+		return -error;
+	vp = nd.ni_vp;
+
+	error = VOP_GETATTR(vp, &va, kauth_cred_get());
+	if (error != 0 || va.va_size == 0 ||
+	    va.va_size > WASM_MODULE_MAXSIZE) {
+		error = error != 0 ? error : EFTYPE;
+		goto out;
+	}
+	size = (size_t)va.va_size;
+
+	error = VOP_OPEN(vp, FREAD, kauth_cred_get());
+	if (error != 0)
+		goto out;
+	buf = kmem_alloc(size, KM_SLEEP);
+	error = vn_rdwr(UIO_READ, vp, buf, size, (off_t)0, UIO_SYSSPACE,
+	    IO_NODELOCKED, kauth_cred_get(), NULL, NULL);
+	VOP_CLOSE(vp, FREAD, kauth_cred_get());
+	if (error != 0) {
+		kmem_free(buf, size);
+		goto out;
+	}
+
+	slot = wasm_host_load_module((uint32_t)(uintptr_t)buf, (uint32_t)size);
+	kmem_free(buf, size);
+	if (slot < 0) {
+		error = EFTYPE;
+		goto out;
+	}
+
+	/*
+	 * Child proc: the fork1 sequence without lwp, signals, or
+	 * address space (B1 shares init's vmspace outright).
+	 */
+	p2 = proc_alloc();
+	if (p2 == NULL) {
+		wasm_host_unload_module(slot);
+		error = EAGAIN;
+		goto out;
+	}
+	memset(&p2->p_startzero, 0,
+	    (unsigned)((char *)&p2->p_endzero - (char *)&p2->p_startzero));
+	memcpy(&p2->p_startcopy, &p1->p_startcopy,
+	    (unsigned)((char *)&p2->p_endcopy - (char *)&p2->p_startcopy));
+	p2->p_stackbase = p1->p_stackbase;
+	TAILQ_INIT(&p2->p_sigpend.sp_info);
+	LIST_INIT(&p2->p_lwps);
+	LIST_INIT(&p2->p_sigwaiters);
+	p2->p_flag = p1->p_flag & PK_32;
+	p2->p_emul = p1->p_emul;
+	p2->p_execsw = p1->p_execsw;
+	mutex_init(&p2->p_stmutex, MUTEX_DEFAULT, IPL_HIGH);
+	mutex_init(&p2->p_auxlock, MUTEX_DEFAULT, IPL_NONE);
+	rw_init(&p2->p_reflock);
+	cv_init(&p2->p_waitcv, "wasmwait");
+	cv_init(&p2->p_lwpcv, "wasmlwp");
+	p2->p_lock = mutex_obj_alloc(MUTEX_DEFAULT, IPL_NONE);
+	kauth_proc_fork(p1, p2);
+	p2->p_raslist = NULL;
+	p2->p_textvp = NULL;
+	p2->p_path = kmem_strdupsize(path, NULL, KM_SLEEP);
+	p2->p_fd = fd_init(NULL);
+	p2->p_cwdi = cwdinit();
+	lim_addref(p1->p_limit);
+	p2->p_limit = p1->p_limit;
+	p2->p_sflag = 0;
+	p2->p_slflag = 0;
+	p2->p_lflag = 0;
+	p2->p_pptr = p1;
+	p2->p_ppid = p1->p_pid;
+	LIST_INIT(&p2->p_children);
+	p2->p_aio = NULL;
+	p2->p_mqueue_cnt = 0;
+	p2->p_sigacts = sigactsinit(p1, 0);
+	p2->p_stats = pstatscopy(p1->p_stats);
+	p2->p_vmspace = p1->p_vmspace;
+	p2->p_vmspace->vm_refcnt++;
+	p2->p_md = p1->p_md;
+	p2->p_stat = SACTIVE;
+	mutex_enter(&proc_lock);
+	LIST_INSERT_HEAD(&allproc, p2, p_list);
+	atomic_inc_uint(&nprocs);
+	mutex_exit(&proc_lock);
+
+	/*
+	 * Startup info: argv[0] is the path, as exec would give it.
+	 */
+	strlcpy(c->c_arg0, path, sizeof(c->c_arg0));
+	c->c_argv[0] = c->c_arg0;
+	c->c_argv[1] = NULL;
+	c->c_si.argc = 1;
+	c->c_si.argv = (uint32_t)(uintptr_t)c->c_argv;
+	c->c_si.envc = 0;
+	c->c_si.envp = (uint32_t)(uintptr_t)wasm_envp;
+
+	c->c_proc = p2;
+	c->c_slot = slot;
+	c->c_started = 0;
+	c->c_running = 0;
+	c->c_exited = 0;
+	c->c_exitcode = 0;
+	c->c_rv = 0;
+
+	vput(vp);
+	printf("wasm: spawned %s as pid %d (slot %d)\n", path,
+	    (int)p2->p_pid, slot);
+	return (int)p2->p_pid;
+
+out:
+	vput(vp);
+	return -error;
+}
+
+/*
+ * wasm_child_reap: undo wasm_child_spawn's allocations once the fd
+ * table has already been freed at the end of the child's last slice
+ * (fd_free runs in child context, like exit1).  Called from init's
+ * wait6 with the child exited.
+ */
+static void
+wasm_child_reap(struct wasm_child *c)
+{
+	struct proc *p = c->c_proc;
+
+	wasm_host_unload_module(c->c_slot);
+	cwdfree(p->p_cwdi);
+	lim_free(p->p_limit);
+	pstatsfree(p->p_stats);
+	sigactsfree(p->p_sigacts);
+	kauth_cred_free(p->p_cred);
+	kmem_strfree(p->p_path);
+	uvmspace_free(p->p_vmspace);
+	mutex_enter(&proc_lock);
+	LIST_REMOVE(p, p_list);
+	atomic_dec_uint(&nprocs);
+	mutex_exit(&proc_lock);
+	mutex_destroy(&p->p_stmutex);
+	mutex_destroy(&p->p_auxlock);
+	rw_destroy(&p->p_reflock);
+	cv_destroy(&p->p_waitcv);
+	cv_destroy(&p->p_lwpcv);
+	mutex_obj_free(p->p_lock);
+	proc_free_pid(p->p_pid);
+	proc_free_mem(p);
+	memset(c, 0, sizeof(*c));
+}
+
+static void
+wasm_child_trampoline(void *arg)
+{
+	struct wasm_child *c = arg;
+
+	c->c_rv = wasm_user_start(c->c_slot,
+	    (uint32_t)(uintptr_t)&c->c_si);
+}
+
+/*
+ * wasm_run_child: run one child slice (exported; the host calls it,
+ * promising-wrapped, only while the epoch is suspended).  Swaps
+ * curlwp's proc/fd for the duration, runs the module under a
+ * protected region, then frees the fd table in child context.  A
+ * wasm_engine_throw (SYS_exit) unwinds back to the guarded frame.
+ */
+int	wasm_run_child(int32_t);
+int
+wasm_run_child(int32_t idx)
+{
+	struct wasm_child *c;
+	struct proc *oldp;
+	filedesc_t *oldfd;
+	int g;
+
+	if (idx < 0 || idx >= WASM_CHILD_MAX)
+		return EINVAL;
+	c = &wasm_children[idx];
+	if (c->c_proc == NULL || c->c_exited || c->c_running)
+		return EINVAL;
+
+	oldp = curlwp->l_proc;
+	oldfd = curlwp->l_fd;
+	c->c_started = 1;
+	c->c_running = 1;
+	wasm_current_child = idx;
+	curlwp->l_proc = c->c_proc;
+	curlwp->l_fd = c->c_proc->p_fd;
+
+	g = wasm_engine_guarded(wasm_child_trampoline, c);
+
+	/* exit1-style fd teardown, still in child context */
+	fd_free();
+	c->c_proc->p_fd = NULL;
+	curlwp->l_fd = oldfd;
+	curlwp->l_proc = oldp;
+	wasm_current_child = -1;
+	c->c_running = 0;
+	c->c_exited = 1;
+	if (g == 0)
+		c->c_exitcode = c->c_rv;
+	c->c_proc->p_stat = SZOMB;
+	printf("wasm: pid %d exited with %d%s\n", (int)c->c_proc->p_pid,
+	    c->c_exitcode, g ? " (exit)" : "");
+	return 0;
+}
+
+/*
+ * wasm_take_pending: index of a spawned child that has never run,
+ * or -1.  The host calls this when an epoch suspends to decide
+ * whether to run a child instead of waiting for console input.
+ */
+int	wasm_take_pending(void);
+int
+wasm_take_pending(void)
+{
+	int i;
+
+	for (i = 0; i < WASM_CHILD_MAX; i++)
+		if (wasm_children[i].c_proc != NULL && !wasm_children[i].c_started)
+			return i;
+	return -1;
+}
+
+/*
  * svc: syscall entry for user modules (ABI v1).  The host wires this
  * as every user module's env.svc import.  Numbers are the real NetBSD
  * SYS_* numbers; argp points to the matching sys_*_args struct in the
@@ -210,9 +530,11 @@ wasm_loader_run(void)
  * the same function a trapframe dispatch would reach -- so user
  * programs share the real VFS, fd table, and credentials.
  *
- * Deviation: SYS_exit on pid 1 would panic ("init died") in real
- * NetBSD; here it reboots into the host, matching what returning
- * from _start already does.
+ * Deviations: SYS_exit from a child unwinds its slice (the exit code
+ * is picked up by wasm_run_child); SYS_exit from init reboots into
+ * the host, matching what returning from _start already does.
+ * WASM_SYS_spawn and SYS_wait6 are served from the child table
+ * above rather than the MI exit paths, which assume real LWPs.
  *
  * Exported for the host (--export-all).
  */
@@ -257,7 +579,83 @@ wasm_user_svc(int nr, int argp)
 	case SYS_close:
 		error = sys_close(l, (const struct sys_close_args *)uap, &rv);
 		break;
+	case SYS_getpid: {
+		register_t rvs[2] = { 0, 0 };
+		error = sys_getpid_with_ppid(l, uap, rvs);
+		rv = rvs[0];
+		break;
+	}
+	case WASM_SYS_spawn: {
+		const struct wasm_spawn_args *sa = uap;
+		int pid = wasm_child_spawn(
+		    (const char *)(uintptr_t)sa->path);
+		return pid;
+	}
+	case SYS_wait6: {
+		/*
+		 * Served from the child table: the MI wait path
+		 * assumes real LWPs and signal delivery, neither of
+		 * which exists for host-instantiated children.  Only
+		 * P_ALL and P_PID blocking waits are supported; the
+		 * loop suspends the epoch (JSPI) until the host has
+		 * run a pending child to completion.
+		 */
+		const struct sys_wait6_args *wa = uap;
+		idtype_t idtype = SCARG(wa, idtype);
+		id_t id = SCARG(wa, id);
+		int *status = SCARG(wa, status);
+		struct wasm_child *c;
+
+		if (idtype != P_ALL && idtype != P_PID)
+			return EOPNOTSUPP;
+		for (;;) {
+			int live = 0, got = -1;
+			for (int i = 0; i < WASM_CHILD_MAX; i++) {
+				c = &wasm_children[i];
+				if (c->c_proc == NULL)
+					continue;
+				if (idtype == P_PID &&
+				    (pid_t)id != c->c_proc->p_pid)
+					continue;
+				if (!c->c_exited) {
+					live++;
+					continue;
+				}
+				got = i;
+				break;
+			}
+			if (got >= 0) {
+				c = &wasm_children[got];
+				if (status != NULL) {
+					*status = (int)W_EXITCODE(
+					    c->c_exitcode & 0377, 0);
+				}
+				rv = c->c_proc->p_pid;
+				wasm_child_reap(c);
+				error = 0;
+				break;
+			}
+			if (live == 0) {
+				error = ECHILD;
+				break;
+			}
+			if (wasm_jspi == 0) {
+				error = EWOULDBLOCK;
+				break;
+			}
+			wasm_host_wait();
+		}
+		break;
+	}
 	case SYS_exit:
+		if (wasm_current_child >= 0) {
+			struct wasm_child *c = &wasm_children[wasm_current_child];
+			const struct sys_exit_args *ea = uap;
+
+			c->c_exitcode = SCARG(ea, rval);
+			wasm_engine_throw();	/* to wasm_run_child */
+			/* NOTREACHED */
+		}
 		printf("wasm: init exited via SYS_exit\n");
 		wasm_user_reboot();	/* not reached */
 		/* FALLTHROUGH */

@@ -67,8 +67,13 @@ async function main() {
   // the wasm epoch (all frames between here and the promising
   // kernel_boot entry are wasm -- JS frames in between would trap);
   // a non-Promise return means input is already queued.
+  let runChild = null;
   const waitImpl = () => {
     if (instance.exports.wasm_console_has_input()) return undefined;
+    // Host-driven child scheduler (see wasm_loader.c): run a spawned
+    // child that has never run before resuming the waiting epoch.
+    const idx = instance.exports.wasm_take_pending();
+    if (idx >= 0 && runChild) return runChild(idx).then(() => {});
     return new Promise((res) => waiters.push(res));
   };
   const importObject = {
@@ -116,6 +121,8 @@ async function main() {
 
   report("instantiating...");
   const { instance } = await WebAssembly.instantiate(wasmBytes, importObject);
+  if (JSPI)
+    runChild = WebAssembly.promising(instance.exports.wasm_run_child);
 
   instance.exports.wasm_set_jspi(JSPI ? 1 : 0);
 
