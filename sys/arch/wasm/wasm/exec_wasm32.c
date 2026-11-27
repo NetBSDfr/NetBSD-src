@@ -55,10 +55,15 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <sys/proc.h>
 #include <sys/reboot.h>
 #include <sys/systm.h>
+#include <sys/vnode.h>
 
 #include <uvm/uvm_extern.h>
 
 #include <machine/proc.h>
+
+/* wasm_loader.c */
+int	wasm_loader_load(struct vnode *, size_t);
+void	wasm_loader_run(void);
 
 /*
  * Stub file format: the file in the filesystem is not the program,
@@ -147,9 +152,32 @@ wasm_userprog_lookup(const char *name)
 static int
 exec_wasm32_makecmds(struct lwp *l, struct exec_package *epp)
 {
+	static const uint8_t wasm_magic[8] = {
+		0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00
+	};
 	const struct wasmuser_hdr *hdr = epp->ep_hdr;
 	const struct wasm_userprog *prog;
 	int error;
+
+	if (memcmp(epp->ep_hdr, wasm_magic, sizeof(wasm_magic)) == 0) {
+		/*
+		 * A real wasm module: read it and have the host
+		 * instantiate it now, while the vnode is still open;
+		 * the epoch later just calls _start through the host.
+		 */
+		struct vattr va;
+
+		vn_lock(epp->ep_vp, LK_EXCLUSIVE | LK_RETRY);
+		error = VOP_GETATTR(epp->ep_vp, &va, l->l_cred);
+		VOP_UNLOCK(epp->ep_vp);
+		if (error != 0)
+			return error;
+		error = wasm_loader_load(epp->ep_vp, (size_t)va.va_size);
+		if (error != 0)
+			return error;
+		epp->ep_entry = (vaddr_t)(uintptr_t)wasm_loader_run;
+		goto have_entry;
+	}
 
 	if (memcmp(hdr->magic, WASMUSER_MAGIC, sizeof(hdr->magic)) != 0)
 		return ENOEXEC;
@@ -163,6 +191,8 @@ exec_wasm32_makecmds(struct lwp *l, struct exec_package *epp)
 	 * hands it to the epoch as md_entryarg).
 	 */
 	epp->ep_entry = (vaddr_t)(uintptr_t)prog->entry;
+
+have_entry:
 	epp->ep_vm_minaddr = VM_MIN_ADDRESS;
 	epp->ep_vm_maxaddr = VM_MAX_ADDRESS;
 

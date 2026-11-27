@@ -35,6 +35,7 @@ file	arch/wasm/wasm/syscall.c
 # module (the filesystem holds 32-byte stubs naming them).
 #
 file	arch/wasm/wasm/exec_wasm32.c
+file	arch/wasm/wasm/wasm_loader.c
 file	arch/wasm/user/init.c
 
 #
