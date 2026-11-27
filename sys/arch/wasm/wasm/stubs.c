@@ -43,16 +43,3 @@ __KERNEL_RCSID(0, "$NetBSD$");
  * Anything that tries to use them gets ENOSYS instead of a link
  * failure; the MI code that pulls these in is not pruned.
  */
-
-/* Pipes: kern/kern_pipe.c is not in the smolBSD source set. */
-void
-pipe_init(void)
-{
-}
-
-int
-pipe1(struct lwp *l, int *fildes, int flags)
-{
-
-	return ENOSYS;
-}

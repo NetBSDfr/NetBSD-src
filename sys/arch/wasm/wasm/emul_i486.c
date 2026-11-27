@@ -47,6 +47,10 @@ __KERNEL_RCSID(0, "$NetBSD$");
 
 #include "emul_i486.h"
 
+#ifdef _KERNEL
+void printf(const char *, ...);
+#endif
+
 #define	FL_W	(I486_CF | I486_SF | I486_ZF | I486_OF)
 
 uint8_t *
@@ -654,6 +658,12 @@ i486_run(struct i486_vm *vm, uint64_t max_steps)
 
 		if (vm->stop)
 			return I486_OK;
+		if (vm->dbg_steps > 0) {
+			vm->dbg_steps--;
+			printf("ST %08x esp=%08x eax=%08x ebx=%08x\n",
+			    s->eip, s->regs[R_ESP], s->regs[R_EAX],
+			    s->regs[R_EBX]);
+		}
 		if (++n > max_steps && max_steps)
 			return I486_STEP;
 		vm->steps = n;

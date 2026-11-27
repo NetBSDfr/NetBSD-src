@@ -85,6 +85,8 @@ __KERNEL_RCSID(0, "$NetBSD$");
 
 #include <uvm/uvm_extern.h>
 
+#include <arch/wasm/wasm/emul_i486.h>
+
 #include <lib/libkern/libkern.h>
 
 /*
@@ -147,7 +149,14 @@ struct wasm_start_info {
 
 static struct wasm_start_info wasm_si;
 static char *wasm_argv[2];
-static char *wasm_envp[1];
+static char wasm_e0[] = "PATH=/rescue:/bin:/sbin:/usr/bin:/usr/sbin";
+static char wasm_e1[] = "HOME=/root";
+static char wasm_e2[] = "SHELL=/rescue/sh";
+static char wasm_e3[] = "TERM=dumb";
+static char *wasm_envp[] = { wasm_e0, wasm_e1, wasm_e2, wasm_e3, NULL };
+
+int	wasm_read_file(const char *, void **, size_t *);
+int	wasm_i486_fork(struct i486_vm *);
 static char wasm_arg0[128];
 
 /*
@@ -159,7 +168,7 @@ static char wasm_arg0[128];
  * One pending module at a time: this system execs init once and
  * never again, so a global is honest v1 scope.
  */
-#define	WASM_MODULE_MAXSIZE	(8 * 1024 * 1024)
+#define	WASM_MODULE_MAXSIZE	(16 * 1024 * 1024)
 
 static int32_t wasm_pending_slot = -1;
 
@@ -190,7 +199,6 @@ wasm_loader_load(struct vnode *vp, size_t size, const char *kname)
 	strlcpy(wasm_arg0, kname, sizeof(wasm_arg0));
 	wasm_argv[0] = wasm_arg0;
 	wasm_argv[1] = NULL;
-	wasm_envp[0] = NULL;
 	wasm_si.argc = 1;
 	wasm_si.argv = (uint32_t)(uintptr_t)wasm_argv;
 	wasm_si.envc = 0;
@@ -255,8 +263,10 @@ struct wasm_spawn_args {
 
 struct wasm_child {
 	struct proc	*c_proc;	/* NULL: slot free */
+	pid_t		c_parent;	/* p_pid of the spawning process */
 	int32_t		c_slot;		/* host function-table slot */
-	int		c_started;
+	int	c_started;
+	int	c_forked;	/* fd table inherited, no console seed */
 	int		c_running;
 	int		c_exited;
 	int		c_exitcode;
@@ -274,9 +284,13 @@ static int wasm_slice_sp;		/* SP across a throw unwind */
 extern int wasm_engine_guarded(void (*)(void *), void *);
 extern void wasm_engine_throw(void);
 int	sys_getpid_with_ppid(struct lwp *, const void *, register_t *);
-void	*wasm_i486_load(const void *, size_t, char *const *);
+int	sys_getuid(struct lwp *, const void *, register_t *);
+int	sys_getgid(struct lwp *, const void *, register_t *);
+void	*wasm_i486_load(const void *, size_t, char *const *, char *const *);
 int	wasm_i486_exec(void *);
 void	wasm_i486_free(void *);
+void	wasm_i486_snapshot(struct i486_vm *, struct i486_vm *);
+void	*wasm_i486_task_alloc(void);
 
 /*
  * wasm_proc_fork: the fork1 recipe without lwp, signals, or address
@@ -285,7 +299,7 @@ void	wasm_i486_free(void *);
  * or NULL.
  */
 static struct proc *
-wasm_proc_fork(struct proc *p1)
+wasm_proc_fork(struct proc *p1, int copyfds)
 {
 	struct proc *p2 = proc_alloc();
 
@@ -312,7 +326,7 @@ wasm_proc_fork(struct proc *p1)
 	p2->p_raslist = NULL;
 	p2->p_textvp = NULL;
 	p2->p_path = NULL;
-	p2->p_fd = fd_init(NULL);
+	p2->p_fd = copyfds ? fd_copy() : fd_init(NULL);
 	p2->p_cwdi = cwdinit();
 	lim_addref(p1->p_limit);
 	p2->p_limit = p1->p_limit;
@@ -385,18 +399,45 @@ wasm_child_spawn(const char *path, char *const *uargv)
 		goto out;
 	}
 	size = (size_t)va.va_size;
+	printf("wasm: spawn %s size=%zu\n", path, size);
 
 	error = VOP_OPEN(vp, FREAD, kauth_cred_get());
 	if (error != 0)
 		goto out;
+	printf("wasm: spawn opened\n");
 	buf = kmem_alloc(size, KM_SLEEP);
-	error = vn_rdwr(UIO_READ, vp, buf, size, (off_t)0, UIO_SYSSPACE,
-	    IO_NODELOCKED, kauth_cred_get(), NULL, NULL);
+	printf("wasm: spawn buf at %p\n", (void *)buf);
+	printf("wasm: spawn free=%lu wire=%lu\n", (u_long)uvmexp.free,
+	    (u_long)uvmexp.wired);
+	{
+		extern u_long bufmem_hiwater, bufmem_lowater, bufmem;
+		printf("wasm: bufmem hi=%lu low=%lu used=%lu\n",
+		    (u_long)bufmem_hiwater, (u_long)bufmem_lowater,
+		    (u_long)bufmem);
+	}
+	{
+		size_t done = 0;
+		while (done < size) {
+			size_t n = size - done > (1u << 20) ? (1u << 20)
+			    : size - done;
+			size_t resid = 0;
+			error = vn_rdwr(UIO_READ, vp, buf + done, n,
+			    (off_t)done, UIO_SYSSPACE, IO_NODELOCKED,
+			    kauth_cred_get(), &resid, NULL);
+			if (error != 0)
+				break;
+			if (resid != 0)
+				printf("wasm: spawn SHORT read at %zu "
+				    "n=%zu resid=%zu\n", done, n, resid);
+			done += n - resid;
+		}
+	}
 	VOP_CLOSE(vp, FREAD, kauth_cred_get());
 	if (error != 0) {
 		kmem_free(buf, size);
 		goto out;
 	}
+	printf("wasm: spawn read done\n");
 
 	/*
 	 * Startup info: the caller's argv array lives in shared memory
@@ -426,7 +467,10 @@ wasm_child_spawn(const char *path, char *const *uargv)
 	 */
 	if (size >= 20 && memcmp(buf, "\177ELF", 4) == 0 && buf[4] == 1 &&
 	    (buf[18] | (buf[19] << 8)) == 3) {
-		c->c_i486 = wasm_i486_load(buf, size, c->c_argv);
+		printf("wasm: spawn i486 load begin\n");
+		c->c_i486 = wasm_i486_load(buf, size, c->c_argv, wasm_envp);
+		printf("wasm: spawn i486 load %s\n",
+		    c->c_i486 != NULL ? "ok" : "FAILED");
 		kmem_free(buf, size);
 		if (c->c_i486 == NULL) {
 			error = EFTYPE;
@@ -448,7 +492,7 @@ wasm_child_spawn(const char *path, char *const *uargv)
 	 * Child proc: the fork1 sequence without lwp, signals, or
 	 * address space (B1 shares init's vmspace outright).
 	 */
-	p2 = wasm_proc_fork(p1);
+	p2 = wasm_proc_fork(p1, 0);
 	if (p2 == NULL) {
 		if (slot >= 0)
 			wasm_host_unload_module(slot);
@@ -461,6 +505,7 @@ wasm_child_spawn(const char *path, char *const *uargv)
 	p2->p_path = kmem_strdupsize(path, NULL, KM_SLEEP);
 
 	c->c_proc = p2;
+	c->c_parent = p1->p_pid;
 	c->c_slot = slot;
 	c->c_started = 0;
 	c->c_running = 0;
@@ -476,6 +521,124 @@ wasm_child_spawn(const char *path, char *const *uargv)
 out:
 	vput(vp);
 	return -error;
+}
+
+/*
+ * wasm_read_file: read a regular file by path into kernel memory.
+ * Used by the i486 execve bridge.  Returns 0 with bufp and sizep set.
+ */
+int
+wasm_read_file(const char *path, void **bufp, size_t *sizep)
+{
+	struct nameidata nd;
+	struct pathbuf *pb;
+	struct vattr va;
+	struct vnode *vp;
+	uint8_t *buf;
+	size_t size;
+	int error;
+
+	pb = pathbuf_create(path);
+	if (pb == NULL)
+		return ENOMEM;
+	NDINIT(&nd, LOOKUP, FOLLOW | LOCKLEAF, pb);
+	error = namei(&nd);
+	pathbuf_destroy(pb);
+	if (error != 0)
+		return error;
+	vp = nd.ni_vp;
+
+	error = VOP_GETATTR(vp, &va, kauth_cred_get());
+	if (error != 0 || va.va_size == 0 ||
+	    va.va_size > WASM_MODULE_MAXSIZE) {
+		if (error == 0)
+			error = EFTYPE;
+		goto out;
+	}
+	size = (size_t)va.va_size;
+
+	error = VOP_OPEN(vp, FREAD, kauth_cred_get());
+	if (error != 0)
+		goto out;
+	buf = kmem_alloc(size, KM_SLEEP);
+	{
+		size_t done = 0;
+		while (done < size) {
+			size_t n = size - done > (1u << 20) ? (1u << 20)
+			    : size - done;
+			size_t resid = 0;
+			error = vn_rdwr(UIO_READ, vp, buf + done, n,
+			    (off_t)done, UIO_SYSSPACE, IO_NODELOCKED,
+			    kauth_cred_get(), &resid, NULL);
+			if (error != 0)
+				break;
+			if (resid != 0) {
+				printf("wasm: rfile SHORT at %zu resid=%zu\n",
+				    done, resid);
+				break;
+			}
+			done += n;
+		}
+	}
+	VOP_CLOSE(vp, FREAD, kauth_cred_get());
+	if (error != 0) {
+		kmem_free(buf, size);
+		goto out;
+	}
+	*bufp = buf;
+	*sizep = size;
+out:
+	vput(vp);
+	return error;
+}
+
+/*
+ * wasm_i486_fork: i486 guest fork(2).  Snapshots the calling task
+ * into a new child (region copy, EAX=0/EDX=1 per fork.S), gives it a
+ * copy of the parent's fd table, and queues it as pending: the host
+ * scheduler runs it when the epoch next suspends (typically the
+ * parent's wait4).  Returns the child pid to the parent.
+ */
+int
+wasm_i486_fork(struct i486_vm *vm)
+{
+	struct wasm_child *c;
+	struct proc *p1 = curlwp->l_proc, *p2;
+	void *t2;
+	int i;
+
+	c = NULL;
+	for (i = 0; i < WASM_CHILD_MAX; i++)
+		if (wasm_children[i].c_proc == NULL) {
+			c = &wasm_children[i];
+			break;
+		}
+	if (c == NULL)
+		return -EAGAIN;
+
+	t2 = wasm_i486_task_alloc();
+	if (t2 == NULL)
+		return -ENOMEM;
+	p2 = wasm_proc_fork(p1, 1);
+	if (p2 == NULL) {
+		wasm_i486_free(t2);
+		return -EAGAIN;
+	}
+	if (p1->p_path != NULL)
+		p2->p_path = kmem_strdupsize(p1->p_path, NULL, KM_SLEEP);
+
+	wasm_i486_snapshot(vm, (struct i486_vm *)t2);
+	c->c_proc = p2;
+	c->c_parent = p1->p_pid;
+	c->c_slot = -1;
+	c->c_i486 = t2;
+	c->c_forked = 1;
+	c->c_started = 0;
+	c->c_running = 0;
+	c->c_exited = 0;
+	c->c_exitcode = 0;
+	c->c_rv = 0;
+	return (int)p2->p_pid;
 }
 
 /*
@@ -530,9 +693,12 @@ wasm_child_trampoline(void *arg)
 		SCARG(&oa, mode) = 0;
 
 		/* init-style console seeding: real i386 binaries
-		 * expect fd 0/1/2 open; child fd table starts empty */
-		for (i = 0; i < 3; i++)
-			(void)sys_open(curlwp, &oa, &rv);
+		 * expect fd 0/1/2 open; child fd table starts empty
+		 * (forked children inherit the parent's table) */
+		if (!c->c_forked) {
+			for (i = 0; i < 3; i++)
+				(void)sys_open(curlwp, &oa, &rv);
+		}
 		c->c_rv = wasm_i486_exec(c->c_i486);
 		return;
 	}
@@ -554,7 +720,7 @@ wasm_run_child(int32_t idx)
 	struct wasm_child *c;
 	struct proc *oldp;
 	filedesc_t *oldfd;
-	int g;
+	int g, oldchild, oldsp;
 
 	if (idx < 0 || idx >= WASM_CHILD_MAX)
 		return EINVAL;
@@ -564,6 +730,10 @@ wasm_run_child(int32_t idx)
 
 	oldp = curlwp->l_proc;
 	oldfd = curlwp->l_fd;
+	/* nested slices (a forked child of a running child) must
+	 * restore the outer slice's context, not clear it */
+	oldchild = wasm_current_child;
+	oldsp = wasm_slice_sp;
 	c->c_started = 1;
 	c->c_running = 1;
 	wasm_current_child = idx;
@@ -574,13 +744,14 @@ wasm_run_child(int32_t idx)
 	g = wasm_engine_guarded(wasm_child_trampoline, c);
 	if (g != 0)
 		wasm_sp_restore(&wasm_slice_sp);
+	wasm_slice_sp = oldsp;
 
 	/* exit1-style fd teardown, still in child context */
 	fd_free();
 	c->c_proc->p_fd = NULL;
 	curlwp->l_fd = oldfd;
 	curlwp->l_proc = oldp;
-	wasm_current_child = -1;
+	wasm_current_child = oldchild;
 	c->c_running = 0;
 	c->c_exited = 1;
 	if (g == 0)
@@ -606,6 +777,79 @@ wasm_take_pending(void)
 		if (wasm_children[i].c_proc != NULL && !wasm_children[i].c_started)
 			return i;
 	return -1;
+}
+
+/*
+ * wasm_child_wait: shared wait4/wait6 service over the child table.
+ */
+static int
+wasm_child_wait(idtype_t idtype, id_t id, int *status, register_t *rvp)
+{
+	struct wasm_child *c;
+
+	if (idtype != P_ALL && idtype != P_PID)
+		return EOPNOTSUPP;
+	for (;;) {
+		int live = 0, got = -1;
+		for (int i = 0; i < WASM_CHILD_MAX; i++) {
+			c = &wasm_children[i];
+			if (c->c_proc == NULL)
+				continue;
+			/* only this caller's own children are waitable */
+			if (c->c_parent != curlwp->l_proc->p_pid)
+				continue;
+			if (idtype == P_PID &&
+			    (pid_t)id != c->c_proc->p_pid)
+				continue;
+			if (!c->c_exited) {
+				live++;
+				continue;
+			}
+			got = i;
+			break;
+		}
+		if (got >= 0) {
+			c = &wasm_children[got];
+			if (status != NULL)
+				*status = (int)W_EXITCODE(
+				    c->c_exitcode & 0377, 0);
+			*rvp = c->c_proc->p_pid;
+			wasm_child_reap(c);
+			return 0;
+		}
+		if (live == 0) {
+			printf("DBG child_wait ECHILD (none live)\n");
+			return ECHILD;
+		}
+		/*
+		 * A child of ours that has never run: execute it as a
+		 * nested slice right here.  The caller may itself be a
+		 * running child slice (a shell waiting on pipeline
+		 * children), and the host scheduler only starts
+		 * top-level slices; nesting wasm_run_child keeps the
+		 * whole family on one wasm stack, where a JSPI suspend
+		 * inside the child unwinds (and resumes) through the
+		 * parent's frames intact.
+		 */
+		for (int i = 0; i < WASM_CHILD_MAX; i++) {
+			c = &wasm_children[i];
+			if (c->c_proc == NULL || c->c_started)
+				continue;
+			if (c->c_parent != curlwp->l_proc->p_pid)
+				continue;
+			wasm_run_child(i);
+			live = 0;	/* re-scan: it exited or ran */
+			break;
+		}
+		if (live == 0)
+			continue;
+		if (wasm_jspi == 0) {
+			printf("DBG child_wait EWOULDBLOCK (no jspi)\n");
+			return EWOULDBLOCK;
+		}
+		printf("DBG child_wait suspend live=%d\n", live);
+		wasm_host_wait(WASM_WAIT_CHILD);
+	}
 }
 
 /*
@@ -698,6 +942,28 @@ wasm_user_svc(int nr, int argp)
 		error = sys_readlink(l, (const struct sys_readlink_args *)uap,
 		    &rv);
 		break;
+	case SYS_fchdir:
+		error = sys_fchdir(l, (const struct sys_fchdir_args *)uap, &rv);
+		break;
+	case SYS_rename:
+		error = sys_rename(l, (const struct sys_rename_args *)uap, &rv);
+		break;
+	case SYS_link:
+		error = sys_link(l, (const struct sys_link_args *)uap, &rv);
+		break;
+	case SYS_symlink:
+		error = sys_symlink(l, (const struct sys_symlink_args *)uap, &rv);
+		break;
+	case SYS_fchmod:
+		error = sys_fchmod(l, (const struct sys_fchmod_args *)uap, &rv);
+		break;
+	case SYS_fchown:
+		error = sys_fchown(l, (const struct sys_fchown_args *)uap, &rv);
+		break;
+	case SYS_fpathconf:
+		error = sys_fpathconf(l,
+		    (const struct sys_fpathconf_args *)uap, &rv);
+		break;
 	case SYS___getdents30:
 		error = sys___getdents30(l,
 		    (const struct sys___getdents30_args *)uap, &rv);
@@ -713,6 +979,15 @@ wasm_user_svc(int nr, int argp)
 		    (char *const *)(uintptr_t)sa->argv);
 		return pid;
 	}
+	case SYS___wait450: {
+		/* wait4(pid, status, options, rusage): pid -1 = any */
+		const struct sys___wait450_args *wa = uap;
+		pid_t pid = SCARG(wa, pid);
+
+		error = wasm_child_wait(pid == -1 ? P_ALL : P_PID,
+		    (id_t)pid, SCARG(wa, status), &rv);
+		break;
+	}
 	case SYS_wait6: {
 		/*
 		 * Served from the child table: the MI wait path
@@ -723,52 +998,86 @@ wasm_user_svc(int nr, int argp)
 		 * run a pending child to completion.
 		 */
 		const struct sys_wait6_args *wa = uap;
-		idtype_t idtype = SCARG(wa, idtype);
-		id_t id = SCARG(wa, id);
-		int *status = SCARG(wa, status);
-		struct wasm_child *c;
 
-		if (idtype != P_ALL && idtype != P_PID)
-			return EOPNOTSUPP;
-		for (;;) {
-			int live = 0, got = -1;
-			for (int i = 0; i < WASM_CHILD_MAX; i++) {
-				c = &wasm_children[i];
-				if (c->c_proc == NULL)
-					continue;
-				if (idtype == P_PID &&
-				    (pid_t)id != c->c_proc->p_pid)
-					continue;
-				if (!c->c_exited) {
-					live++;
-					continue;
-				}
-				got = i;
-				break;
-			}
-			if (got >= 0) {
-				c = &wasm_children[got];
-				if (status != NULL) {
-					*status = (int)W_EXITCODE(
-					    c->c_exitcode & 0377, 0);
-				}
-				rv = c->c_proc->p_pid;
-				wasm_child_reap(c);
-				error = 0;
-				break;
-			}
-			if (live == 0) {
-				error = ECHILD;
-				break;
-			}
-			if (wasm_jspi == 0) {
-				error = EWOULDBLOCK;
-				break;
-			}
-			wasm_host_wait(WASM_WAIT_CHILD);
-		}
+		error = wasm_child_wait(SCARG(wa, idtype), SCARG(wa, id),
+		    SCARG(wa, status), &rv);
 		break;
 	}
+	case SYS_lseek:
+		error = sys_lseek(l, uap, &rv);
+		break;
+	case SYS_fcntl:
+		error = sys_fcntl(l, uap, &rv);
+		break;
+	case SYS_getppid: {
+		register_t rvs[2] = { 0, 0 };
+		error = sys_getpid_with_ppid(l, uap, rvs);
+		rv = rvs[1];
+		break;
+	}
+	case SYS_getuid:
+		error = sys_getuid(l, uap, &rv);
+		break;
+	case SYS_geteuid:
+		error = sys_geteuid(l, uap, &rv);
+		break;
+	case SYS_getgid:
+		error = sys_getgid(l, uap, &rv);
+		break;
+	case SYS_getegid:
+		error = sys_getegid(l, uap, &rv);
+		break;
+	case SYS___sysctl:
+		error = sys___sysctl(l, uap, &rv);
+		break;
+	case SYS_getrlimit:
+		error = sys_getrlimit(l, uap, &rv);
+		break;
+	case SYS_setrlimit:
+		error = sys_setrlimit(l, uap, &rv);
+		break;
+	case SYS___clock_gettime50:
+		error = sys___clock_gettime50(l, uap, &rv);
+		break;
+	case SYS___gettimeofday50:
+		error = sys___gettimeofday50(l, uap, &rv);
+		break;
+	case SYS___nanosleep50:
+		error = sys___nanosleep50(l, uap, &rv);
+		break;
+	case SYS___fstat50:
+		error = sys___fstat50(l, uap, &rv);
+		break;
+	case SYS___lstat50:
+		error = sys___lstat50(l, uap, &rv);
+		break;
+	case SYS___statvfs190:
+		error = sys___statvfs190(l, uap, &rv);
+		break;
+	case SYS___fstatvfs190:
+		error = sys___fstatvfs190(l, uap, &rv);
+		break;
+	case SYS_kill:
+		error = 0;	/* no guest signal delivery yet */
+		break;
+	case SYS_dup:
+		error = sys_dup(l, uap, &rv);
+		break;
+	case SYS_umask:
+		error = sys_umask(l, uap, &rv);
+		break;
+	case SYS_getpgrp:
+		error = sys_getpgrp(l, uap, &rv);
+		break;
+	case SYS_setpgid:
+		error = sys_setpgid(l, uap, &rv);
+		break;
+	case SYS_fsync:
+		error = sys_fsync(l, uap, &rv);
+		break;
+	case SYS_sched_yield:
+		error = 0;
+		break;
 	case SYS_exit:
 		if (wasm_current_child >= 0) {
 			struct wasm_child *c = &wasm_children[wasm_current_child];
@@ -782,6 +1091,7 @@ wasm_user_svc(int nr, int argp)
 		wasm_user_reboot();	/* not reached */
 		/* FALLTHROUGH */
 	default:
+		printf("wasm: svc %d unimplemented\n", nr);
 		return EINVAL;
 	}
 

@@ -134,9 +134,13 @@ pmap_bootstrap(vaddr_t first_avail)
 	 * VA == PA the arena is physical memory, so the default
 	 * fraction of physmem must not be allowed to push its fixed
 	 * reservation past the end of the linear memory.
-	 * kmeminit_nkmempages() leaves a preset value alone.
+	 * kmeminit_nkmempages() leaves a preset value alone.  Two
+	 * thirds covers the boot-time pool and malloc footprint plus
+	 * several concurrent 28 MB i486 guest regions (a shell plus a
+	 * pipeline); the remainder leaves kernel_map room for the UBC
+	 * windows and the page allocator room for the vnode cache.
 	 */
-	nkmempages = atop(avail_end - avail_start) / 3;
+	nkmempages = atop(avail_end - avail_start) * 2 / 3;
 }
 
 /*

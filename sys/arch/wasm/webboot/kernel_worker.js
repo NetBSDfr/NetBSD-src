@@ -7,9 +7,9 @@
 //
 // Root image staging ABI: keep these three constants in sync with
 // sys/arch/wasm/include/rootimg.h (single source of truth).
-const ROOT_BASE = 0x0c000000; // WASM_ROOTIMG_ADDR
+const ROOT_BASE = 0x18000000; // WASM_ROOTIMG_ADDR
 const ROOT_SIZE = 0x01300000; // WASM_ROOTIMG_SIZE
-const MEM_PAGES = 4096;       // 256 MiB linear memory
+const MEM_PAGES = 8192;       // 512 MiB linear memory
 
 // Host ABI (module "host"), implemented for the browser here:
 //   console_write(i32)  one byte of kernel console output

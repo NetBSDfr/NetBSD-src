@@ -248,6 +248,21 @@ reserved:
 			    (void *)(kva + ((vaddr_t)i << PAGE_SHIFT)),
 			    (void *)(uintptr_t)VM_PAGE_TO_PHYS(pps[i]),
 			    PAGE_SIZE);
+	} else {
+		/*
+		 * readin: the I/O fills the buffer and mapout copies it back
+		 * to every page unconditionally.  The caller (genfs_getpages)
+		 * skips pages that already hold valid data (!PG_FAKE), so
+		 * pre-populate their window slots; otherwise the copy-back
+		 * overwrites them with stale kmem contents.
+		 */
+		for (i = 0; i < npages; i++) {
+			if ((pps[i]->flags & PG_FAKE) == 0)
+				memcpy(
+				    (void *)(kva + ((vaddr_t)i << PAGE_SHIFT)),
+				    (void *)(uintptr_t)VM_PAGE_TO_PHYS(pps[i]),
+				    PAGE_SIZE);
+		}
 	}
 	return kva;
 }
@@ -280,6 +295,33 @@ uvm_pagermapout_identity(vaddr_t kva, int npages)
 	b->kva = 0;
 	mutex_exit(&pmap_bounce_lock);
 	return true;
+}
+
+/*
+ * Bounce-aware page lookup: async I/O completion (uvm_aio_aiodone)
+ * reconstructs the page array from the I/O kva via uvm_pageratop().
+ * For bounced mapins the kva is a kmem buffer with no pmap mapping,
+ * so resolve it against the stash instead.  Returns NULL if kva is
+ * not a bounce buffer (single-page direct map falls through).
+ */
+static struct vm_page *
+uvm_pageratop_identity(vaddr_t kva)
+{
+	struct vm_page *pg = NULL;
+	int i;
+
+	mutex_enter(&pmap_bounce_lock);
+	for (i = 0; i < PMAP_BOUNCE_NSLOT; i++) {
+		struct pmap_bounce *b = &pmap_bounces[i];
+
+		if (b->kva != 0 && kva >= b->kva &&
+		    kva < b->kva + ((vaddr_t)b->npages << PAGE_SHIFT)) {
+			pg = b->pps[(kva - b->kva) >> PAGE_SHIFT];
+			break;
+		}
+	}
+	mutex_exit(&pmap_bounce_lock);
+	return pg;
 }
 #endif
 
@@ -702,6 +744,10 @@ uvm_pageratop(vaddr_t kva)
 	paddr_t pa;
 	bool rv __diagused;
 
+#ifdef PMAP_DIRECT_IDENTITY
+	if ((pg = uvm_pageratop_identity(kva)) != NULL)
+		return pg;
+#endif
 	rv = pmap_extract(pmap_kernel(), kva, &pa);
 	KASSERT(rv);
 	pg = PHYS_TO_VM_PAGE(pa);

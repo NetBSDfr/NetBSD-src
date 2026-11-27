@@ -73,6 +73,7 @@ struct i486_vm {
 	 * %fs unused; seg holds the active prefix base. */
 	uint32_t tls_base;
 	uint32_t seg;
+	int	 dbg_steps;	/* debug: printf next N guest insns */
 
 	/* guest-side bookkeeping used by the syscall bridge glue */
 	uint32_t img_end;	/* page-aligned end of loaded image (gva) */

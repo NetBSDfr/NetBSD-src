@@ -47,7 +47,7 @@
  * whose superblock sits at SBLOCK_UFS1 of the partition itself).
  */
 
-#define	WASM_ROOTIMG_ADDR	0x0c000000u	/* 192MB into linear memory */
+#define	WASM_ROOTIMG_ADDR	0x18000000u	/* 384MB into linear memory */
 #define	WASM_ROOTIMG_SIZE	0x01300000u	/* 19922944 bytes */
 
 /*
@@ -66,7 +66,7 @@
  *                                          see include/vmparam.h)
  *   [WASM_ROOTIMG_ADDR, +SIZE)       host-staged root image (never uvm)
  */
-#define	WASM_KERNEL_ARENA_END	0x08000000u	/* 128MB */
-#define	WASM_USER_STACK_MAX	0x0b800000u	/* 184MB: USRSTACK top */
+#define	WASM_KERNEL_ARENA_END	0x14000000u	/* 320MB */
+#define	WASM_USER_STACK_MAX	0x17800000u	/* 376MB: USRSTACK top */
 
 #endif /* _WASM_ROOTIMG_H_ */
