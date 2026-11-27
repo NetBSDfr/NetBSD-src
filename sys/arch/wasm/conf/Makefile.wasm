@@ -59,6 +59,11 @@ CFLAGS+=	-matomics
 # No libcompiler_rt in the first link; keep clang from inventing calls.
 CFLAGS+=	-fno-builtin-memset -fno-builtin-memcpy -fno-builtin-bzero
 
+# The .s/.S rules compile with ${AFLAGS}, not CFLAGS (see
+# Makefile.kern.inc KCOMPILE.s); the integrated assembler needs the
+# wasm32 triple or it assembles for the host.
+AFLAGS+=	--target=wasm32-unknown-unknown
+
 ##
 ## (3) libkern and compat
 ##
@@ -97,7 +102,7 @@ LD=		wasm-ld
 # No _start: the host loader drives the kernel through exported
 # functions (kernel_boot etc.), not an entry point.
 LINKFLAGS=	--import-memory --global-base=131072 --export-all --no-entry \
-		--error-limit=0
+		--growable-table --error-limit=0
 # GNU size(1) cannot read wasm objects; use the LLVM one.
 SIZE=		llvm-size
 

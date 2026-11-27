@@ -92,11 +92,62 @@ const struct cdevsw nullcn_devsw = {
  * TIOCSCTTY ioctl. Without the latter, system won't even boot past init(8)
  * invocation.
  */
+#ifdef __WASM
+/*
+ * Console input ring.  The host pushes typed bytes through
+ * wasm_console_input() (a re-entrant export call, safe while an
+ * epoch is suspended in wasm_host_wait); nullcndev_read drains it
+ * and reports EWOULDBLOCK when empty so the svc layer can suspend
+ * the epoch until more input arrives.
+ */
+#define	NULLCN_INQ	1024
+static uint8_t nullcn_inq[NULLCN_INQ];
+static u_int nullcn_in_head;		/* host writes here */
+static u_int nullcn_in_tail;		/* reads drain from here */
+
+int	wasm_console_input(int);
+int	wasm_console_has_input(void);
+
+int
+wasm_console_input(int c)
+{
+	u_int next = (nullcn_in_head + 1) % NULLCN_INQ;
+
+	if (next == nullcn_in_tail)
+		return 0;		/* full: drop the byte */
+	nullcn_inq[nullcn_in_head] = (uint8_t)c;
+	nullcn_in_head = next;
+	return 1;
+}
+
+int
+wasm_console_has_input(void)
+{
+
+	return nullcn_in_head != nullcn_in_tail;
+}
+#endif /* __WASM */
+
 int
 nullcndev_read(dev_t dev, struct uio *uio, int flag)
 {
+#ifdef __WASM
+	uint8_t c;
+	int error;
 
+	while (uio->uio_resid > 0) {
+		if (nullcn_in_tail == nullcn_in_head)
+			return EWOULDBLOCK;
+		c = nullcn_inq[nullcn_in_tail];
+		nullcn_in_tail = (nullcn_in_tail + 1) % NULLCN_INQ;
+		error = uiomove(&c, sizeof(c), uio);
+		if (error != 0)
+			return error;
+	}
+	return 0;
+#else
 	return EIO;
+#endif
 }
 
 int

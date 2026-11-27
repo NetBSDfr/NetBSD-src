@@ -59,7 +59,18 @@ async function main() {
       `[host] staged ${rootImg.byteLength} byte root image at 0x${ROOT_BASE.toString(16)}\n`));
 
   const t0 = performance.now();
-  const userMods = { nextHandle: 1, map: new Map() };
+  const userMods = { map: new Map() };
+  const JSPI = typeof WebAssembly.Suspending === 'function'
+    && typeof WebAssembly.promising === 'function';
+  const waiters = [];
+  // Suspending import for blocking svc: a returned Promise suspends
+  // the wasm epoch (all frames between here and the promising
+  // kernel_boot entry are wasm -- JS frames in between would trap);
+  // a non-Promise return means input is already queued.
+  const waitImpl = () => {
+    if (instance.exports.wasm_console_has_input()) return undefined;
+    return new Promise((res) => waiters.push(res));
+  };
   const importObject = {
     env: { memory },
     host: {
@@ -72,34 +83,57 @@ async function main() {
       },
       now: () => BigInt(Math.round((performance.now() - t0) * 1000)),
       exit: () => { throw new KernelExit(); },
+      // loader service: instantiate with env.svc wired straight to
+      // the kernel export (no JS trampoline) and _start placed in the
+      // kernel's function table; return the table slot.
       load_module: (ptr, len) => {
         try {
           const mbytes = new Uint8Array(memory.buffer, ptr >>> 0, len >>> 0).slice();
           const m = new WebAssembly.Module(mbytes);
           const mi = new WebAssembly.Instance(m, { env: {
             memory,
-            svc: (nr, argp) => instance.exports.wasm_user_svc(nr | 0, argp | 0) | 0,
+            svc: instance.exports.wasm_user_svc,
           }});
           if (typeof mi.exports._start !== 'function') return -1;
-          const h = userMods.nextHandle++;
-          userMods.map.set(h, mi);
-          return h;
+          const table = instance.exports.__indirect_function_table;
+          const slot = table.length;
+          table.grow(1);
+          table.set(slot, mi.exports._start);
+          userMods.map.set(slot, mi);
+          return slot;
         } catch (e) {
           report(`host: load_module: ${e.message}`, true);
           return -1;
         }
       },
-      call_start: (h, argp) => userMods.map.get(h).exports._start(argp >>> 0),
-      unload_module: (h) => { userMods.map.delete(h); },
+      unload_module: (h) => {
+        try { instance.exports.__indirect_function_table.set(h >>> 0, null); } catch (e) {}
+        userMods.map.delete(h >>> 0);
+      },
+      wait: JSPI ? new WebAssembly.Suspending(waitImpl) : () => {},
     },
   };
 
   report("instantiating...");
   const { instance } = await WebAssembly.instantiate(wasmBytes, importObject);
 
+  instance.exports.wasm_set_jspi(JSPI ? 1 : 0);
+
+  // console input from the UI thread: { in: Uint8Array }
+  onmessage = ({ data }) => {
+    if (!data || data.in === undefined) return;
+    for (const b of new Uint8Array(data.in))
+      instance.exports.wasm_console_input(b);
+    const ws = waiters.splice(0);
+    for (const r of ws) r();
+  };
+
   report("running");
+  const boot = JSPI
+    ? WebAssembly.promising(instance.exports.kernel_boot)
+    : instance.exports.kernel_boot;
   try {
-    instance.exports.kernel_boot();
+    await boot();
     flush();
     report("kernel_boot() returned (unexpected)");
   } catch (e) {

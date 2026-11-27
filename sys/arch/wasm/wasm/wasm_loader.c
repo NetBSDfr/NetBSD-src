@@ -37,12 +37,16 @@
  *
  *   kernel: wasm_host_load_module(bytes) -> host compiles + instantiates
  *           the module, wiring its env.svc import to our exported
- *           wasm_user_svc(), and its env.memory to the shared linear
- *           memory; returns an opaque handle.
- *   kernel: wasm_host_call_start(handle, argp) -> host calls the
- *           module's _start(argp) export; the return value is the
- *           program's exit code.
- *   user:   svc(nr, argp) -> host trampoline -> wasm_user_svc() here.
+ *           wasm_user_svc() directly (a wasm function import, no JS
+ *           trampoline), wiring env.memory to the shared linear
+ *           memory, and storing the module's _start in the next slot
+ *           of our exported function table; returns that slot.
+ *   kernel: wasm_user_start(slot, argp) (wasm_callin.s) -> call_indirect
+ *           through the table straight into _start(argp); the return
+ *           value is the program's exit code.  Keeping this chain in
+ *           wasm frames is what lets a blocking svc suspend the epoch
+ *           via JSPI (a JS frame in between would trap).
+ *   user:   svc(nr, argp) -> wasm_user_svc() here, directly.
  *
  * Shared memory (B1): user modules import the kernel's own linear
  * memory, so pointers pass unmodified across every boundary.  Data
@@ -78,10 +82,32 @@ __KERNEL_RCSID(0, "$NetBSD$");
  */
 int32_t	wasm_host_load_module(uint32_t, uint32_t)
 	    __attribute__((import_module("host"), import_name("load_module")));
-int32_t	wasm_host_call_start(int32_t, uint32_t)
-	    __attribute__((import_module("host"), import_name("call_start")));
 void	wasm_host_unload_module(int32_t)
 	    __attribute__((import_module("host"), import_name("unload_module")));
+
+/*
+ * JSPI blocking support.  The host calls wasm_set_jspi(1) before
+ * boot when it can suspend wasm stacks (WebAssembly.promising +
+ * Suspending).  A syscall that would block then calls wasm_host_wait
+ * (a Suspending import: it returns a Promise the host resolves when
+ * input arrives, suspending this epoch) and retries.  Without the
+ * flag, EWOULDBLOCK is returned to the guest as before.
+ */
+void	wasm_host_wait(void)
+	    __attribute__((import_module("host"), import_name("wait")));
+
+static int wasm_jspi;
+
+int	wasm_set_jspi(int);
+int
+wasm_set_jspi(int v)
+{
+	wasm_jspi = v;
+	return 0;
+}
+
+/* wasm_callin.s: call_indirect into the user module's _start */
+int32_t	wasm_user_start(int32_t, uint32_t);
 
 int	wasm_user_svc(int, int);
 int	wasm_loader_load(struct vnode *, size_t, const char *);
@@ -115,13 +141,13 @@ static char wasm_arg0[128];
  */
 #define	WASM_MODULE_MAXSIZE	(8 * 1024 * 1024)
 
-static int32_t wasm_pending_handle = -1;
+static int32_t wasm_pending_slot = -1;
 
 int
 wasm_loader_load(struct vnode *vp, size_t size, const char *kname)
 {
 	uint8_t *buf;
-	int32_t handle;
+	int32_t slot;
 	int error;
 
 	if (size == 0 || size > WASM_MODULE_MAXSIZE)
@@ -135,10 +161,10 @@ wasm_loader_load(struct vnode *vp, size_t size, const char *kname)
 		return error;
 	}
 
-	handle = wasm_host_load_module((uint32_t)(uintptr_t)buf,
+	slot = wasm_host_load_module((uint32_t)(uintptr_t)buf,
 	    (uint32_t)size);
 	kmem_free(buf, size);
-	if (handle < 0)
+	if (slot < 0)
 		return EFTYPE;
 
 	strlcpy(wasm_arg0, kname, sizeof(wasm_arg0));
@@ -150,7 +176,7 @@ wasm_loader_load(struct vnode *vp, size_t size, const char *kname)
 	wasm_si.envc = 0;
 	wasm_si.envp = (uint32_t)(uintptr_t)wasm_envp;
 
-	wasm_pending_handle = handle;
+	wasm_pending_slot = slot;
 	return 0;
 }
 
@@ -161,18 +187,18 @@ wasm_loader_load(struct vnode *vp, size_t size, const char *kname)
 void
 wasm_loader_run(void)
 {
-	int32_t handle, rv;
+	int32_t slot, rv;
 
-	if (wasm_pending_handle < 0) {
+	if (wasm_pending_slot < 0) {
 		printf("wasm: no module pending\n");
 		return;
 	}
-	handle = wasm_pending_handle;
-	wasm_pending_handle = -1;
+	slot = wasm_pending_slot;
+	wasm_pending_slot = -1;
 
-	rv = wasm_host_call_start(handle, (uint32_t)(uintptr_t)&wasm_si);
+	rv = wasm_user_start(slot, (uint32_t)(uintptr_t)&wasm_si);
 	printf("wasm: module exited with %d\n", rv);
-	wasm_host_unload_module(handle);
+	wasm_host_unload_module(slot);
 }
 
 /*
@@ -206,7 +232,21 @@ wasm_user_svc(int nr, int argp)
 	 */
 	switch (nr) {
 	case SYS_read:
-		error = sys_read(l, (const struct sys_read_args *)uap, &rv);
+		/*
+		 * Blocking read: the console driver returns EWOULDBLOCK
+		 * when its input ring is empty.  With JSPI, suspend the
+		 * epoch in the host (which resolves when input arrives)
+		 * and retry; the whole chain from the host's promising
+		 * entry to wasm_host_wait is wasm frames, as JSPI
+		 * requires.
+		 */
+		for (;;) {
+			error = sys_read(l,
+			    (const struct sys_read_args *)uap, &rv);
+			if (error != EWOULDBLOCK || wasm_jspi == 0)
+				break;
+			wasm_host_wait();
+		}
 		break;
 	case SYS_write:
 		error = sys_write(l, (const struct sys_write_args *)uap, &rv);

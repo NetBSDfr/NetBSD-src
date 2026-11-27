@@ -36,6 +36,20 @@ function boot() {
     status.style.color = "#c66";
     pre.textContent += `\n[host] ${e.message}\n`;
   };
+
+  // console input: forward printable keys to the kernel's input ring
+  document.onkeydown = (e) => {
+    if (!worker) return;
+    let c = -1;
+    if (e.key === "Enter") c = 13;
+    else if (e.key === "Backspace") c = 127;
+    else if (e.key.length === 1 && e.key.charCodeAt(0) >= 32
+             && e.key.charCodeAt(0) < 127)
+      c = e.key.charCodeAt(0);
+    if (c < 0) return;
+    e.preventDefault();
+    worker.postMessage({ in: new Uint8Array([c]) });
+  };
 }
 
 document.getElementById("boot").addEventListener("click", boot);
