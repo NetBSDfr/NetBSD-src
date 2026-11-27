@@ -23,6 +23,8 @@
 enum { R_EAX, R_ECX, R_EDX, R_EBX, R_ESP, R_EBP, R_ESI, R_EDI };
 
 #define	I486_CF		0x0001u
+#define	I486_DF		0x0400u
+#define	I486_IF		0x0200u
 #define	I486_SF		0x0080u
 #define	I486_ZF		0x0040u
 #define	I486_OF		0x0800u
@@ -34,9 +36,9 @@ struct i486_mem {
 };
 
 /*
- * Identity model (kernel): hbase == (uint8_t *)vbase, guest VA is the
- * kernel address itself (flat wasm32 space, copyin is memcpy).
- * Harness model: vbase = 0, hbase = scratch array.
+ * Translation model: guest VA g maps to hbase + (g - vbase) when in
+ * bounds; i486_h() returns NULL otherwise.  The kernel glue allocates
+ * one region per guest task and sets vbase to the ELF load base.
  */
 
 struct i486_state {
@@ -62,6 +64,20 @@ struct i486_vm {
 	void (*syscall)(struct i486_vm *);
 	int stop;
 	uint64_t steps;
+	uint32_t fault_va;	/* last failed access (debug aid) */
+#ifdef I486_WATCH
+	uint32_t watch_lo, watch_hi;
+#endif
+
+	/* segment bases: %gs is the TLS block (0 = uninitialised),
+	 * %fs unused; seg holds the active prefix base. */
+	uint32_t tls_base;
+	uint32_t seg;
+
+	/* guest-side bookkeeping used by the syscall bridge glue */
+	uint32_t img_end;	/* page-aligned end of loaded image (gva) */
+	uint32_t mmap_cur;	/* bump pointer for anonymous mmap (gva) */
+	uint32_t mmap_end;	/* stack guard for the bump allocator */
 };
 
 uint8_t *i486_h(struct i486_mem *m, uint32_t va);	/* NULL if OOB */
