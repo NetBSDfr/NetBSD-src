@@ -261,6 +261,8 @@ extern vaddr_t pmap_direct_end;
  * silently see stale memory instead of the object's pages.
  */
 #define	PMAP_DIRECT
+/* identity pmap: kenter cannot alias kva; multi-page mapin must bounce */
+#define	PMAP_DIRECT_IDENTITY
 static __inline int
 pmap_direct_process(paddr_t pa, voff_t pgoff, size_t len,
     int (*process)(void *, size_t, void *), void *arg)

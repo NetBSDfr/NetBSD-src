@@ -131,6 +131,7 @@ void	wasm_sp_restore(int *);
 int	wasm_user_svc(int, int);
 int	wasm_loader_load(struct vnode *, size_t, const char *);
 void	wasm_loader_run(void);
+int	wasm_child_spawn(const char *, char *const *);
 
 /*
  * Startup info handed to _start as its single argument (wasm exports
@@ -273,7 +274,7 @@ static int wasm_slice_sp;		/* SP across a throw unwind */
 extern int wasm_engine_guarded(void (*)(void *), void *);
 extern void wasm_engine_throw(void);
 int	sys_getpid_with_ppid(struct lwp *, const void *, register_t *);
-void	*wasm_i486_create(void);
+void	*wasm_i486_load(const void *, size_t, char *const *);
 int	wasm_i486_exec(void *);
 void	wasm_i486_free(void *);
 
@@ -340,7 +341,7 @@ wasm_proc_fork(struct proc *p1)
  * wasm_child_spawn: read a wasm module by path and instantiate it as
  * a new process.  Returns the child's pid or a negative errno.
  */
-static int
+int
 wasm_child_spawn(const char *path, char *const *uargv)
 {
 	struct wasm_child *c;
@@ -362,33 +363,6 @@ wasm_child_spawn(const char *path, char *const *uargv)
 		}
 	if (c == NULL)
 		return -EAGAIN;
-
-	/*
-	 * E1b test hook: "/i486test" runs the embedded i486 blob as
-	 * an emulated child instead of loading a wasm module; E2
-	 * replaces this with EM_386 exec routing.
-	 */
-	if (strcmp(path, "/i486test") == 0) {
-		p2 = wasm_proc_fork(p1);
-		if (p2 == NULL)
-			return -EAGAIN;
-		strlcpy(c->c_arg0, path, sizeof(c->c_arg0));
-		c->c_argv[0] = c->c_arg0;
-		c->c_argv[1] = NULL;
-		c->c_si.argc = 1;
-		c->c_si.argv = (uint32_t)(uintptr_t)c->c_argv;
-		c->c_si.envc = 0;
-		c->c_si.envp = (uint32_t)(uintptr_t)wasm_envp;
-		c->c_proc = p2;
-		c->c_slot = -1;
-		c->c_started = c->c_running = c->c_exited = 0;
-		c->c_exitcode = c->c_rv = 0;
-		c->c_i486 = wasm_i486_create();
-		p2->p_path = kmem_strdupsize(path, NULL, KM_SLEEP);
-		printf("wasm: spawned i486 guest as pid %d\n",
-		    (int)p2->p_pid);
-		return (int)p2->p_pid;
-	}
 
 	/*
 	 * Read the whole module into kernel memory (same bound as
@@ -424,25 +398,6 @@ wasm_child_spawn(const char *path, char *const *uargv)
 		goto out;
 	}
 
-	slot = wasm_host_load_module((uint32_t)(uintptr_t)buf, (uint32_t)size);
-	kmem_free(buf, size);
-	if (slot < 0) {
-		error = EFTYPE;
-		goto out;
-	}
-
-	/*
-	 * Child proc: the fork1 sequence without lwp, signals, or
-	 * address space (B1 shares init's vmspace outright).
-	 */
-	p2 = wasm_proc_fork(p1);
-	if (p2 == NULL) {
-		wasm_host_unload_module(slot);
-		error = EAGAIN;
-		goto out;
-	}
-	p2->p_path = kmem_strdupsize(path, NULL, KM_SLEEP);
-
 	/*
 	 * Startup info: the caller's argv array lives in shared memory
 	 * and the parent is frozen while the child runs, but copy the
@@ -465,9 +420,48 @@ wasm_child_spawn(const char *path, char *const *uargv)
 	c->c_si.envc = 0;
 	c->c_si.envp = (uint32_t)(uintptr_t)wasm_envp;
 
+	/*
+	 * ELF32 EM_386: run under the in-kernel i486 interpreter;
+	 * anything else goes to the host wasm module loader.
+	 */
+	if (size >= 20 && memcmp(buf, "\177ELF", 4) == 0 && buf[4] == 1 &&
+	    (buf[18] | (buf[19] << 8)) == 3) {
+		c->c_i486 = wasm_i486_load(buf, size, c->c_argv);
+		kmem_free(buf, size);
+		if (c->c_i486 == NULL) {
+			error = EFTYPE;
+			goto out;
+		}
+		slot = -1;
+	} else {
+		slot = wasm_host_load_module((uint32_t)(uintptr_t)buf,
+		    (uint32_t)size);
+		kmem_free(buf, size);
+		if (slot < 0) {
+			error = EFTYPE;
+			goto out;
+		}
+		c->c_i486 = NULL;
+	}
+
+	/*
+	 * Child proc: the fork1 sequence without lwp, signals, or
+	 * address space (B1 shares init's vmspace outright).
+	 */
+	p2 = wasm_proc_fork(p1);
+	if (p2 == NULL) {
+		if (slot >= 0)
+			wasm_host_unload_module(slot);
+		else
+			wasm_i486_free(c->c_i486);
+		c->c_i486 = NULL;
+		error = EAGAIN;
+		goto out;
+	}
+	p2->p_path = kmem_strdupsize(path, NULL, KM_SLEEP);
+
 	c->c_proc = p2;
 	c->c_slot = slot;
-	c->c_i486 = NULL;
 	c->c_started = 0;
 	c->c_running = 0;
 	c->c_exited = 0;

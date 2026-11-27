@@ -127,10 +127,15 @@ uvm_pager_realloc_emerg(void)
  * uvm_pager_init: init pagers (at boot time)
  */
 
+#ifdef PMAP_DIRECT_IDENTITY
+static kmutex_t pmap_bounce_lock;
+static vaddr_t uvm_pagermapin_identity(struct vm_page **, int, int);
+static bool uvm_pagermapout_identity(vaddr_t, int);
+#endif
+
 void
 uvm_pager_init(void)
-{
-	u_int lcv;
+{	u_int lcv;
 	vaddr_t sva, eva;
 
 	/*
@@ -142,6 +147,9 @@ uvm_pager_init(void)
 	    false, NULL);
 	mutex_init(&pager_map_wanted_lock, MUTEX_DEFAULT, IPL_NONE);
 	pager_map_wanted = false;
+#ifdef PMAP_DIRECT_IDENTITY
+	mutex_init(&pmap_bounce_lock, MUTEX_DEFAULT, IPL_NONE);
+#endif
 
 	uvm_pager_realloc_emerg();
 
@@ -169,6 +177,109 @@ uvm_pagermapdirect(void *kva, size_t sz, void *cookie)
 	KASSERT(sz == PAGE_SIZE);
 	*(vaddr_t *)cookie = (vaddr_t)kva;
 	return 0;
+}
+#endif
+
+#ifdef PMAP_DIRECT_IDENTITY
+/*
+ * Identity pmap (wasm): pmap_kenter_pa() cannot alias a pager_map kva
+ * onto a page, so the generic multi-page path below would hand back a
+ * kva that does not reference the pages (silent stale/zero data).
+ * Multi-page mapins therefore bounce through a kmem buffer; the stash
+ * is found by kva at mapout.  Single pages use the direct map.
+ */
+#define	PMAP_BOUNCE_MAXPGS	64
+#define	PMAP_BOUNCE_NSLOT	16
+
+struct pmap_bounce {
+	vaddr_t		kva;		/* 0: free */
+	int		npages;
+	bool		readin;		/* I/O fills buffer, copy to pages */
+	struct vm_page *pps[PMAP_BOUNCE_MAXPGS];
+};
+
+static struct pmap_bounce pmap_bounces[PMAP_BOUNCE_NSLOT];
+
+static vaddr_t
+uvm_pagermapin_identity(struct vm_page **pps, int npages, int flags)
+{
+	struct pmap_bounce *b;
+	vaddr_t kva;
+	bool readin;
+	int i, tries = 0;
+
+	if (npages > PMAP_BOUNCE_MAXPGS)
+		return 0;
+
+	mutex_enter(&pmap_bounce_lock);
+	for (;;) {
+		for (i = 0; i < PMAP_BOUNCE_NSLOT; i++) {
+			if (pmap_bounces[i].kva == 0) {
+				b = &pmap_bounces[i];
+				b->kva = 1;	/* reserve */
+				goto reserved;
+			}
+		}
+		if (++tries > 100) {
+			mutex_exit(&pmap_bounce_lock);
+			return 0;
+		}
+		mutex_exit(&pmap_bounce_lock);
+		kpause("pgbounce", false, hz >> 4, NULL);
+		mutex_enter(&pmap_bounce_lock);
+	}
+reserved:
+	readin = (flags & UVMPAGER_MAPIN_READ) != 0;
+	mutex_exit(&pmap_bounce_lock);
+
+	kva = (vaddr_t)kmem_alloc((size_t)npages << PAGE_SHIFT, KM_SLEEP);
+
+	mutex_enter(&pmap_bounce_lock);
+	b->npages = npages;
+	b->readin = readin;
+	memcpy(b->pps, pps, npages * sizeof(*pps));
+	b->kva = kva;
+	mutex_exit(&pmap_bounce_lock);
+
+	if (!readin) {
+		/* pageout: pages -> buffer */
+		for (i = 0; i < npages; i++)
+			memcpy(
+			    (void *)(kva + ((vaddr_t)i << PAGE_SHIFT)),
+			    (void *)(uintptr_t)VM_PAGE_TO_PHYS(pps[i]),
+			    PAGE_SIZE);
+	}
+	return kva;
+}
+
+static bool
+uvm_pagermapout_identity(vaddr_t kva, int npages)
+{
+	struct pmap_bounce *b = NULL;
+	int i;
+
+	mutex_enter(&pmap_bounce_lock);
+	for (i = 0; i < PMAP_BOUNCE_NSLOT; i++) {
+		if (pmap_bounces[i].kva == kva) {
+			b = &pmap_bounces[i];
+			break;
+		}
+	}
+	if (b == NULL) {
+		mutex_exit(&pmap_bounce_lock);
+		return false;
+	}
+	if (b->readin) {
+		for (i = 0; i < b->npages; i++)
+			memcpy(
+			    (void *)(uintptr_t)VM_PAGE_TO_PHYS(b->pps[i]),
+			    (void *)(kva + ((vaddr_t)i << PAGE_SHIFT)),
+			    PAGE_SIZE);
+	}
+	kmem_free((void *)kva, (size_t)b->npages << PAGE_SHIFT);
+	b->kva = 0;
+	mutex_exit(&pmap_bounce_lock);
+	return true;
 }
 #endif
 
@@ -207,6 +318,10 @@ uvm_pagermapin(struct vm_page **pps, int npages, int flags)
 		UVMHIST_LOG(maphist, "<- done, direct (KVA=%#jx)", kva,0,0,0);
 		return kva;
 	}
+#ifdef PMAP_DIRECT_IDENTITY
+	if (npages > 1)
+		return uvm_pagermapin_identity(pps, npages, flags);
+#endif
 #endif
 
 	/*
@@ -281,6 +396,11 @@ uvm_pagermapout(vaddr_t kva, int npages)
 	struct vm_map_entry *entries;
 	UVMHIST_FUNC(__func__);
 	UVMHIST_CALLARGS(maphist, " (kva=%#jx, npages=%jd)", kva, npages,0,0);
+
+#ifdef PMAP_DIRECT_IDENTITY
+	if (npages > 1 && uvm_pagermapout_identity(kva, npages))
+		return;
+#endif
 
 #ifdef PMAP_DIRECT
 	/*
