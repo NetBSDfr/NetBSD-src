@@ -53,9 +53,10 @@
  * not reach that deep in practice yet, but the real carve-out comes
  * with per-instance memory.
  *
- * The syscall ABI (v1) is the svc import below: raw pointers, no
- * marshalling.  Only puts(1) exists so far; mapping nr onto real
- * kernel syscalls (write, exit, read) is the next step.
+ * The syscall ABI (v1) is the svc import below: NetBSD SYS_* numbers,
+ * args as the matching sys_*_args struct in shared memory, straight
+ * into the kernel's real sys_* implementations.  _start receives a
+ * wasm_start_info block (argc/argv/envc/envp).
  */
 
 #include <sys/cdefs.h>
@@ -63,7 +64,10 @@ __KERNEL_RCSID(0, "$NetBSD$");
 
 #include <sys/param.h>
 #include <sys/kmem.h>
+#include <sys/proc.h>
 #include <sys/systm.h>
+#include <sys/syscall.h>
+#include <sys/syscallargs.h>
 #include <sys/vnode.h>
 
 #include <lib/libkern/libkern.h>
@@ -80,8 +84,25 @@ void	wasm_host_unload_module(int32_t)
 	    __attribute__((import_module("host"), import_name("unload_module")));
 
 int	wasm_user_svc(int, int);
-int	wasm_loader_load(struct vnode *, size_t);
+int	wasm_loader_load(struct vnode *, size_t, const char *);
 void	wasm_loader_run(void);
+
+/*
+ * Startup info handed to _start as its single argument (wasm exports
+ * take one i32): the classic argc/argv/envc/envp, with pointers as
+ * u32 words into the shared linear memory.
+ */
+struct wasm_start_info {
+	int32_t		argc;
+	uint32_t	argv;	/* char *[argc + 1], NULL-terminated */
+	int32_t		envc;
+	uint32_t	envp;	/* char *[envc + 1], NULL-terminated */
+};
+
+static struct wasm_start_info wasm_si;
+static char *wasm_argv[2];
+static char *wasm_envp[1];
+static char wasm_arg0[128];
 
 /*
  * Real-module support (used by exec_wasm32 for files that carry the
@@ -97,7 +118,7 @@ void	wasm_loader_run(void);
 static int32_t wasm_pending_handle = -1;
 
 int
-wasm_loader_load(struct vnode *vp, size_t size)
+wasm_loader_load(struct vnode *vp, size_t size, const char *kname)
 {
 	uint8_t *buf;
 	int32_t handle;
@@ -120,14 +141,22 @@ wasm_loader_load(struct vnode *vp, size_t size)
 	if (handle < 0)
 		return EFTYPE;
 
+	strlcpy(wasm_arg0, kname, sizeof(wasm_arg0));
+	wasm_argv[0] = wasm_arg0;
+	wasm_argv[1] = NULL;
+	wasm_envp[0] = NULL;
+	wasm_si.argc = 1;
+	wasm_si.argv = (uint32_t)(uintptr_t)wasm_argv;
+	wasm_si.envc = 0;
+	wasm_si.envp = (uint32_t)(uintptr_t)wasm_envp;
+
 	wasm_pending_handle = handle;
 	return 0;
 }
 
 /*
  * Epoch entry for a real module (ep_entry round-trip; see
- * wasm_user_entry).  argp is 0 for now: argv/envp delivery is the
- * next ABI step.
+ * wasm_user_entry).  _start receives the startup info block.
  */
 void
 wasm_loader_run(void)
@@ -141,25 +170,60 @@ wasm_loader_run(void)
 	handle = wasm_pending_handle;
 	wasm_pending_handle = -1;
 
-	rv = wasm_host_call_start(handle, 0);
+	rv = wasm_host_call_start(handle, (uint32_t)(uintptr_t)&wasm_si);
 	printf("wasm: module exited with %d\n", rv);
 	wasm_host_unload_module(handle);
 }
 
 /*
  * svc: syscall entry for user modules (ABI v1).  The host wires this
- * as every user module's env.svc import; arguments are raw pointers
- * into the shared linear memory.  Exported for the host (--export-all).
+ * as every user module's env.svc import.  Numbers are the real NetBSD
+ * SYS_* numbers; argp points to the matching sys_*_args struct in the
+ * shared linear memory (wasm32 words match syscallarg_t exactly).
+ * The call goes straight into the kernel's sys_* implementation --
+ * the same function a trapframe dispatch would reach -- so user
+ * programs share the real VFS, fd table, and credentials.
+ *
+ * Deviation: SYS_exit on pid 1 would panic ("init died") in real
+ * NetBSD; here it reboots into the host, matching what returning
+ * from _start already does.
+ *
+ * Exported for the host (--export-all).
  */
+void	wasm_user_reboot(void);		/* exec_wasm32.c */
+
 int
 wasm_user_svc(int nr, int argp)
 {
+	const void *uap = (const void *)(uintptr_t)argp;
+	register_t rv = 0;
+	struct lwp *l = curlwp;
+	int error;
 
+	/*
+	 * Each case reinterprets argp as the specific args struct;
+	 * the user side declares the identical layout.
+	 */
 	switch (nr) {
-	case 1:		/* puts(argp) */
-		printf("%s", (const char *)(uintptr_t)argp);
-		return 0;
+	case SYS_read:
+		error = sys_read(l, (const struct sys_read_args *)uap, &rv);
+		break;
+	case SYS_write:
+		error = sys_write(l, (const struct sys_write_args *)uap, &rv);
+		break;
+	case SYS_open:
+		error = sys_open(l, (const struct sys_open_args *)uap, &rv);
+		break;
+	case SYS_close:
+		error = sys_close(l, (const struct sys_close_args *)uap, &rv);
+		break;
+	case SYS_exit:
+		printf("wasm: init exited via SYS_exit\n");
+		wasm_user_reboot();	/* not reached */
+		/* FALLTHROUGH */
 	default:
 		return EINVAL;
 	}
+
+	return error != 0 ? -error : (int)rv;
 }

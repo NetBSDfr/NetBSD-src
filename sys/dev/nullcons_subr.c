@@ -50,12 +50,32 @@ dev_type_ioctl(nullcndev_ioctl);
 dev_type_tty(nullcndev_tty);
 
 static int	nullcons_newdev(struct consdev *);
+#ifdef __WASM
+static int	nullcndev_write(dev_t, struct uio *, int);
+static int	nullcndev_open(dev_t, int, int, struct lwp *);
+static int	nullcndev_close(dev_t, int, int, struct lwp *);
+#endif
 
 const struct cdevsw nullcn_devsw = {
+#ifdef __WASM
+	/*
+	 * nullopen/nullclose are legacy nullop(void *) stubs: calling
+	 * them through the 4-arg dev_open_t signature traps in wasm
+	 * (call_indirect validates signatures strictly).  Use exact
+	 * stubs instead.
+	 */
+	.d_open = nullcndev_open,
+	.d_close = nullcndev_close,
+#else
 	.d_open = nullopen,
 	.d_close = nullclose,
+#endif
 	.d_read = nullcndev_read,
+#ifdef __WASM
+	.d_write = nullcndev_write,
+#else
 	.d_write = nullwrite,
+#endif
 	.d_ioctl = nullcndev_ioctl,
 	.d_stop = nullstop,
 	.d_tty = nullcndev_tty,
@@ -127,6 +147,42 @@ nullcninit(struct consdev *cn)
 	cn_tab = &nullcn;
 }
 
+#ifdef __WASM
+static int
+nullcndev_open(dev_t dev, int flag, int type, struct lwp *l)
+{
+
+	return 0;
+}
+
+static int
+nullcndev_close(dev_t dev, int flag, int type, struct lwp *l)
+{
+
+	return 0;
+}
+
+/*
+ * Console write: echo every byte through the console putc, which on
+ * wasm reaches the host terminal (see nullcnputc below).  Without
+ * this, write(2) to /dev/console lands in nullwrite and vanishes.
+ */
+static int
+nullcndev_write(dev_t dev, struct uio *uio, int flag)
+{
+	uint8_t c;
+	int error;
+
+	while (uio->uio_resid > 0) {
+		error = uiomove(&c, sizeof(c), uio);
+		if (error != 0)
+			return error;
+		nullcnputc(dev, c);
+	}
+	return 0;
+}
+#endif /* __WASM */
+
 /*
  * Dumb getc() implementation. Simply blocks on call.
  */
@@ -179,6 +235,9 @@ nullcons_newdev(struct consdev *cn)
 	nulltty->t_dev = makedev(cmajor, 0);
 	tty_attach(nulltty);
 	cn->cn_dev = nulltty->t_dev;
+#ifdef __WASM
+	printf("nullcons: major %d\n", cmajor);
+#endif
 
 	return 0;
 }

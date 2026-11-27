@@ -62,7 +62,7 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <machine/proc.h>
 
 /* wasm_loader.c */
-int	wasm_loader_load(struct vnode *, size_t);
+int	wasm_loader_load(struct vnode *, size_t, const char *);
 void	wasm_loader_run(void);
 
 /*
@@ -172,7 +172,8 @@ exec_wasm32_makecmds(struct lwp *l, struct exec_package *epp)
 		VOP_UNLOCK(epp->ep_vp);
 		if (error != 0)
 			return error;
-		error = wasm_loader_load(epp->ep_vp, (size_t)va.va_size);
+		error = wasm_loader_load(epp->ep_vp, (size_t)va.va_size,
+		    epp->ep_kname);
 		if (error != 0)
 			return error;
 		epp->ep_entry = (vaddr_t)(uintptr_t)wasm_loader_run;
