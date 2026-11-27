@@ -244,10 +244,12 @@ wasm_loader_run(void)
  * (sp_run) come with multi-suspend scheduling.
  */
 #define	WASM_CHILD_MAX	8
-#define	WASM_SYS_spawn	512	/* svc extension: { const char *path } */
+#define	WASM_SYS_spawn	512	/* svc extension: { path, argv } */
+#define	WASM_SPAWN_ARGC_MAX	16
 
 struct wasm_spawn_args {
 	uint32_t	path;
+	uint32_t	argv;	/* NULL-terminated char *[], may be 0 */
 };
 
 struct wasm_child {
@@ -258,9 +260,10 @@ struct wasm_child {
 	int		c_exited;
 	int		c_exitcode;
 	int		c_rv;		/* _start return value */
+	void		*c_i486;	/* i486 guest task, NULL for wasm */
 	struct wasm_start_info c_si;
 	char		c_arg0[128];
-	char		*c_argv[2];
+	char		*c_argv[WASM_SPAWN_ARGC_MAX + 1];
 };
 
 static struct wasm_child wasm_children[WASM_CHILD_MAX];
@@ -270,13 +273,75 @@ static int wasm_slice_sp;		/* SP across a throw unwind */
 extern int wasm_engine_guarded(void (*)(void *), void *);
 extern void wasm_engine_throw(void);
 int	sys_getpid_with_ppid(struct lwp *, const void *, register_t *);
+void	*wasm_i486_create(void);
+int	wasm_i486_exec(void *);
+void	wasm_i486_free(void *);
+
+/*
+ * wasm_proc_fork: the fork1 recipe without lwp, signals, or address
+ * space (B1 shares init's vmspace outright); used for both wasm and
+ * i486 children.  Returns the new proc, ready for fd/cwd defaults,
+ * or NULL.
+ */
+static struct proc *
+wasm_proc_fork(struct proc *p1)
+{
+	struct proc *p2 = proc_alloc();
+
+	if (p2 == NULL)
+		return NULL;
+	memset(&p2->p_startzero, 0,
+	    (unsigned)((char *)&p2->p_endzero - (char *)&p2->p_startzero));
+	memcpy(&p2->p_startcopy, &p1->p_startcopy,
+	    (unsigned)((char *)&p2->p_endcopy - (char *)&p2->p_startcopy));
+	p2->p_stackbase = p1->p_stackbase;
+	TAILQ_INIT(&p2->p_sigpend.sp_info);
+	LIST_INIT(&p2->p_lwps);
+	LIST_INIT(&p2->p_sigwaiters);
+	p2->p_flag = p1->p_flag & PK_32;
+	p2->p_emul = p1->p_emul;
+	p2->p_execsw = p1->p_execsw;
+	mutex_init(&p2->p_stmutex, MUTEX_DEFAULT, IPL_HIGH);
+	mutex_init(&p2->p_auxlock, MUTEX_DEFAULT, IPL_NONE);
+	rw_init(&p2->p_reflock);
+	cv_init(&p2->p_waitcv, "wasmwait");
+	cv_init(&p2->p_lwpcv, "wasmlwp");
+	p2->p_lock = mutex_obj_alloc(MUTEX_DEFAULT, IPL_NONE);
+	kauth_proc_fork(p1, p2);
+	p2->p_raslist = NULL;
+	p2->p_textvp = NULL;
+	p2->p_path = NULL;
+	p2->p_fd = fd_init(NULL);
+	p2->p_cwdi = cwdinit();
+	lim_addref(p1->p_limit);
+	p2->p_limit = p1->p_limit;
+	p2->p_sflag = 0;
+	p2->p_slflag = 0;
+	p2->p_lflag = 0;
+	p2->p_pptr = p1;
+	p2->p_ppid = p1->p_pid;
+	LIST_INIT(&p2->p_children);
+	p2->p_aio = NULL;
+	p2->p_mqueue_cnt = 0;
+	p2->p_sigacts = sigactsinit(p1, 0);
+	p2->p_stats = pstatscopy(p1->p_stats);
+	p2->p_vmspace = p1->p_vmspace;
+	p2->p_vmspace->vm_refcnt++;
+	p2->p_md = p1->p_md;
+	p2->p_stat = SACTIVE;
+	mutex_enter(&proc_lock);
+	LIST_INSERT_HEAD(&allproc, p2, p_list);
+	atomic_inc_uint(&nprocs);
+	mutex_exit(&proc_lock);
+	return p2;
+}
 
 /*
  * wasm_child_spawn: read a wasm module by path and instantiate it as
  * a new process.  Returns the child's pid or a negative errno.
  */
 static int
-wasm_child_spawn(const char *path)
+wasm_child_spawn(const char *path, char *const *uargv)
 {
 	struct wasm_child *c;
 	struct proc *p1 = curlwp->l_proc, *p2;
@@ -297,6 +362,33 @@ wasm_child_spawn(const char *path)
 		}
 	if (c == NULL)
 		return -EAGAIN;
+
+	/*
+	 * E1b test hook: "/i486test" runs the embedded i486 blob as
+	 * an emulated child instead of loading a wasm module; E2
+	 * replaces this with EM_386 exec routing.
+	 */
+	if (strcmp(path, "/i486test") == 0) {
+		p2 = wasm_proc_fork(p1);
+		if (p2 == NULL)
+			return -EAGAIN;
+		strlcpy(c->c_arg0, path, sizeof(c->c_arg0));
+		c->c_argv[0] = c->c_arg0;
+		c->c_argv[1] = NULL;
+		c->c_si.argc = 1;
+		c->c_si.argv = (uint32_t)(uintptr_t)c->c_argv;
+		c->c_si.envc = 0;
+		c->c_si.envp = (uint32_t)(uintptr_t)wasm_envp;
+		c->c_proc = p2;
+		c->c_slot = -1;
+		c->c_started = c->c_running = c->c_exited = 0;
+		c->c_exitcode = c->c_rv = 0;
+		c->c_i486 = wasm_i486_create();
+		p2->p_path = kmem_strdupsize(path, NULL, KM_SLEEP);
+		printf("wasm: spawned i486 guest as pid %d\n",
+		    (int)p2->p_pid);
+		return (int)p2->p_pid;
+	}
 
 	/*
 	 * Read the whole module into kernel memory (same bound as
@@ -343,69 +435,39 @@ wasm_child_spawn(const char *path)
 	 * Child proc: the fork1 sequence without lwp, signals, or
 	 * address space (B1 shares init's vmspace outright).
 	 */
-	p2 = proc_alloc();
+	p2 = wasm_proc_fork(p1);
 	if (p2 == NULL) {
 		wasm_host_unload_module(slot);
 		error = EAGAIN;
 		goto out;
 	}
-	memset(&p2->p_startzero, 0,
-	    (unsigned)((char *)&p2->p_endzero - (char *)&p2->p_startzero));
-	memcpy(&p2->p_startcopy, &p1->p_startcopy,
-	    (unsigned)((char *)&p2->p_endcopy - (char *)&p2->p_startcopy));
-	p2->p_stackbase = p1->p_stackbase;
-	TAILQ_INIT(&p2->p_sigpend.sp_info);
-	LIST_INIT(&p2->p_lwps);
-	LIST_INIT(&p2->p_sigwaiters);
-	p2->p_flag = p1->p_flag & PK_32;
-	p2->p_emul = p1->p_emul;
-	p2->p_execsw = p1->p_execsw;
-	mutex_init(&p2->p_stmutex, MUTEX_DEFAULT, IPL_HIGH);
-	mutex_init(&p2->p_auxlock, MUTEX_DEFAULT, IPL_NONE);
-	rw_init(&p2->p_reflock);
-	cv_init(&p2->p_waitcv, "wasmwait");
-	cv_init(&p2->p_lwpcv, "wasmlwp");
-	p2->p_lock = mutex_obj_alloc(MUTEX_DEFAULT, IPL_NONE);
-	kauth_proc_fork(p1, p2);
-	p2->p_raslist = NULL;
-	p2->p_textvp = NULL;
 	p2->p_path = kmem_strdupsize(path, NULL, KM_SLEEP);
-	p2->p_fd = fd_init(NULL);
-	p2->p_cwdi = cwdinit();
-	lim_addref(p1->p_limit);
-	p2->p_limit = p1->p_limit;
-	p2->p_sflag = 0;
-	p2->p_slflag = 0;
-	p2->p_lflag = 0;
-	p2->p_pptr = p1;
-	p2->p_ppid = p1->p_pid;
-	LIST_INIT(&p2->p_children);
-	p2->p_aio = NULL;
-	p2->p_mqueue_cnt = 0;
-	p2->p_sigacts = sigactsinit(p1, 0);
-	p2->p_stats = pstatscopy(p1->p_stats);
-	p2->p_vmspace = p1->p_vmspace;
-	p2->p_vmspace->vm_refcnt++;
-	p2->p_md = p1->p_md;
-	p2->p_stat = SACTIVE;
-	mutex_enter(&proc_lock);
-	LIST_INSERT_HEAD(&allproc, p2, p_list);
-	atomic_inc_uint(&nprocs);
-	mutex_exit(&proc_lock);
 
 	/*
-	 * Startup info: argv[0] is the path, as exec would give it.
+	 * Startup info: the caller's argv array lives in shared memory
+	 * and the parent is frozen while the child runs, but copy the
+	 * pointers (bounded) so the child never dereferences a stale
+	 * user array; the strings themselves pass by reference.
 	 */
-	strlcpy(c->c_arg0, path, sizeof(c->c_arg0));
-	c->c_argv[0] = c->c_arg0;
-	c->c_argv[1] = NULL;
-	c->c_si.argc = 1;
+	if (uargv != NULL) {
+		int n;
+		for (n = 0; n < WASM_SPAWN_ARGC_MAX && uargv[n] != NULL; n++)
+			c->c_argv[n] = uargv[n];
+		c->c_argv[n] = NULL;
+		c->c_si.argc = n;
+	} else {
+		strlcpy(c->c_arg0, path, sizeof(c->c_arg0));
+		c->c_argv[0] = c->c_arg0;
+		c->c_argv[1] = NULL;
+		c->c_si.argc = 1;
+	}
 	c->c_si.argv = (uint32_t)(uintptr_t)c->c_argv;
 	c->c_si.envc = 0;
 	c->c_si.envp = (uint32_t)(uintptr_t)wasm_envp;
 
 	c->c_proc = p2;
 	c->c_slot = slot;
+	c->c_i486 = NULL;
 	c->c_started = 0;
 	c->c_running = 0;
 	c->c_exited = 0;
@@ -433,7 +495,10 @@ wasm_child_reap(struct wasm_child *c)
 {
 	struct proc *p = c->c_proc;
 
-	wasm_host_unload_module(c->c_slot);
+	if (c->c_i486 != NULL)
+		wasm_i486_free(c->c_i486);
+	else
+		wasm_host_unload_module(c->c_slot);
 	cwdfree(p->p_cwdi);
 	lim_free(p->p_limit);
 	pstatsfree(p->p_stats);
@@ -461,6 +526,22 @@ wasm_child_trampoline(void *arg)
 {
 	struct wasm_child *c = arg;
 
+	if (c->c_i486 != NULL) {
+		register_t rv;
+		struct sys_open_args oa;
+		int i;
+
+		SCARG(&oa, path) = (long)(uintptr_t)"/dev/console";
+		SCARG(&oa, flags) = O_RDWR;
+		SCARG(&oa, mode) = 0;
+
+		/* init-style console seeding: real i386 binaries
+		 * expect fd 0/1/2 open; child fd table starts empty */
+		for (i = 0; i < 3; i++)
+			(void)sys_open(curlwp, &oa, &rv);
+		c->c_rv = wasm_i486_exec(c->c_i486);
+		return;
+	}
 	c->c_rv = wasm_user_start(c->c_slot,
 	    (uint32_t)(uintptr_t)&c->c_si);
 }
@@ -597,10 +678,45 @@ wasm_user_svc(int nr, int argp)
 		rv = rvs[0];
 		break;
 	}
+	case SYS_chdir:
+		error = sys_chdir(l, (const struct sys_chdir_args *)uap, &rv);
+		break;
+	case SYS___getcwd:
+		error = sys___getcwd(l, (const struct sys___getcwd_args *)uap,
+		    &rv);
+		break;
+	case SYS_unlink:
+		error = sys_unlink(l, (const struct sys_unlink_args *)uap, &rv);
+		break;
+	case SYS_mkdir:
+		error = sys_mkdir(l, (const struct sys_mkdir_args *)uap, &rv);
+		break;
+	case SYS_rmdir:
+		error = sys_rmdir(l, (const struct sys_rmdir_args *)uap, &rv);
+		break;
+	case SYS_access:
+		error = sys_access(l, (const struct sys_access_args *)uap, &rv);
+		break;
+	case SYS_dup2:
+		error = sys_dup2(l, (const struct sys_dup2_args *)uap, &rv);
+		break;
+	case SYS_readlink:
+		error = sys_readlink(l, (const struct sys_readlink_args *)uap,
+		    &rv);
+		break;
+	case SYS___getdents30:
+		error = sys___getdents30(l,
+		    (const struct sys___getdents30_args *)uap, &rv);
+		break;
+	case SYS___stat50:
+		error = sys___stat50(l, (const struct sys___stat50_args *)uap,
+		    &rv);
+		break;
 	case WASM_SYS_spawn: {
 		const struct wasm_spawn_args *sa = uap;
 		int pid = wasm_child_spawn(
-		    (const char *)(uintptr_t)sa->path);
+		    (const char *)(uintptr_t)sa->path,
+		    (char *const *)(uintptr_t)sa->argv);
 		return pid;
 	}
 	case SYS_wait6: {
