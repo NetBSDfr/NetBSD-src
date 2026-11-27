@@ -100,11 +100,15 @@ void	wasm_host_unload_module(int32_t)
  * JSPI blocking support.  The host calls wasm_set_jspi(1) before
  * boot when it can suspend wasm stacks (WebAssembly.promising +
  * Suspending).  A syscall that would block then calls wasm_host_wait
- * (a Suspending import: it returns a Promise the host resolves when
- * input arrives, suspending this epoch) and retries.  Without the
- * flag, EWOULDBLOCK is returned to the guest as before.
+ * with a reason code (the Suspending callback receives it: the host
+ * must not short-circuit a child wait just because console input is
+ * queued) and retries.  Without the flag, EWOULDBLOCK is returned to
+ * the guest as before.
  */
-void	wasm_host_wait(void)
+#define	WASM_WAIT_INPUT	0	/* retry once console input exists */
+#define	WASM_WAIT_CHILD	1	/* retry once a child changed state */
+
+void	wasm_host_wait(int32_t)
 	    __attribute__((import_module("host"), import_name("wait")));
 
 static int wasm_jspi;
@@ -119,6 +123,10 @@ wasm_set_jspi(int v)
 
 /* wasm_callin.s: call_indirect into the user module's _start */
 int32_t	wasm_user_start(int32_t, uint32_t);
+
+/* wasm_callin.s: stack-pointer save/restore around a throw unwind */
+void	wasm_sp_save(int *);
+void	wasm_sp_restore(int *);
 
 int	wasm_user_svc(int, int);
 int	wasm_loader_load(struct vnode *, size_t, const char *);
@@ -257,6 +265,7 @@ struct wasm_child {
 
 static struct wasm_child wasm_children[WASM_CHILD_MAX];
 static int wasm_current_child = -1;	/* running child index, -1 = init */
+static int wasm_slice_sp;		/* SP across a throw unwind */
 
 extern int wasm_engine_guarded(void (*)(void *), void *);
 extern void wasm_engine_throw(void);
@@ -486,7 +495,10 @@ wasm_run_child(int32_t idx)
 	curlwp->l_proc = c->c_proc;
 	curlwp->l_fd = c->c_proc->p_fd;
 
+	wasm_sp_save(&wasm_slice_sp);
 	g = wasm_engine_guarded(wasm_child_trampoline, c);
+	if (g != 0)
+		wasm_sp_restore(&wasm_slice_sp);
 
 	/* exit1-style fd teardown, still in child context */
 	fd_free();
@@ -567,7 +579,7 @@ wasm_user_svc(int nr, int argp)
 			    (const struct sys_read_args *)uap, &rv);
 			if (error != EWOULDBLOCK || wasm_jspi == 0)
 				break;
-			wasm_host_wait();
+			wasm_host_wait(WASM_WAIT_INPUT);
 		}
 		break;
 	case SYS_write:
@@ -643,7 +655,7 @@ wasm_user_svc(int nr, int argp)
 				error = EWOULDBLOCK;
 				break;
 			}
-			wasm_host_wait();
+			wasm_host_wait(WASM_WAIT_CHILD);
 		}
 		break;
 	}

@@ -67,13 +67,22 @@ async function main() {
   // the wasm epoch (all frames between here and the promising
   // kernel_boot entry are wasm -- JS frames in between would trap);
   // a non-Promise return means input is already queued.
+  const WAIT_INPUT = 0, WAIT_CHILD = 1;
   let runChild = null;
-  const waitImpl = () => {
-    if (instance.exports.wasm_console_has_input()) return undefined;
-    // Host-driven child scheduler (see wasm_loader.c): run a spawned
-    // child that has never run before resuming the waiting epoch.
-    const idx = instance.exports.wasm_take_pending();
-    if (idx >= 0 && runChild) return runChild(idx).then(() => {});
+  let childBusy = false;
+  const waitImpl = (reason) => {
+    // Only an input wait short-circuits on queued console bytes.
+    if (reason === WAIT_INPUT && instance.exports.wasm_console_has_input())
+      return undefined;
+    // Host-driven child scheduler, serial (see wasm_loader.c): start
+    // a pending child only while no other child slice is suspended.
+    if (!childBusy && runChild) {
+      const idx = instance.exports.wasm_take_pending();
+      if (idx >= 0) {
+        childBusy = true;
+        return runChild(idx).then(() => { childBusy = false; });
+      }
+    }
     return new Promise((res) => waiters.push(res));
   };
   const importObject = {
