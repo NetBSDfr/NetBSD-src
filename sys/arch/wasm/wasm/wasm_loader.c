@@ -935,6 +935,16 @@ wasm_user_svc(int nr, int argp)
 	case SYS_open:
 		error = sys_open(l, (const struct sys_open_args *)uap, &rv);
 		break;
+	case SYS___mount50:
+		/* name/path/data pointers are translated by the i486 ptrmask
+		 * before this is reached (see wasm_i486.c). */
+		error = sys___mount50(l,
+		    (const struct sys___mount50_args *)uap, &rv);
+		break;
+	case SYS_unmount:
+		error = sys_unmount(l, (const struct sys_unmount_args *)uap,
+		    &rv);
+		break;
 	case SYS_close:
 		error = sys_close(l, (const struct sys_close_args *)uap, &rv);
 		break;

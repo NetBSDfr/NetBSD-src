@@ -195,6 +195,12 @@ static const uint8_t i486_ptrmask[513] = {
 	[SYS_lpathconf]		= I486_PTR(0),
 	[SYS_pread]		= I486_PTR(1),
 	[SYS___acl_get_link]	= I486_PTR(0) | I486_PTR(2),
+	/* __mount50(name, path, flags, data): the fstype name, mount point and
+	 * fs-specific data are guest pointers; without translation the kernel
+	 * reads them as host addresses and returns EINVAL (mount_tmpfs et al.
+	 * are i486 binaries, unlike the wasm32 svc path where guest==host). */
+	[SYS___mount50]		= I486_PTR(0) | I486_PTR(1) | I486_PTR(3),
+	[SYS_unmount]		= I486_PTR(0),
 };
 
 static int i486_trace_nr;
