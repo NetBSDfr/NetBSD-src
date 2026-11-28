@@ -68,6 +68,9 @@ __KERNEL_RCSID(0, "$NetBSD$");
 /* wasm_loader.c */
 int	wasm_loader_load(struct vnode *, size_t, const char *);
 void	wasm_loader_run(void);
+int	wasm_jit_selftest(void);
+
+static bool jit_selftested;
 
 /*
  * Stub file format: the file in the filesystem is not the program,
@@ -179,6 +182,12 @@ exec_wasm32_makecmds(struct lwp *l, struct exec_package *epp)
 	const struct wasmuser_hdr *hdr = epp->ep_hdr;
 	const struct wasm_userprog *prog;
 	int error;
+
+	/* E5a: one-shot JIT round-trip self-test (console is up now). */
+	if (!jit_selftested) {
+		jit_selftested = true;
+		wasm_jit_selftest();
+	}
 
 	if (memcmp(epp->ep_hdr, wasm_magic, sizeof(wasm_magic)) == 0) {
 		/*
