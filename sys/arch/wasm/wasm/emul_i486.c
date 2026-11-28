@@ -681,6 +681,18 @@ i486_run(struct i486_vm *vm, uint64_t max_steps)
 			return I486_STEP;
 		vm->steps = n;
 
+		/* E5c: try a compiled block at the current eip. */
+		if (vm->jit_run != NULL && vm->dbg_steps == 0) {
+			int k = vm->jit_run(vm);
+			if (k > 0) {
+				n += (uint64_t)k - 1;	/* ++n counted one */
+				vm->steps = n;
+				if (max_steps && n > max_steps)
+					return I486_STEP;
+				continue;
+			}
+		}
+
 		sz = 4;
 		rep = 0;
 		vm->seg = 0;

@@ -78,6 +78,7 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <sys/statvfs.h>
 
 #include <arch/wasm/wasm/emul_i486.h>
+#include <arch/wasm/wasm/jit.h>
 
 #define	I486_REGION_SIZE	(28u << 20)
 #define	I486_GUEST_BASE		0x08048000u	/* TEXTBASE, ld(1) i386 */
@@ -936,6 +937,179 @@ i486_check_elf(const void *image, size_t size)
  * Load an ELF32 EM_386 executable into a fresh guest region.
  * Returns the task handle or NULL (not an i386 ELF, or does not fit).
  */
+/*
+ * ---- E5c: JIT block cache + hotness ----
+ *
+ * The interpreter calls wasm_i486_jit_run() at every guest instruction
+ * boundary (via vm.jit_run).  A direct-mapped cache keyed by
+ * (guest region, eip) holds compiled wasm blocks; a heat table counts
+ * executions so only hot blocks are translated and handed to the host
+ * for compilation.  A compiled block commits guest state directly into
+ * the vm struct over the shared linear memory; on a fault (return -1)
+ * the entry is dropped and the interpreter replays the block, so the
+ * JIT is purely an optimisation and never changes observable results.
+ */
+int32_t wasm_host_jit_compile(uint32_t, uint32_t)
+    __attribute__((import_module("host"), import_name("jit_compile")));
+int32_t wasm_host_jit_call(int32_t, int32_t, int32_t)
+    __attribute__((import_module("host"), import_name("jit_call")));
+
+#define	JIT_CACHE_N	8192		/* direct-mapped, power of two */
+#define	JIT_HEAT_N	8192
+#define	JIT_HOT		8		/* executions before compiling */
+#define	JIT_MODBUF	16384
+
+struct jit_block {
+	uint32_t hbase;			/* guest region base (per task) */
+	uint32_t eip;
+	int32_t handle;			/* host module handle, -1 = empty */
+	int ninsns;
+	int stores;			/* writes guest memory */
+};
+struct jit_heat {
+	uint32_t hbase;
+	uint32_t eip;
+	int heat;
+};
+
+static struct jit_block jit_cache[JIT_CACHE_N];
+static struct jit_heat jit_heat[JIT_HEAT_N];
+static uint8_t jit_modbuf[JIT_MODBUF];
+int wasm_jit_enable = 0;		/* host-assisted JIT: off by default (see
+					 * E5d finding: per-block host crossing +
+					 * module-compile cost make it a net loss
+					 * vs the inline interpreter for the small
+					 * basic blocks real code produces). */
+uint64_t jit_ncompile, jit_ncall;	/* instrumentation */
+int wasm_jit_verify = 0;		/* debug: replay blocks on interpreter */
+
+static uint32_t
+jit_mix(uint32_t hbase, uint32_t eip)
+{
+
+	return (hbase * 2654435761u) ^ (eip * 40503u);
+}
+
+/* Drop every cached block (exec reload, task teardown, hbase reuse). */
+static void
+wasm_jit_flush(void)
+{
+	unsigned i;
+
+	for (i = 0; i < JIT_CACHE_N; i++) {
+		jit_cache[i].handle = -1;
+		jit_cache[i].hbase = 0;
+		jit_cache[i].eip = 0;
+		jit_cache[i].ninsns = 0;
+	}
+	for (i = 0; i < JIT_HEAT_N; i++) {
+		jit_heat[i].hbase = 0;
+		jit_heat[i].eip = 0;
+		jit_heat[i].heat = 0;
+	}
+}
+
+static int
+wasm_i486_jit_run(struct i486_vm *vm)
+{
+	uint32_t h = (uint32_t)(uintptr_t)vm->m.hbase;
+	uint32_t eip = vm->s.eip;
+	uint32_t mix = jit_mix(h, eip);
+	struct jit_block *b = &jit_cache[mix & (JIT_CACHE_N - 1)];
+	struct jit_heat *he;
+	struct jit_out out;
+	int n;
+	int32_t handle;
+
+	if (!wasm_jit_enable)
+		return 0;
+
+	/* cache hit: run the compiled block */
+	if (b->handle >= 0 && b->hbase == h && b->eip == eip) {
+		struct i486_state pre = vm->s;
+		uint64_t steps = vm->steps;
+		int32_t r = wasm_host_jit_call(b->handle, 0,
+		    (uint32_t)(uintptr_t)vm);
+		jit_ncall++;
+		if (r == 0) {
+			if (wasm_jit_verify && !b->stores) {
+				struct i486_state jit = vm->s;
+				int rr;
+				vm->s = pre;
+				vm->jit_run = NULL;
+				rr = i486_run(vm, (uint64_t)b->ninsns);
+				vm->jit_run = wasm_i486_jit_run;
+				vm->steps = steps;
+				if (rr != I486_STEP ||
+				    memcmp(&vm->s, &jit, sizeof jit) != 0) {
+					printf("JITVERIFY eip=%08x n=%d rr=%d\n",
+					    eip, b->ninsns, rr);
+					{
+						uint8_t *p = i486_h(&vm->m, eip);
+						int bj;
+						printf("  bytes:");
+						for (bj = 0; p && bj < 16; bj++)
+							printf(" %02x", p[bj]);
+						printf("\n");
+					}
+					printf("  jit eax=%08x ecx=%08x edx=%08x "
+					    "ebx=%08x esp=%08x ebp=%08x esi=%08x "
+					    "edi=%08x eip=%08x efl=%08x\n",
+					    jit.regs[0], jit.regs[1], jit.regs[2],
+					    jit.regs[3], jit.regs[4], jit.regs[5],
+					    jit.regs[6], jit.regs[7], jit.eip,
+					    jit.eflags);
+					printf("  int eax=%08x ecx=%08x edx=%08x "
+					    "ebx=%08x esp=%08x ebp=%08x esi=%08x "
+					    "edi=%08x eip=%08x efl=%08x\n",
+					    vm->s.regs[0], vm->s.regs[1],
+					    vm->s.regs[2], vm->s.regs[3],
+					    vm->s.regs[4], vm->s.regs[5],
+					    vm->s.regs[6], vm->s.regs[7],
+					    vm->s.eip, vm->s.eflags);
+					wasm_jit_enable = 0;
+				}
+				vm->s = jit;
+			}
+			return b->ninsns;
+		}
+		b->handle = -1;		/* fault: interpreter replays */
+		b->hbase = 0;
+		b->eip = 0;
+		return 0;
+	}
+
+	/* not cached: heat up, compile once hot enough */
+	he = &jit_heat[mix & (JIT_HEAT_N - 1)];
+	if (he->hbase != h || he->eip != eip) {
+		he->hbase = h;
+		he->eip = eip;
+		he->heat = 0;
+	}
+	if (++he->heat < JIT_HOT)
+		return 0;
+	he->heat = 0;
+
+	out.buf = jit_modbuf;
+	out.cap = sizeof(jit_modbuf);
+	out.len = 0;
+	out.error = 0;
+	out.stores = 0;
+	if (jit_translate(vm, &out, &n) <= 0 || out.error || n == 0)
+		return 0;
+	handle = wasm_host_jit_compile((uint32_t)(uintptr_t)jit_modbuf,
+	    (uint32_t)out.len);
+	jit_ncompile++;
+	if (handle < 0)
+		return 0;
+	b->hbase = h;
+	b->eip = eip;
+	b->handle = handle;
+	b->ninsns = n;
+	b->stores = out.stores;
+	return 0;				/* run it next time round */
+}
+
 void *
 wasm_i486_load(const void *image, size_t size, char *const *argv,
     char *const *envp)
@@ -958,6 +1132,8 @@ wasm_i486_load(const void *image, size_t size, char *const *argv,
 	t->vm.m.vbase = I486_GUEST_BASE;
 	t->vm.m.size = I486_REGION_SIZE;
 	t->vm.syscall = wasm_i486_syscall;
+	t->vm.jit_run = wasm_i486_jit_run;
+	wasm_jit_flush();
 
 	if (i486_setup(t, image, size, argv, envp) != 0) {
 		kmem_free(region, I486_REGION_SIZE);
@@ -982,6 +1158,7 @@ wasm_i486_reload(struct wasm_i486_task *t, const void *image, size_t size,
 	if (error != 0)
 		return -error;
 	memset(t->vm.m.hbase, 0, I486_REGION_SIZE);
+	wasm_jit_flush();		/* same hbase, new image: drop blocks */
 	/* fresh process state: the harness resets these too; stale
 	 * eflags/TLS/segment bases from the old image derail the
 	 * static-pie startup (it branches on flags and relocates
@@ -1014,6 +1191,7 @@ wasm_i486_snapshot(struct i486_vm *parent, struct i486_vm *child)
 	child->m.hbase = chbase;	/* struct copy clobbered it */
 	memcpy(chbase, parent->m.hbase, I486_REGION_SIZE);
 	child->syscall = wasm_i486_syscall;
+	child->jit_run = wasm_i486_jit_run;
 	child->s.regs[R_EAX] = 0;
 	child->s.regs[R_EDX] = 1;	/* fork.S: pid = EAX & (EDX-1) */
 	child->steps = 0;
