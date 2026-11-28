@@ -80,6 +80,23 @@
  */
 #define	WASM_MEM_PAGE_BYTES	(64U * 1024U)	/* one wasm page */
 extern const char __heap_base[];	/* first address after the image */
+
+/*
+ * With the identity pmap the kmem arena's kva range *is* physical
+ * memory, so the arena must be carved out of the page allocator's
+ * free pool at bootstrap (pmap_bootstrap()); otherwise the same
+ * pages are handed out twice: once as kmem (via vmem, whose pages
+ * uvm_km_kmem_alloc() never actually owns here) and once as object
+ * pages, and uvm_km_pgremove_intrsafe() then "frees" pages that
+ * belong to someone else.  wasm_pool_end is the first address above
+ * the managed free pool; the pages between it and the arena proper
+ * hold the boot-time page array (pmap_virtual_space()).  The reserve
+ * doubles as the only kernel_map hole left for uvm_km_suballoc()
+ * (pager_map is 16 MB, exec_map ~4 MB), so it must cover the boot
+ * arrays (~4 MB measured) plus those maps with slack: 32 MB.
+ */
+#define	WASM_BOOTALLOC_RESERVE	(32 * 1024 * 1024)
+extern vaddr_t wasm_pool_end;
 #endif
 
 /*

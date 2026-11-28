@@ -211,12 +211,22 @@ ubc_init(void)
 		LIST_INIT(&ubc_object.hash[i]);
 	}
 
+#ifdef __WASM
+	/*
+	 * ubc_direct is always true here (pmap_init), so the window
+	 * region is never faulted into and ubc_object.kva is never
+	 * dereferenced: skip reserving it in the (small) kernel_map
+	 * hole.  See ubc_uiomove()'s direct dispatch.
+	 */
+	(void)va;
+#else
 	if (uvm_map(kernel_map, (vaddr_t *)&ubc_object.kva,
 		    ubc_nwins << ubc_winshift, &ubc_object.uobj, 0, (vsize_t)va,
 		    UVM_MAPFLAG(UVM_PROT_RW, UVM_PROT_RW, UVM_INH_NONE,
 				UVM_ADV_RANDOM, UVM_FLAG_NOMERGE)) != 0) {
 		panic("ubc_init: failed to map ubc_object");
 	}
+#endif
 
 	hashstat_register("ubchash", ubchash_stats);
 }

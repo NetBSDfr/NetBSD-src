@@ -130,6 +130,11 @@ SYSTEM_LD_TAIL_STAGE2=	# not yet for wasm
 # only clang's analyzer flags it).  Keep MI untouched.
 CWARNFLAGS.uvm_pglist.c= ${${ACTIVE_CC} == "clang":? -Wno-error=unused-but-set-variable :}
 
+# tmpfs_dir_attach()/tmpfs_dir_detach() build an 'events' value the
+# removed kqueue notify path would have passed (dead upstream; gcc does
+# not flag it).  Same treatment as uvm_pglist.c above.
+CWARNFLAGS.tmpfs_subr.c= ${${ACTIVE_CC} == "clang":? -Wno-error=unused-but-set-variable :}
+
 ##
 ## (7) misc settings
 ##

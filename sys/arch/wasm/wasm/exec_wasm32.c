@@ -52,12 +52,16 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <sys/exec.h>
 #include <sys/lwp.h>
 #include <sys/module.h>
+#include <sys/mount.h>
 #include <sys/proc.h>
 #include <sys/reboot.h>
 #include <sys/systm.h>
+#include <sys/uio.h>
 #include <sys/vnode.h>
 
 #include <uvm/uvm_extern.h>
+
+#include <fs/tmpfs/tmpfs_args.h>
 
 #include <machine/proc.h>
 
@@ -126,6 +130,23 @@ void
 wasm_user_entry(void *arg)
 {
 	void (*main)(void) = (void (*)(void))arg;
+	struct tmpfs_args ta;
+	register_t rv;
+	int error;
+
+	/*
+	 * The md root is a read-only FFS image; give init a writable
+	 * scratch on /tmp (the image ships an empty /tmp directory).
+	 * Ignore failures: a root image without /tmp simply keeps the
+	 * read-only semantics.
+	 */
+	memset(&ta, 0, sizeof(ta));
+	ta.ta_version = TMPFS_ARGS_VERSION;
+	ta.ta_root_mode = 0777;
+	error = do_sys_mount(curlwp, "tmpfs", UIO_SYSSPACE, "/tmp",
+	    0, &ta, UIO_SYSSPACE, sizeof(ta), &rv);
+	if (error != 0)
+		printf("user: tmpfs on /tmp: error %d\n", error);
 
 	main();
 	printf("user: init exited\n");

@@ -834,6 +834,19 @@ again:
 	if (rc != 0)
 		return rc;
 
+#ifdef __WASM
+	/*
+	 * Identity pmap: the kmem arena is a physical region carved
+	 * out of the page allocator by pmap_bootstrap(), so the
+	 * reserved range is already backed and accessible.  The
+	 * generic path below would wire up unrelated pages and hand
+	 * back their kva, double-using the physical pages that live
+	 * at the reserved addresses.
+	 */
+	*addr = va;
+	return 0;
+#endif
+
 #ifdef PMAP_GROWKERNEL
 	/*
 	 * These VA allocations happen independently of uvm_map
@@ -889,6 +902,17 @@ uvm_km_kmem_free(vmem_t *vm, vmem_addr_t addr, size_t size)
 {
 
 	size = round_page(size);
+#ifdef __WASM
+	/*
+	 * The arena's pages belong to the arena, not to the page
+	 * allocator: return the kva range only.  pgremove would
+	 * extract the identity mapping and free pages that were never
+	 * ours (uvm_pagefree on a page someone else is using).  See
+	 * uvm_km_kmem_alloc().
+	 */
+	vmem_free(vm, addr, size);
+	return;
+#endif
 #if defined(PMAP_UNMAP_POOLPAGE)
 	if (size == PAGE_SIZE) {
 		paddr_t pa;

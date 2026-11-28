@@ -495,14 +495,14 @@ uvm_page_physunload(uvm_physseg_t upm, int freelist, paddr_t *paddrp)
 	/* try from front */
 	if (seg->avail_start == seg->start &&
 	    seg->avail_start < seg->avail_end) {
-		*paddrp = ctob(seg->avail_start);
+		*paddrp = ptoa(seg->avail_start);
 		return uvm_physseg_unplug(seg->avail_start, 1);
 	}
 
 	/* try from rear */
 	if (seg->avail_end == seg->end &&
 	    seg->avail_start < seg->avail_end) {
-		*paddrp = ctob(seg->avail_end - 1);
+		*paddrp = ptoa(seg->avail_end - 1);
 		return uvm_physseg_unplug(seg->avail_end - 1, 1);
 	}
 
@@ -523,7 +523,7 @@ uvm_page_physunload_force(uvm_physseg_t upm, int freelist, paddr_t *paddrp)
 		return false; /* nope */
 	}
 
-	*paddrp = ctob(seg->avail_start);
+	*paddrp = ptoa(seg->avail_start);
 
 	/* Always unplug from front */
 	return uvm_physseg_unplug(seg->avail_start, 1);
@@ -673,7 +673,7 @@ uvm_page_physunload(uvm_physseg_t psi, int freelist, paddr_t *paddrp)
 	/* try from front */
 	if (seg->avail_start == seg->start &&
 	    seg->avail_start < seg->avail_end) {
-		*paddrp = ctob(seg->avail_start);
+		*paddrp = ptoa(seg->avail_start);
 		seg->avail_start++;
 		seg->start++;
 		/* nothing left?   nuke it */
@@ -691,7 +691,7 @@ uvm_page_physunload(uvm_physseg_t psi, int freelist, paddr_t *paddrp)
 	/* try from rear */
 	if (seg->avail_end == seg->end &&
 	    seg->avail_start < seg->avail_end) {
-		*paddrp = ctob(seg->avail_end - 1);
+		*paddrp = ptoa(seg->avail_end - 1);
 		seg->avail_end--;
 		seg->end--;
 		/* nothing left?   nuke it */
@@ -724,7 +724,7 @@ uvm_page_physunload_force(uvm_physseg_t psi, int freelist, paddr_t *paddrp)
 		return false; /* nope */
 	}
 
-	*paddrp = ctob(seg->avail_start);
+	*paddrp = ptoa(seg->avail_start);
 	seg->avail_start++;
 	/* truncate! */
 	seg->start = seg->avail_start;
@@ -1145,7 +1145,7 @@ uvm_physseg_init_seg(uvm_physseg_t upm, struct vm_page *pgs)
 	seg->pgs = pgs;
 
 	/* init and free vm_pages (we've already zeroed them) */
-	paddr = ctob(seg->start);
+	paddr = ptoa(seg->start);
 	for (i = 0 ; i < n ; i++, paddr += PAGE_SIZE) {
 		pg = &seg->pgs[i];
 		pg->phys_addr = paddr;

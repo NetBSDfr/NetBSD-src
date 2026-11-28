@@ -25,6 +25,7 @@ options		MEMORY_DISK_DYNAMIC
 pseudo-device	md
 
 file-system	FFS
+file-system	TMPFS
 
 # Print kernel boot time (ms) before entering uvm_scheduler().
 options		BOOT_DURATION

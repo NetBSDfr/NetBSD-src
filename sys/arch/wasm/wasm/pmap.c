@@ -80,6 +80,9 @@ static struct pmap kernel_pmap_store;
  * expands to it: hand out the static kernel pmap directly. */
 struct pmap *const kernel_pmap_ptr = &kernel_pmap_store;
 
+/* First address above the managed free pool (set by pmap_bootstrap). */
+vaddr_t wasm_pool_end;
+
 void
 pmap_init(void)
 {
@@ -369,15 +372,16 @@ pmap_growkernel(vaddr_t maxkvaddr)
  *
  * With the flat pmap every virtual address is also the physical
  * address it touches, so this region must lie inside the linear memory
- * and cannot alias the kernel image, data, or bss: report exactly the
- * region that pmap_bootstrap() registered as free memory, which
- * starts at the page boundary above __heap_base.
+ * and cannot alias the kernel image, data, or bss.  It starts at
+ * wasm_pool_end: the pages below it are the managed free pool, and
+ * the boot-time page array plus the kmem arena (which pmap_bootstrap()
+ * carved out of the pool for exactly this purpose) live above it.
  */
 void
 pmap_virtual_space(vaddr_t *start, vaddr_t *end)
 {
 
-	*start = round_page((vaddr_t)(uintptr_t)__heap_base);
+	*start = wasm_pool_end;
 	*end = trunc_page((vaddr_t)__builtin_wasm_memory_size(0) *
 	    WASM_MEM_PAGE_BYTES);
 	if (*end > WASM_KERNEL_ARENA_END)

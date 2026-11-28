@@ -99,8 +99,9 @@ boot_duration_timer(void)
 void
 pmap_bootstrap(vaddr_t first_avail)
 {
-	paddr_t avail_start, avail_end;
+	paddr_t avail_start, avail_end, pool_end;
 	size_t wasm_pages;
+	vsize_t kmemsize;
 
 	(void)first_avail;
 
@@ -125,10 +126,6 @@ pmap_bootstrap(vaddr_t first_avail)
 
 	uvm_md_init();
 
-	physmem = atop(avail_end);
-	uvm_page_physload(atop(avail_start), atop(avail_end),
-	    atop(avail_start), atop(avail_end), VM_FREELIST_DEFAULT);
-
 	/*
 	 * Bound the kmem arena by the memory we actually manage: with
 	 * VA == PA the arena is physical memory, so the default
@@ -137,10 +134,34 @@ pmap_bootstrap(vaddr_t first_avail)
 	 * kmeminit_nkmempages() leaves a preset value alone.  Two
 	 * thirds covers the boot-time pool and malloc footprint plus
 	 * several concurrent 28 MB i486 guest regions (a shell plus a
-	 * pipeline); the remainder leaves kernel_map room for the UBC
-	 * windows and the page allocator room for the vnode cache.
+	 * pipeline); the remainder leaves the page allocator room for
+	 * object pages (vnode pager, tmpfs, guest COW).
 	 */
 	nkmempages = atop(avail_end - avail_start) * 2 / 3;
+	kmemsize = ptoa(nkmempages);
+
+	/*
+	 * Carve the kmem arena out of the page allocator: the arena's
+	 * kva range is physical memory under the identity pmap, so
+	 * those pages must never sit in the free pool or they would be
+	 * handed out a second time as object pages (and then freed a
+	 * second time by uvm_km_pgremove_intrsafe()).  The page array
+	 * still covers the whole range (segment end is avail_end) so
+	 * PHYS_TO_VM_PAGE() answers for every managed address; only
+	 * [avail_start, pool_end) is ever free.  pmap_virtual_space()
+	 * reports [pool_end, avail_end) so the boot-time page array
+	 * and the kmem arena live above the pool, inside the reserve.
+	 */
+	pool_end = avail_end - kmemsize - WASM_BOOTALLOC_RESERVE;
+	if (pool_end <= avail_start)
+		panic("pmap_bootstrap: linear memory too small for kmem"
+		    " carve-out (avail_start %lx avail_end %lx)",
+		    (u_long)avail_start, (u_long)avail_end);
+	wasm_pool_end = pool_end;
+
+	physmem = atop(avail_end);
+	uvm_page_physload(atop(avail_start), atop(avail_end),
+	    atop(avail_start), atop(pool_end), VM_FREELIST_DEFAULT);
 }
 
 /*
