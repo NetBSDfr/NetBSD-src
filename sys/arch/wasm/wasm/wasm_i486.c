@@ -107,6 +107,7 @@ extern int wasm_user_svc(int, int);
 extern int wasm_child_spawn(const char *, char *const *);
 extern int wasm_i486_fork(struct i486_vm *);
 extern int wasm_read_file(const char *, void **, size_t *);
+extern void wasm_clock_tick(void);
 
 void	*wasm_i486_load(const void *, size_t, char *const *, char *const *);
 int	wasm_i486_exec(void *);
@@ -337,6 +338,9 @@ wasm_i486_syscall(struct i486_vm *vm)
 	uint8_t mask;
 	uint32_t *ap, *av;
 	int rv, i;
+
+	/* Keep the host-backed clock's timehands fresh (see clock.c). */
+	wasm_clock_tick();
 
 	i486_trace_nr = nr;
 	i486_trace_on = (i486_trace_budget-- > 200);

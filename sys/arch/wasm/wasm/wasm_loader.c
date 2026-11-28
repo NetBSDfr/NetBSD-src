@@ -132,6 +132,7 @@ void	wasm_sp_save(int *);
 void	wasm_sp_restore(int *);
 
 int	wasm_user_svc(int, int);
+void	wasm_clock_tick(void);
 int	wasm_loader_load(struct vnode *, size_t, const char *);
 void	wasm_loader_run(void);
 int	wasm_child_spawn(const char *, char *const *);
@@ -874,6 +875,9 @@ wasm_user_svc(int nr, int argp)
 	register_t rv = 0;
 	struct lwp *l = curlwp;
 	int error;
+
+	/* Keep the host-backed clock's timehands fresh (see clock.c). */
+	wasm_clock_tick();
 
 	/*
 	 * Each case reinterprets argp as the specific args struct;
