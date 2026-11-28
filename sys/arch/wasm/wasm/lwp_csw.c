@@ -200,11 +200,21 @@ wasm_epoch_run(void *arg)
 			void *farg = newl->l_md.md_entryarg;
 
 			/*
-			 * The entry function is not cleared: an LWP
-			 * that blocks and is later rescheduled re-
-			 * enters here (see the restart caveat in the
-			 * DESIGN NOTE above).
+			 * The entry function is not cleared for kernel
+			 * daemon loops: an LWP that blocks and is later
+			 * rescheduled re-enters at the top, which is safe
+			 * because those loops re-check their queues (see
+			 * the restart caveat in the DESIGN NOTE above).
+			 *
+			 * The user-program entry is the exception: its
+			 * frames park on the engine stack (JSPI suspend
+			 * inside wasm_user_start), so the LWP's real
+			 * continuation lives below, not at the top.  A
+			 * later selection of the same LWP must not
+			 * restart the program: make the entry one-shot.
 			 */
+			if (func == wasm_user_entry)
+				newl->l_md.md_entryfunc = NULL;
 			func(farg);
 		}
 

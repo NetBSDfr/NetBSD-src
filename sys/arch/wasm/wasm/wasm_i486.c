@@ -178,7 +178,8 @@ static const uint8_t i486_ptrmask[513] = {
 	[SYS___fstat50]		= I486_PTR(1),
 	[SYS___statvfs190]	= I486_PTR(0) | I486_PTR(1),
 	[SYS___fstatvfs190]	= I486_PTR(1),
-	[SYS_wait6]		= I486_PTR(2),
+	/* wait6(idtype, id, status, options, rusage, rusage_info) */
+	[SYS_wait6]		= I486_PTR(2) | I486_PTR(4) | I486_PTR(5),
 	[SYS___wait450]		= I486_PTR(1) | I486_PTR(3),
 	[SYS___sysctl]		= I486_PTR(0) | I486_PTR(2) |
 				  I486_PTR(3) | I486_PTR(4),
@@ -188,6 +189,9 @@ static const uint8_t i486_ptrmask[513] = {
 	[SYS___clock_gettime50]	= I486_PTR(1),
 	[SYS___gettimeofday50]	= I486_PTR(0) | I486_PTR(1),
 	[SYS___nanosleep50]	= I486_PTR(0) | I486_PTR(1),
+	[SYS_lpathconf]		= I486_PTR(0),
+	[SYS_pread]		= I486_PTR(1),
+	[SYS___acl_get_link]	= I486_PTR(0) | I486_PTR(2),
 };
 
 static int i486_trace_nr;

@@ -81,6 +81,7 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <sys/vnode.h>
 #include <sys/wait.h>
 
+#include <sys/file.h>
 #include <sys/filedesc.h>
 
 #include <uvm/uvm_extern.h>
@@ -817,10 +818,8 @@ wasm_child_wait(idtype_t idtype, id_t id, int *status, register_t *rvp)
 			wasm_child_reap(c);
 			return 0;
 		}
-		if (live == 0) {
-			printf("DBG child_wait ECHILD (none live)\n");
+		if (live == 0)
 			return ECHILD;
-		}
 		/*
 		 * A child of ours that has never run: execute it as a
 		 * nested slice right here.  The caller may itself be a
@@ -843,11 +842,8 @@ wasm_child_wait(idtype_t idtype, id_t id, int *status, register_t *rvp)
 		}
 		if (live == 0)
 			continue;
-		if (wasm_jspi == 0) {
-			printf("DBG child_wait EWOULDBLOCK (no jspi)\n");
+		if (wasm_jspi == 0)
 			return EWOULDBLOCK;
-		}
-		printf("DBG child_wait suspend live=%d\n", live);
 		wasm_host_wait(WASM_WAIT_CHILD);
 	}
 }
@@ -892,13 +888,41 @@ wasm_user_svc(int nr, int argp)
 		 * and retry; the whole chain from the host's promising
 		 * entry to wasm_host_wait is wasm frames, as JSPI
 		 * requires.
+		 *
+		 * Pipes take the same route with a different wait
+		 * reason: a pipe reader that cv_sleeps inside sys_read
+		 * strands the slice (no runnable LWP can wake it in the
+		 * epoch model) while the child that would feed the pipe
+		 * waits for the host to start it.  Read pipes with
+		 * FNONBLOCK forced on and let the host scheduler run
+		 * pending children before the retry.
 		 */
 		for (;;) {
-			error = sys_read(l,
-			    (const struct sys_read_args *)uap, &rv);
+			const struct sys_read_args *ra = uap;
+			file_t *fp;
+			int ispipe = 0, wasnb = 0;
+
+			fp = fd_getfile(SCARG(ra, fd));
+			if (fp != NULL) {
+				ispipe = fp->f_type == DTYPE_PIPE;
+				if (ispipe) {
+					wasnb = (fp->f_flag & FNONBLOCK) != 0;
+					fp->f_flag |= FNONBLOCK;
+				}
+				fd_putfile(SCARG(ra, fd));
+			}
+			error = sys_read(l, ra, &rv);
+			if (ispipe && !wasnb) {
+				fp = fd_getfile(SCARG(ra, fd));
+				if (fp != NULL) {
+					fp->f_flag &= ~FNONBLOCK;
+					fd_putfile(SCARG(ra, fd));
+				}
+			}
 			if (error != EWOULDBLOCK || wasm_jspi == 0)
 				break;
-			wasm_host_wait(WASM_WAIT_INPUT);
+			wasm_host_wait(ispipe ? WASM_WAIT_CHILD :
+			    WASM_WAIT_INPUT);
 		}
 		break;
 	case SYS_write:
@@ -1051,6 +1075,17 @@ wasm_user_svc(int nr, int argp)
 	case SYS___lstat50:
 		error = sys___lstat50(l, uap, &rv);
 		break;
+	case SYS_lpathconf:
+		error = sys_lpathconf(l, (const struct sys_lpathconf_args *)uap,
+		    &rv);
+		break;
+	case SYS_pread:
+		error = sys_pread(l, (const struct sys_pread_args *)uap, &rv);
+		break;
+	case SYS___acl_get_link:
+		error = sys___acl_get_link(l,
+		    (const struct sys___acl_get_link_args *)uap, &rv);
+		break;
 	case SYS___statvfs190:
 		error = sys___statvfs190(l, uap, &rv);
 		break;
@@ -1092,7 +1127,7 @@ wasm_user_svc(int nr, int argp)
 		/* FALLTHROUGH */
 	default:
 		printf("wasm: svc %d unimplemented\n", nr);
-		return EINVAL;
+		return -EINVAL;
 	}
 
 	return error != 0 ? -error : (int)rv;

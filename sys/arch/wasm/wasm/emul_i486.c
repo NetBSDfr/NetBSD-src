@@ -49,6 +49,8 @@ __KERNEL_RCSID(0, "$NetBSD$");
 
 #ifdef _KERNEL
 void printf(const char *, ...);
+#else
+#include <stdio.h>
 #endif
 
 #define	FL_W	(I486_CF | I486_SF | I486_ZF | I486_OF)
@@ -457,7 +459,18 @@ shift_exec(struct i486_vm *vm, struct rm *rm, int sz, uint32_t cnt, int dir,
 		if (cnt <= sz * 8)
 			cf = (v >> (sz * 8 - cnt)) & 1;
 	} else if (arith && (v & sign)) {
-		r = ((v | ~m) >> cnt) & m;
+		/*
+		 * Arithmetic right shift: fill the vacated high bits of
+		 * the operand size with 1s.  (v | ~m) >> cnt only works
+		 * for sz < 4; for 32-bit operands ~m == 0 and the shift
+		 * degenerates into a logical one, silently corrupting
+		 * every negative value (btyacc token clamp, tzcode
+		 * negative-time arithmetic).
+		 */
+		if (cnt >= sz * 8)
+			r = m;
+		else
+			r = ((v >> cnt) | (m << (sz * 8 - cnt))) & m;
 		cf = (v >> (cnt - 1)) & 1;
 	} else {
 		r = (v >> cnt) & m;
@@ -1007,7 +1020,7 @@ i486_run(struct i486_vm *vm, uint64_t max_steps)
 			if (fetch8(vm, &imm))
 				return I486_FAULT;
 			if (shift_exec(vm, &rm, sz, imm, rm.reg & 1,
-			    rm.reg == 7))
+			    (rm.reg & 3) == 3))
 				return I486_FAULT;
 			break;
 
@@ -1052,7 +1065,7 @@ i486_run(struct i486_vm *vm, uint64_t max_steps)
 			sz = (op & 1) ? sz : 1;
 			imm = (op & 2) ? (s->regs[R_ECX] & 0xff) : 1;
 			if (shift_exec(vm, &rm, sz, imm, rm.reg & 1,
-			    rm.reg == 7))
+			    (rm.reg & 3) == 3))
 				return I486_FAULT;
 			break;
 

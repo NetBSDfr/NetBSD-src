@@ -491,8 +491,20 @@ xc_ipi_handler(void)
 	KASSERT(xc->xc_ipl < __arraycount(xc_sihs));
 	KASSERT(xc_sihs[xc->xc_ipl] != NULL);
 
+#ifdef __WASM
+	/*
+	 * The wasm port is a single engine running an epoch model: a
+	 * softint cannot be delivered while the calling LWP blocks in
+	 * xc_wait(), so scheduling one would deadlock (and the epoch
+	 * would unwind the caller).  Nothing else runs concurrently
+	 * with us here, so run the handler inline: the same guarantee
+	 * the !mp_online fast path in xc_broadcast() relies on.
+	 */
+	xc__highpri_intr(NULL);
+#else
 	/* Executes xc__highpri_intr() via software interrupt. */
 	softint_schedule(xc_sihs[xc->xc_ipl]);
+#endif
 }
 
 /*

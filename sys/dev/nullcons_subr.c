@@ -104,9 +104,11 @@ const struct cdevsw nullcn_devsw = {
 static uint8_t nullcn_inq[NULLCN_INQ];
 static u_int nullcn_in_head;		/* host writes here */
 static u_int nullcn_in_tail;		/* reads drain from here */
+static int nullcn_eof;			/* host stdin closed: reads see EOF */
 
 int	wasm_console_input(int);
 int	wasm_console_has_input(void);
+void	wasm_console_eof(void);
 
 int
 wasm_console_input(int c)
@@ -126,6 +128,17 @@ wasm_console_has_input(void)
 
 	return nullcn_in_head != nullcn_in_tail;
 }
+
+/*
+ * wasm_console_eof: host stdin closed.  Drained reads then return 0
+ * (EOF) instead of EWOULDBLOCK, so shells exit like on a real tty.
+ */
+void
+wasm_console_eof(void)
+{
+
+	nullcn_eof = 1;
+}
 #endif /* __WASM */
 
 int
@@ -137,7 +150,7 @@ nullcndev_read(dev_t dev, struct uio *uio, int flag)
 
 	while (uio->uio_resid > 0) {
 		if (nullcn_in_tail == nullcn_in_head)
-			return EWOULDBLOCK;
+			return nullcn_eof ? 0 : EWOULDBLOCK;
 		c = nullcn_inq[nullcn_in_tail];
 		nullcn_in_tail = (nullcn_in_tail + 1) % NULLCN_INQ;
 		error = uiomove(&c, sizeof(c), uio);
