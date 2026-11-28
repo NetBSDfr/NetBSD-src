@@ -76,6 +76,8 @@ __KERNEL_RCSID(0, "$NetBSD$");
 #include <sys/syscall.h>
 #include <sys/syscallargs.h>
 #include <sys/statvfs.h>
+#include <sys/time.h>
+#include <sys/timevar.h>
 
 #include <arch/wasm/wasm/emul_i486.h>
 
@@ -318,6 +320,11 @@ i486_execve(struct wasm_i486_task *t, const uint32_t *a)
 		kmem_free(kenvp[i], 256);
 	return error;		/* 0 or negative errno from reload */
 }
+
+/* Host-driven timed sleep: suspends the epoch for usec microseconds
+ * (JSPI Suspending import; see wasmrun/run.mjs, webboot kernel_worker.js). */
+void	wasm_host_sleep(uint32_t)
+    __attribute__((import_module("host"), import_name("sleep")));
 
 static void
 wasm_i486_syscall(struct i486_vm *vm)
@@ -605,6 +612,42 @@ wasm_i486_syscall(struct i486_vm *vm)
 		if (rv == 0 && w[1] != 0)
 			memcpy(g, rem, 12);
 		wasm_i486_ret(vm, rv);
+		return;
+	}
+	case SYS_clock_nanosleep: {
+		/* clock_nanosleep(clock_id, flags, rqtp, rmtp): the wasm
+		 * kernel has no timer interrupt, so the sleep is delegated
+		 * to the host (JSPI Suspending import).  flags &
+		 * TIMER_ABSTIME means rqtp is an absolute CLOCK_MONOTONIC
+		 * deadline; convert it to a relative duration against the
+		 * monotonic clock before handing it to the host. */
+		uint32_t *w = (uint32_t *)i486_h(&vm->m, esp + 4);
+		uint8_t *rq;
+		struct timespec now, ts;
+		uint64_t sec, nsec, usec;
+
+		if (w == NULL || w[2] == 0)
+			goto efault;
+		rq = i486_h(&vm->m, w[2]);
+		if (rq == NULL)
+			goto efault;
+		sec = (uint64_t)rq[0] | (uint64_t)rq[1] << 8 |
+		    (uint64_t)rq[2] << 16 | (uint64_t)rq[3] << 24;
+		nsec = (uint64_t)rq[4] | (uint64_t)rq[5] << 8 |
+		    (uint64_t)rq[6] << 16 | (uint64_t)rq[7] << 24;
+		ts.tv_sec = (time_t)sec;
+		ts.tv_nsec = (long)nsec;
+		if (w[1] & TIMER_ABSTIME) {
+			nanouptime(&now);
+			if (timespeccmp(&ts, &now, >))
+				timespecsub(&ts, &now, &ts);
+			else
+				timespecclear(&ts);
+		}
+		usec = (uint64_t)ts.tv_sec * 1000000u +
+		    (uint64_t)ts.tv_nsec / 1000u;
+		wasm_host_sleep((uint32_t)usec);
+		wasm_i486_ret(vm, 0);
 		return;
 	}
 	case SYS___stat50: case SYS___lstat50: case SYS___fstat50: {

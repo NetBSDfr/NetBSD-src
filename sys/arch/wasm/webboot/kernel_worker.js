@@ -20,6 +20,8 @@ const MEM_PAGES = 8192;       // 512 MiB linear memory
 //                                  shared, env.svc -> kernel export)
 //   call_start(handle, argp)       run a loaded module's _start
 //   unload_module(handle)          drop the instance
+//   wait(reason)                   blocking svc: suspend epoch (JSPI)
+//   sleep(usec)                    clock_nanosleep: suspend epoch (JSPI)
 class KernelExit extends Error {}
 
 async function fetchBytes(url) {
@@ -125,6 +127,10 @@ async function main() {
         userMods.map.delete(h >>> 0);
       },
       wait: JSPI ? new WebAssembly.Suspending(waitImpl) : () => {},
+      // Host-driven timed sleep: the kernel has no timer interrupt, so
+      // clock_nanosleep suspends the epoch here for usec microseconds.
+      sleep: JSPI ? new WebAssembly.Suspending(
+        (usec) => new Promise((res) => setTimeout(res, usec / 1000))) : () => {},
     },
   };
 
