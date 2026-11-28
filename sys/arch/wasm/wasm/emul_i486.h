@@ -62,14 +62,6 @@ struct i486_vm {
 	struct i486_state s;
 	struct i486_mem m;
 	void (*syscall)(struct i486_vm *);
-	/*
-	 * E5c JIT hook (NULL = interpreter only).  Called at each guest
-	 * instruction boundary: if a compiled block exists for s.eip it
-	 * runs it (committing state to s) and returns the number of guest
-	 * instructions consumed; returns 0 to fall through to the
-	 * interpreter.  Kernel glue in wasm_i486.c implements it.
-	 */
-	int (*jit_run)(struct i486_vm *);
 	int stop;
 	uint64_t steps;
 	uint32_t fault_va;	/* last failed access (debug aid) */

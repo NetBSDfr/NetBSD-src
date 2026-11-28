@@ -20,9 +20,6 @@ const MEM_PAGES = 8192;       // 512 MiB linear memory
 //                                  shared, env.svc -> kernel export)
 //   call_start(handle, argp)       run a loaded module's _start
 //   unload_module(handle)          drop the instance
-//   jit_compile(ptr, len) -> i32   compile kernel-emitted wasm bytes
-//                                  (env.memory shared); -1 on failure
-//   jit_call(handle, fnidx, arg)   run compiled export #fnidx(arg)
 class KernelExit extends Error {}
 
 async function fetchBytes(url) {
@@ -63,7 +60,6 @@ async function main() {
 
   const t0 = performance.now();
   const userMods = { map: new Map() };
-  const jitMods = new Map(); let jitNext = 1;
   const JSPI = typeof WebAssembly.Suspending === 'function'
     && typeof WebAssembly.promising === 'function';
   const waiters = [];
@@ -127,27 +123,6 @@ async function main() {
       unload_module: (h) => {
         try { instance.exports.__indirect_function_table.set(h >>> 0, null); } catch (e) {}
         userMods.map.delete(h >>> 0);
-      },
-      // E5 JIT tier: compile kernel-emitted wasm bytes with the shared
-      // linear memory imported; jit_call invokes export #fnidx(arg).
-      jit_compile: (ptr, len) => {
-        try {
-          const mb = new Uint8Array(memory.buffer, ptr >>> 0, len >>> 0).slice();
-          const inst = new WebAssembly.Instance(new WebAssembly.Module(mb),
-            { env: { memory } });
-          const fns = Object.values(inst.exports).filter(v => typeof v === 'function');
-          const h = jitNext++;
-          jitMods.set(h, fns);
-          return h;
-        } catch (e) {
-          report(`host: jit_compile: ${e.message}`, true);
-          return -1;
-        }
-      },
-      jit_call: (h, fnidx, arg) => {
-        const fns = jitMods.get(h >>> 0);
-        if (!fns || !fns[fnidx >>> 0]) return -1;
-        return fns[fnidx >>> 0](arg >>> 0) | 0;
       },
       wait: JSPI ? new WebAssembly.Suspending(waitImpl) : () => {},
     },

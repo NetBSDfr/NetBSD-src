@@ -124,54 +124,6 @@ wasm_set_jspi(int v)
 	return 0;
 }
 
-/*
- * E5 JIT tier: host-assisted code generation.  The kernel emits wasm
- * module bytes into ordinary memory and asks the host to compile and
- * instantiate them with the shared linear memory imported, so compiled
- * guest code reads and writes guest memory directly.  jit_compile
- * returns a module handle (-1 on failure); jit_call invokes export
- * number fnidx with one i32 argument.  See wasmrun/run.mjs.
- */
-int32_t	wasm_host_jit_compile(uint32_t, uint32_t)
-	    __attribute__((import_module("host"), import_name("jit_compile")));
-int32_t	wasm_host_jit_call(int32_t, int32_t, int32_t)
-	    __attribute__((import_module("host"), import_name("jit_call")));
-
-/*
- * E5a self-test: hand-assembled module exporting f(p) = *(int32 *)p + 4.
- * Proves the emit -> compile -> call round trip over shared memory.
- * Run once from the first exec_wasm32 (console is up by then).
- */
-static const uint8_t jit_spike_mod[] = {
-	0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-	0x01, 0x06, 0x01, 0x60, 0x01, 0x7f, 0x01, 0x7f,
-	0x02, 0x0f, 0x01, 0x03, 0x65, 0x6e, 0x76, 0x06,
-	0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x02, 0x00,
-	0x00, 0x03, 0x02, 0x01, 0x00, 0x07, 0x05, 0x01,
-	0x01, 0x66, 0x00, 0x00, 0x0a, 0x0c, 0x01, 0x0a,
-	0x00, 0x20, 0x00, 0x28, 0x02, 0x00, 0x41, 0x04,
-	0x6a, 0x0b
-};
-
-int	wasm_jit_selftest(void);
-int
-wasm_jit_selftest(void)
-{
-	static uint32_t jit_spike_buf;
-	int32_t h, r;
-
-	jit_spike_buf = 38;
-	h = wasm_host_jit_compile((uint32_t)(uintptr_t)jit_spike_mod,
-	    sizeof(jit_spike_mod));
-	if (h < 0) {
-		printf("[jit] selftest: compile unavailable\n");
-		return 0;
-	}
-	r = wasm_host_jit_call(h, 0, (uint32_t)(uintptr_t)&jit_spike_buf);
-	printf("[jit] selftest: f(38) = %d %s\n", r, r == 42 ? "OK" : "FAIL");
-	return 0;
-}
-
 /* wasm_callin.s: call_indirect into the user module's _start */
 int32_t	wasm_user_start(int32_t, uint32_t);
 
